@@ -330,6 +330,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     <div class="ph">
       <div><div class="pt">Trade History</div><div class="ps" id="tr-sub">0 trades</div></div>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-g" id="tr-export" title="Download the currently filtered trades as a CSV file">Export CSV</button>
         <button class="btn btn-g" id="tr-clear-data" title="Clear all trades">Clear Data</button>
         <button class="btn btn-p" id="tr-import">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -621,7 +622,9 @@ async function boot() {
   }
   document.getElementById('s-balance').value = settings.accountBalance
   document.getElementById('s-risk').value    = settings.targetRisk
+  restoreTradeFilters()
   renderAll()
+  applyTradeSortIndicator()
   wire()
 }
 
@@ -977,18 +980,18 @@ function renderDash() {
 
   const f = n => (n>=0?'+':'')+n.toFixed(2)
   sg.innerHTML = [
-    ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`],
-    ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`],
-    ['Net P&L', `<span class="${s.total>=0?'col-g':'col-r'}">${f(s.total)}</span>`, 'all trades'],
-    ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss'],
-    ['Avg Win', `<span class="col-g">+${s.avgW.toFixed(2)}</span>`, 'per winner'],
-    ['Avg Loss', `<span class="col-r">${s.avgL.toFixed(2)}</span>`, 'per loser'],
-    ['Max Profit',   `<span class="col-g">+${s.best.toFixed(2)}</span>`, 'single trade'],
-    ['Max Drawdown', `<span class="col-r">${s.worst.toFixed(2)}</span>`, 'single trade'],
-    ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${(s.total/s.n>=0?'+':'')+(s.total/s.n).toFixed(2)}</span>`, 'avg $/trade'],
-    ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`],
-  ].map(([l,v,ss]) =>
-    `<div class="sc"><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
+    ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
+    ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
+    ['Net P&L', `<span class="${s.total>=0?'col-g':'col-r'}">${f(s.total)}</span>`, 'all trades', 'Sum of profit/loss across every trade, net of commission'],
+    ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross profit ÷ gross loss. Above 1.0 is profitable; 2.0+ is strong'],
+    ['Avg Win', `<span class="col-g">+${s.avgW.toFixed(2)}</span>`, 'per winner', 'Average profit on your winning trades'],
+    ['Avg Loss', `<span class="col-r">${s.avgL.toFixed(2)}</span>`, 'per loser', 'Average loss on your losing trades'],
+    ['Max Profit',   `<span class="col-g">+${s.best.toFixed(2)}</span>`, 'single trade', 'Your single largest winning trade'],
+    ['Max Drawdown', `<span class="col-r">${s.worst.toFixed(2)}</span>`, 'single trade', 'Your single worst losing trade'],
+    ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${(s.total/s.n>=0?'+':'')+(s.total/s.n).toFixed(2)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
+  ].map(([l,v,ss,ti]) =>
+    `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
   ).join('')
 
   buildCharts(s)
@@ -1190,6 +1193,67 @@ function renderTrades() {
 
 window.chPg = (d) => { const p=Math.ceil(filtered.length/PG); page=Math.max(1,Math.min(p,page+d)); renderTrades() }
 
+// ── Export filtered trades to CSV ─────────
+// Exports whatever the current filters/sort produce — including the
+// computed %Risk and realised R-multiple so the numbers match the table.
+function exportTradesCSV() {
+  const list = getFiltered()
+  if (!list.length) { alert('No trades to export. Adjust your filters or import a CSV first.'); return }
+  const esc = v => {
+    const s = v == null ? '' : String(v)
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  }
+  const header = ['#','Entry Time','Exit Time','Symbol','Side','Entry Price','Exit Price','SL Price','TP Price','Qty','Risk %','R Multiple','Net P&L','Commission']
+  const rows = list.map((t, i) => {
+    const risk  = calcRisk(t)
+    const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
+    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
+      ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
+      : ''
+    return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
+            t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
+      .map(esc).join(',')
+  })
+  const csv  = [header.join(','), ...rows].join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `tradelog-export-${new Date().toISOString().slice(0,10)}.csv`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
+}
+
+// ── Trade filter + sort persistence ───────
+// Remembered locally (localStorage) so returning to the Trades view keeps
+// your last search/side/result/date filters and sort — no data-shape change.
+const TR_FILTERS_KEY = 'tradelog.tradeFilters'
+function saveTradeFilters() {
+  try {
+    const v = id => document.getElementById(id)?.value || ''
+    localStorage.setItem(TR_FILTERS_KEY, JSON.stringify({
+      q: v('f-q'), side: v('f-side'), res: v('f-res'),
+      from: v('f-from'), to: v('f-to'), sortCol, sortDir
+    }))
+  } catch {}
+}
+function restoreTradeFilters() {
+  try {
+    const s = JSON.parse(localStorage.getItem(TR_FILTERS_KEY) || 'null')
+    if (!s) return
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
+    set('f-q', s.q); set('f-side', s.side); set('f-res', s.res)
+    set('f-from', s.from); set('f-to', s.to)
+    if (s.sortCol) sortCol = s.sortCol
+    if (s.sortDir) sortDir = s.sortDir
+  } catch {}
+}
+function applyTradeSortIndicator() {
+  document.querySelectorAll('#tr-wrap thead th').forEach(t => t.classList.remove('sort-asc','sort-desc'))
+  const th = document.querySelector(`#tr-wrap thead th[data-col="${sortCol}"]`)
+  if (th) th.classList.add('sort-' + sortDir)
+}
+
 // ── Journal ───────────────────────────────
 // ── Note helpers ─────────────────────────────
 const J_FIELDS = ['macro','technical','structure','management','result','review']
@@ -1329,9 +1393,11 @@ function openModal(id) {
   const riskItems = risk ? [
     ['Actual %Risk',  risk.breakeven ? `<span style="color:var(--blue)">Breakeven Stop</span>` : `<span style="color:${risk.actualRiskPct > settings.targetRisk ? 'var(--red)' : 'var(--green)'}">${risk.actualRiskPct.toFixed(2)}% <span style="font-size:10px;color:var(--tx3)">(target ${settings.targetRisk}%)</span></span>`],
   ] : []
+  const dur = fdur(t.entryTime, t.exitTime)
   document.getElementById('m-meta').innerHTML = [
     ['Entry Time',  fdt(t.entryTime)],
     ['Exit Time',   fdt(t.exitTime)],
+    ...(dur ? [['Hold Time', dur]] : []),
     ['Entry Price', t.entryPrice || '—'],
     ['Exit Price',  t.exitPrice  || '—'],
     ['SL Price',    t.slPrice ? t.slPrice : '—'],
@@ -1626,18 +1692,18 @@ function renderStrategy() {
   else {
     const tgtRate = s.n ? (s.tgt/s.n)*100 : 0
     sg.innerHTML = [
-      ['Setups', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L${s.flat?` / ${s.flat} BE`:''}`],
-      ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} of ${s.n} closed green`],
-      ['Target Hit', `<span class="${tgtRate>=50?'col-g':'col-gold'}">${tgtRate.toFixed(1)}%</span>`, `${s.tgt} reached full TP`],
-      ['Total R', `<span class="${s.totalR>=0?'col-g':'col-r'}">${rNum(s.totalR,1)}R</span>`, 'sum of results'],
-      ['Expectancy', `<span class="${s.expectancy>=0?'col-g':'col-r'}">${rNum(s.expectancy)}R</span>`, 'per setup'],
-      ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss'],
-      ['Avg Win', `<span class="col-g">${rNum(s.avgW)}R</span>`, 'per winner'],
-      ['Avg Loss', `<span class="col-r">${rNum(s.avgL)}R</span>`, 'per loser'],
-      ['Best R', `<span class="col-g">${rNum(s.bestR)}R</span>`, `worst ${rNum(s.worstR)}R`],
-      ['Max Consec', `<span class="col-g">${s.mw}W</span> / <span class="col-r">${s.ml}L</span>`, 'win / loss streak'],
-    ].map(([l,v,ss]) =>
-      `<div class="sc"><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
+      ['Setups', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L${s.flat?` / ${s.flat} BE`:''}`, 'Number of cup & handle setups matching the current filters'],
+      ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} of ${s.n} closed green`, 'Share of setups that closed with a positive R-multiple'],
+      ['Target Hit', `<span class="${tgtRate>=50?'col-g':'col-gold'}">${tgtRate.toFixed(1)}%</span>`, `${s.tgt} reached full TP`, 'Share of setups that reached the full take-profit target (vs stopped out or timed out). Differs from Win Rate, which counts any green close'],
+      ['Total R', `<span class="${s.totalR>=0?'col-g':'col-r'}">${rNum(s.totalR,1)}R</span>`, 'sum of results', 'Sum of R-multiple results across all setups. 1R = the amount risked per trade'],
+      ['Expectancy', `<span class="${s.expectancy>=0?'col-g':'col-r'}">${rNum(s.expectancy)}R</span>`, 'per setup', 'Average R per setup (Total R ÷ setups). Positive means a profitable edge'],
+      ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross R won ÷ gross R lost. Above 1.0 is profitable'],
+      ['Avg Win', `<span class="col-g">${rNum(s.avgW)}R</span>`, 'per winner', 'Average R-multiple on winning setups'],
+      ['Avg Loss', `<span class="col-r">${rNum(s.avgL)}R</span>`, 'per loser', 'Average R-multiple on losing setups'],
+      ['Best R', `<span class="col-g">${rNum(s.bestR)}R</span>`, `worst ${rNum(s.worstR)}R`, 'Best single-setup R-multiple (worst shown below)'],
+      ['Max Consec', `<span class="col-g">${s.mw}W</span> / <span class="col-r">${s.ml}L</span>`, 'win / loss streak', 'Longest streak of consecutive winning / losing setups'],
+    ].map(([l,v,ss,ti]) =>
+      `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
     ).join('')
   }
 
@@ -1776,6 +1842,20 @@ function fdt(s) {
   } catch { return s }
 }
 
+// Hold time entry→exit, e.g. "45m", "2h 10m", "3d 4h" — helps tell scalps from swings
+function fdur(entry, exit) {
+  if (!entry || !exit) return null
+  const ms = new Date(exit) - new Date(entry)
+  if (!isFinite(ms) || ms < 0) return null
+  const mins = Math.round(ms / 60000)
+  if (mins < 1) return '<1m'
+  if (mins < 60) return mins + 'm'
+  const h = Math.floor(mins / 60), m = mins % 60
+  if (h < 24) return m ? `${h}h ${m}m` : `${h}h`
+  const d = Math.floor(h / 24), hr = h % 24
+  return hr ? `${d}d ${hr}h` : `${d}d`
+}
+
 // ════════════════════════════════════════════════════
 //  WIRE
 // ════════════════════════════════════════════════════
@@ -1839,6 +1919,9 @@ function wire() {
     btn.textContent = '✓ Saved!'; setTimeout(() => btn.textContent = 'Save Settings', 1500)
   })
 
+  // Export filtered trades
+  document.getElementById('tr-export').addEventListener('click', exportTradesCSV)
+
   // Clear data
   document.getElementById('tr-clear-data').addEventListener('click', async () => {
     if (!confirm('Clear all trade data? This cannot be undone.')) return
@@ -1849,12 +1932,12 @@ function wire() {
 
   // Filters
   ;['f-q','f-side','f-res','f-from','f-to'].forEach(id =>
-    document.getElementById(id)?.addEventListener('input', () => { page=1; renderTrades() })
+    document.getElementById(id)?.addEventListener('input', () => { page=1; renderTrades(); saveTradeFilters() })
   )
   document.getElementById('f-clr').addEventListener('click', () => {
     ;['f-q','f-from','f-to'].forEach(id => document.getElementById(id).value = '')
     ;['f-side','f-res'].forEach(id => document.getElementById(id).value = '')
-    page = 1; renderTrades()
+    page = 1; renderTrades(); saveTradeFilters()
   })
 
   // Column sort (trades table only)
@@ -1865,7 +1948,7 @@ function wire() {
       else { sortCol = c; sortDir = 'desc' }
       document.querySelectorAll('#tr-wrap thead th').forEach(t => t.classList.remove('sort-asc','sort-desc'))
       th.classList.add('sort-' + sortDir)
-      page = 1; renderTrades()
+      page = 1; renderTrades(); saveTradeFilters()
     })
   })
 
