@@ -262,22 +262,22 @@ textarea.nt::placeholder{color:var(--tx3);}
 
   <div class="nav on" data-v="dashboard">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-    <span class="tip">Dashboard</span>
+    <span class="tip">Dashboard [1]</span>
   </div>
 
   <div class="nav" data-v="trades">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
-    <span class="tip">Trades</span>
+    <span class="tip">Trades [2]</span>
   </div>
 
   <div class="nav" data-v="journal">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-    <span class="tip">Journal</span>
+    <span class="tip">Journal [3]</span>
   </div>
 
   <div class="nav" data-v="strategy">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-    <span class="tip">Strategy</span>
+    <span class="tip">Strategy [4]</span>
   </div>
 
   <div class="nav nav-bottom" data-v="import">
@@ -984,7 +984,9 @@ function renderDash() {
     ['Avg Win', `<span class="col-g">+${s.avgW.toFixed(2)}</span>`, 'per winner'],
     ['Avg Loss', `<span class="col-r">${s.avgL.toFixed(2)}</span>`, 'per loser'],
     ['Max Profit',   `<span class="col-g">+${s.best.toFixed(2)}</span>`, 'single trade'],
-    ['Max Drawdown', `<span class="col-r">${s.worst.toFixed(2)}</span>`, 'single trade'],
+    ['Worst Trade',  `<span class="col-r">${s.worst.toFixed(2)}</span>`, 'single loss'],
+    ['Max Drawdown', `<span class="col-r">${s.maxDD>0?'-'+s.maxDD.toFixed(2):'—'}</span>`, 'peak-to-trough'],
+    ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${(s.total/s.n>=0?'+':'')+(s.total/s.n).toFixed(2)}</span>`, 'avg $/trade'],
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`],
   ].map(([l,v,ss]) =>
     `<div class="sc"><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
@@ -1152,6 +1154,12 @@ function renderTrades() {
     const riskStr    = risk
       ? (risk.breakeven ? `<span style="color:var(--blue)">BE</span>` : `<span class="${risk.actualRiskPct > settings.targetRisk ? 'col-r' : 'col-g'}">${risk.actualRiskPct.toFixed(1)}%</span>`)
       : '<span style="color:var(--tx3)">—</span>'
+    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
+      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
+      : null
+    const rLine = rMult != null
+      ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
+      : ''
     return `<tr data-id="${t.id}">
       <td style="color:var(--tx3)">${idx}</td>
       <td style="color:var(--tx2);white-space:nowrap">${fdt(t.entryTime)}</td>
@@ -1164,7 +1172,7 @@ function renderTrades() {
       <td style="color:var(--tx2)">${t.qty}</td>
       <td>${riskStr}</td>
 
-      <td class="${pc}">${ps}</td>
+      <td class="${pc}">${ps}${rLine}</td>
       <td><span class="ni ${hasNote(notes[t.id])?'has':''}">✎</span></td>
     </tr>`
   }).join('')
@@ -1893,7 +1901,18 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', closeModal)
   document.getElementById('m-cancel').addEventListener('click', closeModal)
   document.getElementById('m-save').addEventListener('click', saveNote)
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal() })
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeModal(); return }
+    const isModalOpen = document.getElementById('modal').classList.contains('on')
+    const isTyping = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)
+    if (!isModalOpen && !isTyping) {
+      if (e.key === '1') go('dashboard')
+      else if (e.key === '2') go('trades')
+      else if (e.key === '3') go('journal')
+      else if (e.key === '4') go('strategy')
+    }
+    if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
+  })
 }
 
 boot()
