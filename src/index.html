@@ -984,8 +984,7 @@ function renderDash() {
     ['Avg Win', `<span class="col-g">+${s.avgW.toFixed(2)}</span>`, 'per winner'],
     ['Avg Loss', `<span class="col-r">${s.avgL.toFixed(2)}</span>`, 'per loser'],
     ['Max Profit',   `<span class="col-g">+${s.best.toFixed(2)}</span>`, 'single trade'],
-    ['Worst Trade',  `<span class="col-r">${s.worst.toFixed(2)}</span>`, 'single loss'],
-    ['Max Drawdown', `<span class="col-r">${s.maxDD>0?'-'+s.maxDD.toFixed(2):'—'}</span>`, 'peak-to-trough'],
+    ['Max Drawdown', `<span class="col-r">${s.worst.toFixed(2)}</span>`, 'single trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${(s.total/s.n>=0?'+':'')+(s.total/s.n).toFixed(2)}</span>`, 'avg $/trade'],
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`],
   ].map(([l,v,ss]) =>
