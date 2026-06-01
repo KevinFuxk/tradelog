@@ -1,0 +1,16 @@
+# Dependencies (the remote agent runs `npm install` itself)
+node_modules/
+
+# Build output (large binaries — rebuilt locally with `npm run build:mac`)
+dist/
+out/
+build/
+
+# macOS
+.DS_Store
+
+# Logs / temp
+*.log
+npm-debug.log*
+.cache/
+tmp/
