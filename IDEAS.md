@@ -34,3 +34,18 @@
 - **Best/worst day stat** — surface the single best and worst daily P&L on the Dashboard
 - **Sortable Hold Time column in Trades table** — add an optional duration column (needs a responsive width pass first)
 - **Equity high-water-mark line** on the cumulative P&L chart to visualise drawdowns
+
+## 2026-06-03 — Shipped
+- **Avg R stat on Dashboard** — new card shows average realised R-multiple across trades that carry a stop-loss (the $ Expectancy expressed in risk units). Factored a shared `tradeR()` helper now reused by the Trades table, CSV export, and Dashboard (removed 3 copies of the same formula).
+- **Best / Worst Day stat on Dashboard** — single best day of total P&L as the value, worst day in the sub-line, so a trader can see whether one outlier day is carrying their results.
+- **Persist Strategy (Cup & Handle) filters + sort** — last-used symbol/TF/size/outcome/date filters and sort column survive a restart via `localStorage` (`tradelog.cnhFilters`), mirroring the existing Trades persistence. Restored after the first render so the dynamic option lists exist. No change to the events JSON store.
+- **Export Journal notes to Markdown** — "Export Notes" button on the Journal view downloads the currently filtered entries as a readable `.md` file (each trade's 6 structured sections under a P&L header). Directly serves the "never lose journal notes" value — a one-click human-readable backup. Extracted a shared `journalEntries()` filter helper.
+
+## Deferred ideas for future runs (2026-06-03)
+- **Journal entry Avg R header** — still open: add the R-multiple to each journal card header (mirrors the Trades table sub-line)
+- **Sortable Hold Time column in Trades table** — still open; needs a responsive width pass first
+- **Equity high-water-mark line** on the cumulative P&L chart to visualise drawdowns
+- **Best/worst-day chart marker** — highlight the best/worst day bar on the Daily P&L chart now that the stat exists
+- **Expectancy trend / rolling 20-trade R** — small line showing whether the edge is improving or decaying over time
+- **Persist Dashboard daily-range toggle (1W/1M/All)** — small nicety alongside the other persisted prefs
+- **Import a previously exported Journal .md** to restore notes (round-trip backup)
