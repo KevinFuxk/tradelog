@@ -385,6 +385,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
     <!-- Journal filters -->
     <div class="fbar" id="jn-filters" style="margin-bottom:16px">
+      <input class="fi" id="jf-q" placeholder="Search notes…" oninput="renderJournal()" style="width:180px" title="Search the text of your journal notes (and symbol)">
       <select class="fs" id="jf-symbol" onchange="renderJournal()">
         <option value="">All products</option>
       </select>
@@ -416,6 +417,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     <div class="ph">
       <div><div class="pt">Cup &amp; Handle</div><div class="ps" id="cnh-sub">No strategy data loaded</div></div>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-g" id="cnh-export" title="Download the currently filtered setups as a CSV file">Export CSV</button>
         <button class="btn btn-g" id="cnh-clear" title="Clear strategy data">Clear Data</button>
         <button class="btn btn-p" id="cnh-import">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -626,16 +628,25 @@ async function boot() {
   renderAll()
   applyTradeSortIndicator()
   wire()
+  // Reopen whichever main view was active last session
+  try {
+    const last = localStorage.getItem(LAST_VIEW_KEY)
+    if (last && MAIN_VIEWS.includes(last) && last !== 'dashboard') go(last)
+  } catch {}
 }
 
 // ════════════════════════════════════════════════════
 //  NAVIGATION
 // ════════════════════════════════════════════════════
+const LAST_VIEW_KEY = 'tradelog.lastView'
+const MAIN_VIEWS = ['dashboard','trades','journal','strategy']
 function go(v) {
   document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v))
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.id === 'v-' + v))
   // Rebuild charts that were sized while their view was hidden
   if (v === 'strategy') renderStrategy()
+  // Remember the last main view so it reopens on next launch (skip Import flow)
+  if (MAIN_VIEWS.includes(v)) { try { localStorage.setItem(LAST_VIEW_KEY, v) } catch {} }
 }
 
 // ════════════════════════════════════════════════════
@@ -979,6 +990,18 @@ function renderDash() {
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
   const f = n => (n>=0?'+':'')+n.toFixed(2)
+
+  // Avg hold time of winners vs losers — surfaces "do I hold losers too long?"
+  const avgMs = list => { const a = list.map(holdMs).filter(v => v != null); return a.length ? a.reduce((x,y)=>x+y,0)/a.length : null }
+  const wHold = avgMs(trades.filter(t=>t.pnl>0))
+  const lHold = avgMs(trades.filter(t=>t.pnl<0))
+  const holdCard = (wHold != null || lHold != null) ? [[
+    'Avg Hold',
+    `<span class="col-g">${wHold!=null?fmtDur(wHold):'—'}</span>`,
+    `losers ${lHold!=null?fmtDur(lHold):'—'}`,
+    'Average hold time of winning trades (losers shown below). If losers are held much longer than winners, you may be letting losses run'
+  ]] : []
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
@@ -990,6 +1013,7 @@ function renderDash() {
     ['Max Drawdown', `<span class="col-r">${s.worst.toFixed(2)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${(s.total/s.n>=0?'+':'')+(s.total/s.n).toFixed(2)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
+    ...holdCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
   ).join('')
@@ -1278,6 +1302,13 @@ function notePreview(n) {
   return J_FIELDS.map(f => n[f]).find(v => v && v.trim()) || ''
 }
 
+// Full searchable text of a note (all sections joined) for journal keyword search
+function noteText(n) {
+  if (!n) return ''
+  if (typeof n === 'string') return n
+  return J_FIELDS.map(f => n[f] || '').join(' ')
+}
+
 function filledCount(n) {
   if (!n) return 0
   if (typeof n === 'string') return n.trim() ? 1 : 0
@@ -1294,6 +1325,7 @@ function populateJournalSymbols() {
 }
 
 function clearJournalFilters() {
+  const qEl = document.getElementById('jf-q'); if (qEl) qEl.value = ''
   document.getElementById('jf-symbol').value = ''
   document.getElementById('jf-side').value = ''
   document.getElementById('jf-date-from').value = ''
@@ -1304,6 +1336,7 @@ function clearJournalFilters() {
 function renderJournal() {
   populateJournalSymbols()
 
+  const q          = (document.getElementById('jf-q')?.value || '').toLowerCase().trim()
   const symFilter  = document.getElementById('jf-symbol')?.value || ''
   const sideFilter = document.getElementById('jf-side')?.value || ''
   const dateFrom   = document.getElementById('jf-date-from')?.value  // 'YYYY-MM-DD' or ''
@@ -1311,6 +1344,7 @@ function renderJournal() {
 
   const noted = trades.filter(t => {
     if (!hasNote(notes[t.id])) return false
+    if (q && !noteText(notes[t.id]).toLowerCase().includes(q) && !t.symbol.toLowerCase().includes(q)) return false
     if (symFilter  && t.symbol !== symFilter)  return false
     if (sideFilter && t.side   !== sideFilter) return false
     if (dateFrom) {
@@ -1669,6 +1703,32 @@ function clearCnhFilters() {
   cnhPage = 1; renderStrategy()
 }
 
+// Export the currently filtered cup & handle setups to CSV — mirrors the
+// Trades export so backtest results can be sliced in Excel/Sheets.
+function exportEventsCSV() {
+  const list = cnhFiltered()
+  if (!list.length) { alert('No setups to export. Adjust your filters or import an events file first.'); return }
+  const esc = v => {
+    const s = v == null ? '' : String(v)
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  }
+  const ocName = oc => oc === 1 ? 'target' : oc === -1 ? 'stop' : oc === 0 ? 'timeout' : ''
+  const header = ['Date','Symbol','Timeframe','Entry','Stop','Target','Result R','MFE R','MAE R','Outcome','Size Tier','Return Bucket','Earnings','Handle']
+  const rows = list.map(e => [
+    e.day, e.symbol, e.timeframe, e.entry, e.stop, e.target, e.pnlR,
+    e.mfeR != null ? e.mfeR : '', e.maeR != null ? e.maeR : '',
+    ocName(e.outcome), e.sizeTier, e.returnBucket, e.earningsBucket, e.handleNum
+  ].map(esc).join(','))
+  const csv  = [header.join(','), ...rows].join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `tradelog-strategy-${new Date().toISOString().slice(0,10)}.csv`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
+}
+
 function rNum(v, dp=2) { return (v>=0?'+':'') + v.toFixed(dp) }
 
 function renderStrategy() {
@@ -1842,10 +1902,8 @@ function fdt(s) {
   } catch { return s }
 }
 
-// Hold time entry→exit, e.g. "45m", "2h 10m", "3d 4h" — helps tell scalps from swings
-function fdur(entry, exit) {
-  if (!entry || !exit) return null
-  const ms = new Date(exit) - new Date(entry)
+// Format a duration in ms, e.g. "45m", "2h 10m", "3d 4h" — helps tell scalps from swings
+function fmtDur(ms) {
   if (!isFinite(ms) || ms < 0) return null
   const mins = Math.round(ms / 60000)
   if (mins < 1) return '<1m'
@@ -1854,6 +1912,19 @@ function fdur(entry, exit) {
   if (h < 24) return m ? `${h}h ${m}m` : `${h}h`
   const d = Math.floor(h / 24), hr = h % 24
   return hr ? `${d}d ${hr}h` : `${d}d`
+}
+
+// Hold time entry→exit for a single trade
+function fdur(entry, exit) {
+  if (!entry || !exit) return null
+  return fmtDur(new Date(exit) - new Date(entry))
+}
+
+// Hold time in ms for a trade, or null when timestamps are missing/invalid
+function holdMs(t) {
+  if (!t.entryTime || !t.exitTime) return null
+  const ms = new Date(t.exitTime) - new Date(t.entryTime)
+  return (isFinite(ms) && ms >= 0) ? ms : null
 }
 
 // ════════════════════════════════════════════════════
@@ -1956,6 +2027,7 @@ function wire() {
   document.getElementById('cnh-import').addEventListener('click', importEvents)
   document.getElementById('cnh-empty-import').addEventListener('click', importEvents)
   document.getElementById('cnh-clear').addEventListener('click', clearEvents)
+  document.getElementById('cnh-export').addEventListener('click', exportEventsCSV)
   document.getElementById('file-events').addEventListener('change', e => {
     const f = e.target.files[0]
     if (!f) return
