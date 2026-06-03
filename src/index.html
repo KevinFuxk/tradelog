@@ -382,6 +382,7 @@ textarea.nt::placeholder{color:var(--tx3);}
   <div class="view" id="v-journal">
     <div class="ph">
       <div><div class="pt">Journal</div><div class="ps" id="jn-sub">Your notes &amp; reflections</div></div>
+      <button class="btn btn-g" id="jn-export" title="Download your journal entries as a Markdown file (respects the filters below)">Export Notes</button>
     </div>
     <!-- Journal filters -->
     <div class="fbar" id="jn-filters" style="margin-bottom:16px">
@@ -627,6 +628,11 @@ async function boot() {
   restoreTradeFilters()
   renderAll()
   applyTradeSortIndicator()
+  // Restore strategy filters AFTER the first render has populated the dynamic
+  // symbol/TF/size option lists, otherwise setting a value wouldn't stick.
+  restoreCnhFilters()
+  applyCnhSortIndicator()
+  if (events.length) renderStrategy()
   wire()
   // Reopen whichever main view was active last session
   try {
@@ -927,6 +933,14 @@ function calcRisk(trade) {
   }
 }
 
+// Realised R-multiple for a trade (P&L ÷ dollars risked), or null when there's
+// no usable stop-loss. Shared by the Trades table, CSV export, and Dashboard.
+function tradeR(t) {
+  const risk = calcRisk(t)
+  if (!risk || risk.breakeven || !(risk.actualRiskPct > 0)) return null
+  return t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
+}
+
 // ════════════════════════════════════════════════════
 //  STATS
 // ════════════════════════════════════════════════════
@@ -1002,6 +1016,27 @@ function renderDash() {
     'Average hold time of winning trades (losers shown below). If losers are held much longer than winners, you may be letting losses run'
   ]] : []
 
+  // Avg realised R across trades that carry a stop-loss — the $ Expectancy in risk terms
+  const rList = trades.map(tradeR).filter(v => v != null)
+  const avgR  = rList.length ? rList.reduce((a,b)=>a+b,0)/rList.length : null
+  const avgRCard = avgR != null ? [[
+    'Avg R',
+    `<span class="${avgR>=0?'col-g':'col-r'}">${(avgR>=0?'+':'')+avgR.toFixed(2)}R</span>`,
+    `${rList.length} trade${rList.length!==1?'s':''} w/ SL`,
+    'Average realised R-multiple across trades that have a stop-loss set. 1R = the amount risked; your edge expressed in risk units rather than dollars'
+  ]] : []
+
+  // Best vs worst single day of total P&L — spot whether one outlier day carries results
+  const dmap = {}
+  trades.forEach(t => { const d=((t.entryTime||'').split('T')[0]||'').split(' ')[0]; if(d) dmap[d]=(dmap[d]||0)+t.pnl })
+  const dayVals = Object.values(dmap)
+  const dayCard = dayVals.length ? [[
+    'Best Day',
+    `<span class="col-g">+${Math.max(...dayVals).toFixed(2)}</span>`,
+    `worst ${Math.min(...dayVals).toFixed(2)}`,
+    'Your single best day of total P&L (worst day shown below). If one outlier day dominates, your edge may be less consistent than the totals suggest'
+  ]] : []
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
@@ -1013,6 +1048,8 @@ function renderDash() {
     ['Max Drawdown', `<span class="col-r">${s.worst.toFixed(2)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${(s.total/s.n>=0?'+':'')+(s.total/s.n).toFixed(2)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
+    ...avgRCard,
+    ...dayCard,
     ...holdCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
@@ -1180,9 +1217,7 @@ function renderTrades() {
     const riskStr    = risk
       ? (risk.breakeven ? `<span style="color:var(--blue)">BE</span>` : `<span class="${risk.actualRiskPct > settings.targetRisk ? 'col-r' : 'col-g'}">${risk.actualRiskPct.toFixed(1)}%</span>`)
       : '<span style="color:var(--tx3)">—</span>'
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
@@ -1231,9 +1266,8 @@ function exportTradesCSV() {
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
-      : ''
+    const rRaw  = tradeR(t)
+    const rMult = rRaw != null ? +rRaw.toFixed(2) : ''
     return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
             t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
       .map(esc).join(',')
@@ -1333,16 +1367,16 @@ function clearJournalFilters() {
   renderJournal()
 }
 
-function renderJournal() {
-  populateJournalSymbols()
-
+// Trades that have a note and match the current Journal filters — shared by the
+// list render and the Markdown export so both show exactly the same set.
+function journalEntries() {
   const q          = (document.getElementById('jf-q')?.value || '').toLowerCase().trim()
   const symFilter  = document.getElementById('jf-symbol')?.value || ''
   const sideFilter = document.getElementById('jf-side')?.value || ''
   const dateFrom   = document.getElementById('jf-date-from')?.value  // 'YYYY-MM-DD' or ''
   const dateTo     = document.getElementById('jf-date-to')?.value
 
-  const noted = trades.filter(t => {
+  return trades.filter(t => {
     if (!hasNote(notes[t.id])) return false
     if (q && !noteText(notes[t.id]).toLowerCase().includes(q) && !t.symbol.toLowerCase().includes(q)) return false
     if (symFilter  && t.symbol !== symFilter)  return false
@@ -1357,6 +1391,12 @@ function renderJournal() {
     }
     return true
   })
+}
+
+function renderJournal() {
+  populateJournalSymbols()
+
+  const noted = journalEntries()
 
   const em = document.getElementById('jn-empty')
   const ls = document.getElementById('jn-list')
@@ -1403,6 +1443,36 @@ function renderJournal() {
   document.querySelectorAll('.jc').forEach(c =>
     c.addEventListener('click', () => openModal(c.dataset.id))
   )
+}
+
+// ── Export journal entries to Markdown (readable backup) ──
+// Notes are a trader's most precious data — this writes the currently filtered
+// entries to a human-readable .md file so they can be backed up or shared.
+function exportJournal() {
+  const list = journalEntries()
+  if (!list.length) { alert('No journal entries to export. Add notes to a trade first (or clear your filters).'); return }
+  const sections = list.map(t => {
+    const n = notes[t.id] || {}
+    const pnl = (t.pnl>0?'+':'') + t.pnl.toFixed(2)
+    const head = `## ${t.symbol} · ${t.side.toUpperCase()} · ${fdt(t.entryTime)} · P&L ${pnl}`
+    if (typeof n === 'string') return `${head}\n\n${n}\n`
+    const body = J_FIELDS.map(f => {
+      const v = n[f]
+      if (!v || (typeof v === 'string' && !v.trim())) return ''
+      const val = f === 'structure' ? (v === 'yes' ? '是 ✓' : '否 ✗') : v.trim()
+      return `**${J_LABELS[f]}**\n${val}`
+    }).filter(Boolean).join('\n\n')
+    return `${head}\n\n${body}\n`
+  })
+  const md = `# TradeLog Journal Export\n_${new Date().toISOString().slice(0,10)} · ${list.length} entr${list.length!==1?'ies':'y'}_\n\n` +
+             sections.join('\n---\n\n')
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `tradelog-journal-${new Date().toISOString().slice(0,10)}.md`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
 }
 
 // ════════════════════════════════════════════════════
@@ -1700,7 +1770,38 @@ function clearCnhFilters() {
   ['cnh-f-symbol','cnh-f-tf','cnh-f-size','cnh-f-outcome','cnh-f-from','cnh-f-to'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = ''
   })
-  cnhPage = 1; renderStrategy()
+  cnhPage = 1; saveCnhFilters(); renderStrategy()
+}
+
+// ── Strategy filter + sort persistence ────
+// Mirrors the Trades persistence: last-used symbol/TF/size/outcome/date filters
+// and sort survive a restart via localStorage. No change to the events JSON store.
+const CNH_FILTERS_KEY = 'tradelog.cnhFilters'
+function saveCnhFilters() {
+  try {
+    const v = id => document.getElementById(id)?.value || ''
+    localStorage.setItem(CNH_FILTERS_KEY, JSON.stringify({
+      sym: v('cnh-f-symbol'), tf: v('cnh-f-tf'), size: v('cnh-f-size'),
+      outcome: v('cnh-f-outcome'), from: v('cnh-f-from'), to: v('cnh-f-to'),
+      sort: cnhSort, dir: cnhDir
+    }))
+  } catch {}
+}
+function restoreCnhFilters() {
+  try {
+    const s = JSON.parse(localStorage.getItem(CNH_FILTERS_KEY) || 'null')
+    if (!s) return
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
+    set('cnh-f-symbol', s.sym); set('cnh-f-tf', s.tf); set('cnh-f-size', s.size)
+    set('cnh-f-outcome', s.outcome); set('cnh-f-from', s.from); set('cnh-f-to', s.to)
+    if (s.sort) cnhSort = s.sort
+    if (s.dir)  cnhDir  = s.dir
+  } catch {}
+}
+function applyCnhSortIndicator() {
+  document.querySelectorAll('#v-strategy thead th').forEach(t => t.classList.remove('sort-asc','sort-desc'))
+  const th = document.querySelector(`#v-strategy thead th[data-col="${cnhSort}"]`)
+  if (th) th.classList.add('sort-' + cnhDir)
 }
 
 // Export the currently filtered cup & handle setups to CSV — mirrors the
@@ -1993,6 +2094,9 @@ function wire() {
   // Export filtered trades
   document.getElementById('tr-export').addEventListener('click', exportTradesCSV)
 
+  // Export journal notes (Markdown backup)
+  document.getElementById('jn-export')?.addEventListener('click', exportJournal)
+
   // Clear data
   document.getElementById('tr-clear-data').addEventListener('click', async () => {
     if (!confirm('Clear all trade data? This cannot be undone.')) return
@@ -2037,7 +2141,7 @@ function wire() {
     e.target.value = ''
   })
   ;['cnh-f-symbol','cnh-f-tf','cnh-f-size','cnh-f-outcome','cnh-f-from','cnh-f-to'].forEach(id =>
-    document.getElementById(id)?.addEventListener('input', () => { cnhPage = 1; renderStrategy() })
+    document.getElementById(id)?.addEventListener('input', () => { cnhPage = 1; saveCnhFilters(); renderStrategy() })
   )
   document.getElementById('cnh-f-clr').addEventListener('click', clearCnhFilters)
   document.querySelectorAll('#v-strategy thead th[data-col]').forEach(th => {
@@ -2047,7 +2151,7 @@ function wire() {
       else { cnhSort = c; cnhDir = 'desc' }
       document.querySelectorAll('#v-strategy thead th').forEach(t => t.classList.remove('sort-asc','sort-desc'))
       th.classList.add('sort-' + cnhDir)
-      cnhPage = 1; renderCnhTable(cnhFiltered())
+      cnhPage = 1; saveCnhFilters(); renderCnhTable(cnhFiltered())
     })
   })
 
