@@ -624,6 +624,10 @@ async function boot() {
   }
   document.getElementById('s-balance').value = settings.accountBalance
   document.getElementById('s-risk').value    = settings.targetRisk
+  try {
+    const dr = localStorage.getItem(DAILY_RANGE_KEY)
+    if (dr === '1W' || dr === '1M' || dr === 'all') dailyRange = dr
+  } catch {}
   restoreTradeFilters()
   renderAll()
   applyTradeSortIndicator()
@@ -1022,11 +1026,17 @@ function renderDash() {
 }
 
 let dailyRange = '1M'
+// Remember the last-used Daily P&L range (1W / 1M / All) across restarts.
+const DAILY_RANGE_KEY = 'tradelog.dailyRange'
 
 function buildCharts(s) {
   const sorted = [...trades].sort((a,b)=>new Date(a.entryTime)-new Date(b.entryTime))
   let cum = 0
   const cumData = sorted.map(t => { cum += t.pnl; return +cum.toFixed(2) })
+  // Running equity high-water mark — a flat-then-rising dashed line makes
+  // every peak-to-trough drawdown visible directly on the cumulative curve.
+  let peak = -Infinity
+  const peakData = cumData.map(v => { peak = Math.max(peak, v); return +peak.toFixed(2) })
   const finalColor = (cumData[cumData.length-1]||0) >= 0 ? '#00e599' : '#ff3d6b'
 
   const tipBase = {
@@ -1044,17 +1054,24 @@ function buildCharts(s) {
   g1.addColorStop(0, finalColor+'40'); g1.addColorStop(1, finalColor+'00')
   charts.pnl = new Chart(c1, {
     type:'line',
-    data:{ labels:sorted.map(t=>t.entryTime), datasets:[{data:cumData,borderColor:finalColor,backgroundColor:g1,fill:true,borderWidth:2,pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:finalColor,tension:.35}] },
+    data:{ labels:sorted.map(t=>t.entryTime), datasets:[
+      {label:'Cumulative',data:cumData,borderColor:finalColor,backgroundColor:g1,fill:true,borderWidth:2,pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:finalColor,tension:.35,order:2},
+      {label:'Peak equity',data:peakData,borderColor:'#7889a8',backgroundColor:'transparent',fill:false,borderWidth:1,borderDash:[4,4],pointRadius:0,pointHoverRadius:0,tension:0,order:1}
+    ] },
     options:{
       responsive:true, maintainAspectRatio:false,
       interaction:{ mode:'index', intersect:false },
       plugins:{
-        legend:{display:false},
+        legend:{display:true,position:'top',align:'end',labels:{color:'#7889a8',font:{family:'JetBrains Mono',size:9},boxWidth:14,padding:8,usePointStyle:true}},
         tooltip:{
           ...tipBase,
           callbacks:{
             title: items => fdt(items[0].label),
             label: item => {
+              if (item.datasetIndex === 1) {
+                const dd = peakData[item.dataIndex] - cumData[item.dataIndex]
+                return `Peak: ${item.raw>=0?'+':''}${item.raw.toFixed(2)}` + (dd>0 ? `  ·  drawdown -${dd.toFixed(2)}` : '')
+              }
               const v = item.raw
               const trade = sorted[item.dataIndex]
               return [
@@ -1370,6 +1387,13 @@ function renderJournal() {
     const n     = notes[t.id] || {}
     const count = filledCount(n)
 
+    // Realised R-multiple in the header — mirrors the Trades table sub-line so
+    // R-based traders can scan their journal in risk units, not just dollars.
+    const risk  = calcRisk(t)
+    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
+      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
+      : null
+
     // Build per-section rows
     const sectionRows = typeof n === 'object' ? J_FIELDS.map((f, i) => {
       const val = n[f]
@@ -1392,6 +1416,7 @@ function renderJournal() {
         <div class="jct">${t.symbol} <span class="badge ${t.side==='buy'?'bb':'bs'}">${t.side}</span></div>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="${pc}" style="font-size:13px;font-weight:600">${(t.pnl>0?'+':'')+t.pnl.toFixed(2)}</span>
+          ${rMult!=null?`<span style="font-size:11px;color:var(--tx3)" title="Realised R-multiple (P&L ÷ amount risked at the stop)">${rMult>=0?'+':''}${rMult.toFixed(1)}R</span>`:''}
           <span style="font-size:11px;color:var(--tx2)">${fdt(t.entryTime)}</span>
           <span style="font-size:11px;color:var(--tx3)">${count}/6 sections</span>
         </div>
@@ -1976,7 +2001,7 @@ function wire() {
 
   // Daily range buttons
   document.querySelectorAll('.daily-range-btn').forEach(b =>
-    b.addEventListener('click', () => { dailyRange = b.dataset.range; buildDailyChart() })
+    b.addEventListener('click', () => { dailyRange = b.dataset.range; try { localStorage.setItem(DAILY_RANGE_KEY, dailyRange) } catch {} ; buildDailyChart() })
   )
 
   // Settings save
