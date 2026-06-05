@@ -305,7 +305,7 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div class="card"><div class="ct">CUMULATIVE P&amp;L</div><div style="height:210px;position:relative"><canvas id="c-pnl"></canvas></div></div>
       <div class="card"><div class="ct">WIN / LOSS</div><div style="height:210px;position:relative"><canvas id="c-wl"></canvas></div></div>
     </div>
-    <div class="card" id="daily-card" style="margin-bottom:0">
+    <div class="card" id="daily-card" style="margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div class="ct" style="margin-bottom:0">DAILY P&amp;L</div>
         <div style="display:flex;gap:4px">
@@ -315,6 +315,11 @@ textarea.nt::placeholder{color:var(--tx3);}
         </div>
       </div>
       <div style="height:140px;position:relative"><canvas id="c-daily"></canvas></div>
+    </div>
+
+    <div class="card" id="symbol-card" style="margin-bottom:0">
+      <div class="ct">BY SYMBOL</div>
+      <div id="ds-symbol-bd"></div>
     </div>
 
     <div class="empty" id="ds-empty" style="display:none">
@@ -962,13 +967,17 @@ function stats(list) {
     const dd = peak - cum
     if (dd > maxDD) maxDD = dd
   })
+  // Current (open) drawdown = how far final equity sits below its running peak
+  const curDD    = +(peak - cum).toFixed(2)
+  const curDDPct = peak > 0 ? (curDD / peak) * 100 : 0
+  const atHigh   = curDD <= 0.0049   // within rounding of a fresh high
 
   return { n:list.length, wins:wins.length, losses:losses.length,
     wr: list.length ? (wins.length/list.length)*100 : 0,
     total, avgW, avgL, pf, mw, ml,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
-    maxDD }
+    maxDD, curDD, curDDPct, peak, atHigh }
 }
 
 // ════════════════════════════════════════════════════
@@ -982,18 +991,17 @@ function renderDash() {
   const sg = document.getElementById('sg')
   const cr = document.getElementById('charts-row')
   const dc = document.getElementById('daily-card')
+  const syc = document.getElementById('symbol-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = syc.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
-
-  const f = n => (n>=0?'+':'')+n.toFixed(2)
 
   // Avg hold time of winners vs losers — surfaces "do I hold losers too long?"
   const avgMs = list => { const a = list.map(holdMs).filter(v => v != null); return a.length ? a.reduce((x,y)=>x+y,0)/a.length : null }
@@ -1006,23 +1014,62 @@ function renderDash() {
     'Average hold time of winning trades (losers shown below). If losers are held much longer than winners, you may be letting losses run'
   ]] : []
 
+  // Current drawdown — how far equity sits below its running peak right now.
+  const curDDsub = s.atHigh ? 'no open drawdown'
+    : (s.peak > 0 ? `${s.curDDPct.toFixed(1)}% below peak` : 'below peak')
+  const ddCard = [
+    'Current DD',
+    s.atHigh ? `<span class="col-g">At new high</span>` : `<span class="col-r">${fmtMoney(-s.curDD)}</span>`,
+    curDDsub,
+    'How far your current equity sits below its all-time peak (the running high-water mark on the P&L chart). "At new high" means you are at peak equity right now'
+  ]
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
-    ['Net P&L', `<span class="${s.total>=0?'col-g':'col-r'}">${f(s.total)}</span>`, 'all trades', 'Sum of profit/loss across every trade, net of commission'],
+    ['Net P&L', `<span class="${s.total>=0?'col-g':'col-r'}">${fmtMoney(s.total)}</span>`, 'all trades', 'Sum of profit/loss across every trade, net of commission'],
     ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross profit ÷ gross loss. Above 1.0 is profitable; 2.0+ is strong'],
-    ['Avg Win', `<span class="col-g">+${s.avgW.toFixed(2)}</span>`, 'per winner', 'Average profit on your winning trades'],
-    ['Avg Loss', `<span class="col-r">${s.avgL.toFixed(2)}</span>`, 'per loser', 'Average loss on your losing trades'],
-    ['Max Profit',   `<span class="col-g">+${s.best.toFixed(2)}</span>`, 'single trade', 'Your single largest winning trade'],
-    ['Max Drawdown', `<span class="col-r">${s.worst.toFixed(2)}</span>`, 'single trade', 'Your single worst losing trade'],
-    ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${(s.total/s.n>=0?'+':'')+(s.total/s.n).toFixed(2)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ['Avg Win', `<span class="col-g">${fmtMoney(s.avgW)}</span>`, 'per winner', 'Average profit on your winning trades'],
+    ['Avg Loss', `<span class="col-r">${fmtMoney(s.avgL)}</span>`, 'per loser', 'Average loss on your losing trades'],
+    ['Max Profit',   `<span class="col-g">${fmtMoney(s.best)}</span>`, 'single trade', 'Your single largest winning trade'],
+    ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
+    ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ddCard,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
   ).join('')
 
+  renderSymbolBreakdown()
   buildCharts(s)
+}
+
+// Per-symbol performance mini-table — which instruments actually make money.
+// Reuses the Strategy view's breakdown table styling (.bdt / .bd-bar).
+function renderSymbolBreakdown() {
+  const el = document.getElementById('ds-symbol-bd'); if (!el) return
+  const groups = {}
+  trades.forEach(t => { (groups[t.symbol || 'UNKNOWN'] = groups[t.symbol || 'UNKNOWN'] || []).push(t) })
+  const rows = Object.entries(groups).map(([name, ts]) => {
+    const n = ts.length
+    const wins = ts.filter(t => t.pnl > 0).length
+    const total = ts.reduce((a, t) => a + t.pnl, 0)
+    return { name, n, wr: (wins / n) * 100, total }
+  }).sort((a, b) => b.total - a.total)
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  el.innerHTML = `<table class="bdt">
+    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      return `<tr>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
 }
 
 let dailyRange = '1M'
@@ -1191,7 +1238,7 @@ function renderTrades() {
   document.getElementById('tr-body').innerHTML = slice.map((t, i) => {
     const idx  = (page-1)*PG + i + 1
     const pc   = t.pnl > 0 ? 'pnl-p' : t.pnl < 0 ? 'pnl-n' : ''
-    const ps   = (t.pnl > 0 ? '+' : '') + t.pnl.toFixed(2)
+    const ps   = fmtMoney(t.pnl)
     const risk = calcRisk(t)
     const slStr      = t.slPrice ? fp(t.slPrice) : '<span style="color:var(--tx3)">—</span>'
     const riskStr    = risk
@@ -1415,7 +1462,7 @@ function renderJournal() {
       <div class="jch">
         <div class="jct">${t.symbol} <span class="badge ${t.side==='buy'?'bb':'bs'}">${t.side}</span></div>
         <div style="display:flex;align-items:center;gap:10px">
-          <span class="${pc}" style="font-size:13px;font-weight:600">${(t.pnl>0?'+':'')+t.pnl.toFixed(2)}</span>
+          <span class="${pc}" style="font-size:13px;font-weight:600">${fmtMoney(t.pnl)}</span>
           ${rMult!=null?`<span style="font-size:11px;color:var(--tx3)" title="Realised R-multiple (P&L ÷ amount risked at the stop)">${rMult>=0?'+':''}${rMult.toFixed(1)}R</span>`:''}
           <span style="font-size:11px;color:var(--tx2)">${fdt(t.entryTime)}</span>
           <span style="font-size:11px;color:var(--tx3)">${count}/6 sections</span>
@@ -1462,8 +1509,8 @@ function openModal(id) {
     ['SL Price',    t.slPrice ? t.slPrice : '—'],
     ['TP Price',    t.tpPrice ? t.tpPrice : '—'],
     ['Quantity',    t.qty],
-    ['Net P&L',      `<span style="color:${pc}">${(t.pnl>0?'+':'')+t.pnl.toFixed(2)}</span>`],
-    ...(t.commission ? [['Commission', `<span style="color:var(--red)">${t.commission.toFixed(2)}</span>`]] : []),
+    ['Net P&L',      `<span style="color:${pc}">${fmtMoney(t.pnl)}</span>`],
+    ...(t.commission ? [['Commission', `<span style="color:var(--red)">${fmtMoney(t.commission, false)}</span>`]] : []),
     ...riskItems,
   ].map(([k,v]) => `<div class="mi"><div class="mk">${k}</div><div class="mv">${v}</div></div>`).join('')
   document.getElementById('modal').classList.add('on')
@@ -1510,7 +1557,7 @@ function handleText(text) {
   document.getElementById('prev-title').textContent = `PREVIEW — ${pending.length} trades detected`
   document.getElementById('prev-body').innerHTML =
     `<strong style="color:var(--tx)">${pending.length}</strong> trades detected<br>
-     Net P&L: <span style="color:${s.total>=0?'var(--green)':'var(--red)'}">${(s.total>=0?'+':'')+s.total.toFixed(2)}</span><br>
+     Net P&L: <span style="color:${s.total>=0?'var(--green)':'var(--red)'}">${fmtMoney(s.total)}</span><br>
      Win Rate: <span style="color:var(--tx)">${s.wr.toFixed(1)}%</span> (${s.wins}W / ${s.losses}L)<br>
      Symbols: ${[...new Set(pending.map(t=>t.symbol))].slice(0,8).join(', ')}<br>
      <br>
@@ -1950,6 +1997,14 @@ function holdMs(t) {
   if (!t.entryTime || !t.exitTime) return null
   const ms = new Date(t.exitTime) - new Date(t.entryTime)
   return (isFinite(ms) && ms >= 0) ? ms : null
+}
+
+// Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.
+// Keeps larger-account P&L readable. `sign` adds a leading + for non-negatives.
+function fmtMoney(n, sign = true) {
+  if (n == null || !isFinite(n)) return '—'
+  const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return (n < 0 ? '-' : sign ? '+' : '') + s
 }
 
 // ════════════════════════════════════════════════════
