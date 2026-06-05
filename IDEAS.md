@@ -33,4 +33,16 @@
 - **Avg R on Dashboard** — show average realised R per trade (for trades that have a SL), alongside the $ Expectancy card
 - **Best/worst day stat** — surface the single best and worst daily P&L on the Dashboard
 - **Sortable Hold Time column in Trades table** — add an optional duration column (needs a responsive width pass first)
-- **Equity high-water-mark line** on the cumulative P&L chart to visualise drawdowns
+- **Equity high-water-mark line** on the cumulative P&L chart to visualise drawdowns — DONE 2026-06-04
+
+## 2026-06-04 — Shipped
+- **Equity high-water-mark line** on the Dashboard cumulative P&L chart — a dashed grey "Peak equity" line tracks the running maximum, so every peak-to-trough drawdown is visible directly on the curve; the hover tooltip also reports the live drawdown below the peak. A compact top legend now labels the two lines. (Pairs with the existing Max Drawdown stat card.)
+- **R-multiple in Journal entry card headers** — each journal card now shows the realised R-multiple next to its $ P&L (when a stop-loss is set), mirroring the Trades table sub-line, so R-based traders can scan their journal in risk units. Reuses the same `calcRisk` formula.
+- **Persist the Daily P&L chart range** (1W / 1M / All) across restarts via `localStorage` (`tradelog.dailyRange`). A trader who always reviews the last week no longer re-clicks 1W every launch. No JSON-store change.
+
+### Deferred / next-up ideas (2026-06-04)
+- **Sortable Hold Time column in Trades table** — still needs a responsive width pass before adding another column
+- **Drawdown depth/duration stat** — now that the high-water mark is drawn, surface current drawdown ($ and % from peak) and longest underwater stretch as a Dashboard card
+- **Thousands separators on money figures** — `1,234.50` formatting on Dashboard stat cards + table P&L for larger accounts (add an `fmtMoney` helper, apply consistently)
+- **Best-trading-day-of-week breakdown** — mini-table of expectancy by weekday (Mon–Fri) to spot day-of-week edges/leaks
+- **Per-symbol performance breakdown** on the Dashboard — win rate / total P&L grouped by symbol (mirrors the Strategy bucket mini-tables)
