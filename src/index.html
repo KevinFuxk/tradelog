@@ -467,7 +467,7 @@ textarea.nt::placeholder{color:var(--tx3);}
         <div class="card"><div class="ct">BY SIZE TIER</div><div id="cnh-bd-size"></div></div>
         <div class="card"><div class="ct">BY RETURN BUCKET (GAP)</div><div id="cnh-bd-return"></div></div>
         <div class="card"><div class="ct">BY TIMEFRAME</div><div id="cnh-bd-tf"></div></div>
-        <div class="card"><div class="ct">BY EARNINGS</div><div id="cnh-bd-earn"></div></div>
+        <div class="card"><div class="ct" id="cnh-bd-earn-title">BY EARNINGS</div><div id="cnh-bd-earn"></div></div>
       </div>
 
       <div class="ct" style="margin:22px 0 12px">SETUPS <span id="cnh-count" style="color:var(--tx3)"></span></div>
@@ -592,7 +592,7 @@ textarea.nt::placeholder{color:var(--tx3);}
 </div>
 
 <input type="file" id="file-in" accept=".csv" style="display:none">
-<input type="file" id="file-events" accept=".jsonl,.json,.ndjson,.txt" style="display:none">
+<input type="file" id="file-events" accept=".jsonl,.json,.ndjson,.csv,.txt" style="display:none">
 
 <script>
 // ════════════════════════════════════════════════════
@@ -1551,6 +1551,14 @@ function closeModal() { document.getElementById('modal').classList.remove('on');
 //  IMPORT
 // ════════════════════════════════════════════════════
 function handleText(text) {
+  // Cup & Handle backtest data (JSONL/JSON/CSV) belongs in the Strategy view,
+  // not the broker-trade importer. Offer to route it so it never silently no-ops.
+  if (looksLikeEvents(text)) {
+    if (confirm('This looks like Cup & Handle strategy/backtest data, not broker trades.\n\nImport it into the Strategy tab instead?')) {
+      handleEventsText(text)
+      return
+    }
+  }
   pending = parseCSV(text)
   if (!pending.length) { alert('Could not parse CSV. Check the format and try again.'); return }
   const s = stats(pending)
@@ -1586,64 +1594,122 @@ async function confirmImport() {
 // ════════════════════════════════════════════════════
 //  CUP & HANDLE — JSONL / JSON parser
 // ════════════════════════════════════════════════════
+// Does this text look like cup-and-handle strategy data (JSON/JSONL or CSV)?
+function looksLikeEvents(text) {
+  const first = ((text || '').trim().split(/\r?\n/)[0] || '').trim()
+  if (first[0] === '{' || first[0] === '[') return true        // JSON / JSONL
+  const h = first.toLowerCase()
+  return h.includes(',') &&
+         /(^|,)\s*"?pnl_r"?\s*(,|$)/.test(h) &&
+         /(^|,)\s*"?(entry_price|risk_r|cup_depth|mae_r)"?\s*(,|$)/.test(h)
+}
+
+// Normalise an outcome value from either numeric (JSONL) or text (CSV) form.
+function normOutcome(v) {
+  if (v == null || v === '') return null
+  if (typeof v === 'number') return v
+  const s = String(v).trim().toLowerCase()
+  if (['1','win','target','tp','hit'].includes(s)) return 1
+  if (['-1','loss','stop','sl','stopped','stopout'].includes(s)) return -1
+  if (['0','time','timeout','timed_out','eod','expired','open'].includes(s)) return 0
+  const n = +s
+  return isFinite(n) ? n : null
+}
+
+// CSV → array of row objects keyed by lower-cased header names.
+function csvToEventObjects(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  if (lines.length < 2) return []
+  const headers = splitRow(lines[0]).map(h => h.toLowerCase().replace(/['"]/g,'').trim())
+  const rows = []
+  for (let i = 1; i < lines.length; i++) {
+    const cells = splitRow(lines[i])
+    if (!cells.length) continue
+    const o = {}
+    headers.forEach((h, j) => { o[h] = cells[j] != null ? clean(cells[j]) : '' })
+    rows.push(o)
+  }
+  return rows
+}
+
+// Map one raw object (from JSONL or a CSV row) to the internal event shape.
+function eventFromRaw(o, idx) {
+  if (!o || typeof o !== 'object') return null
+  // Normalise keys to lower-case so JSONL (pnl_R) and CSV (pnl_r) both work.
+  const lo = {}
+  for (const k in o) lo[k.toLowerCase()] = o[k]
+  const numOrNull = v => (v == null || v === '') ? null : (isFinite(+v) ? +v : null)
+  const g = (k, d) => (lo[k] != null && lo[k] !== '') ? lo[k] : d
+
+  const entry = numOrNull(lo.entry_price)
+  const pnlR  = numOrNull(lo.pnl_r)
+  if (entry == null || pnlR == null) return null   // not a cup-and-handle event
+
+  const stop   = numOrNull(lo.stop_price)
+  const target = numOrNull(lo.target_price)
+  const riskR  = (lo.risk_r != null && lo.risk_r !== '') ? +lo.risk_r
+               : (stop != null ? Math.abs(entry - stop) : 0)
+  // All cup-and-handle setups are long breakouts → exit = entry + R-result × risk
+  const exit   = riskR ? +(entry + pnlR * riskR).toFixed(4) : entry
+
+  // ID: prefer full pattern geometry (JSONL). For CSV without it, a single bar can
+  // host several setups, so fall back to entry/stop + row index to stay unique.
+  const hasGeom = (lo.breakout_idx != null && lo.breakout_idx !== '') ||
+                  (lo.cup_left_idx  != null && lo.cup_left_idx  !== '')
+  const id = hasGeom
+    ? `cnh:${g('symbol','?')}:${g('day','?')}:${g('timeframe','?')}:${g('breakout_idx','?')}:h${lo.handle_num||1}:${g('cup_left_idx','?')}-${g('cup_bottom_idx','?')}-${g('cup_right_idx','?')}`
+    : `cnh:${g('symbol','?')}:${g('day','?')}:${g('timeframe','?')}:${entry}:${stop==null?'?':stop}:r${idx}`
+
+  return {
+    id,
+    symbol:         g('symbol','UNKNOWN'),
+    day:            g('day',''),
+    timeframe:      g('timeframe',''),
+    entry, stop, target, exit, riskR, pnlR,
+    mfeR:           numOrNull(lo.mfe_r),
+    maeR:           numOrNull(lo.mae_r),
+    outcome:        normOutcome(lo.outcome),   // 1 target/win · -1 stop/loss · 0 timeout
+    handleNum:      lo.handle_num || 1,
+    sizeTier:       g('size_tier','na'),
+    returnBucket:   g('return_bucket','na'),
+    earningsBucket: g('earnings_bucket','na'),
+    reason:         g('reason','na'),          // present in backtest_v2 CSVs
+    cupDepth:       numOrNull(lo.cup_depth),
+    lipDiffFrac:    numOrNull(lo.lip_diff_frac)
+  }
+}
+
 function parseEvents(text) {
-  let objs = []
   const trimmed = (text || '').trim()
   if (!trimmed) return []
+  const firstLine = (trimmed.split(/\r?\n/)[0] || '').trim()
 
-  // Try whole-file JSON first (array, or single object)
-  let parsedWhole = false
-  try {
-    const whole = JSON.parse(trimmed)
-    if (Array.isArray(whole)) { objs = whole; parsedWhole = true }
-    else if (whole && typeof whole === 'object') { objs = [whole]; parsedWhole = true }
-  } catch { /* not a single JSON doc — fall through to JSONL */ }
-
-  // JSONL: one JSON object per line
-  if (!parsedWhole) {
-    for (const line of trimmed.split(/\r?\n/)) {
-      const s = line.trim()
-      if (!s) continue
-      try { const o = JSON.parse(s); if (o && typeof o === 'object') objs.push(o) }
-      catch { /* skip malformed line */ }
+  let objs = []
+  // CSV branch: header row with known columns, and not JSON
+  if (firstLine[0] !== '{' && firstLine[0] !== '[' && firstLine.includes(',') &&
+      /(^|,)\s*"?(pnl_r|entry_price|risk_r)"?\s*(,|$)/i.test(firstLine)) {
+    objs = csvToEventObjects(trimmed)
+  } else {
+    // Whole-file JSON (array or single object)
+    let parsedWhole = false
+    try {
+      const whole = JSON.parse(trimmed)
+      if (Array.isArray(whole)) { objs = whole; parsedWhole = true }
+      else if (whole && typeof whole === 'object') { objs = [whole]; parsedWhole = true }
+    } catch { /* fall through to JSONL */ }
+    // JSONL: one JSON object per line
+    if (!parsedWhole) {
+      for (const line of trimmed.split(/\r?\n/)) {
+        const s = line.trim()
+        if (!s) continue
+        try { const o = JSON.parse(s); if (o && typeof o === 'object') objs.push(o) }
+        catch { /* skip malformed line */ }
+      }
     }
   }
 
   const out = []
-  objs.forEach(o => {
-    if (!o || typeof o !== 'object') return
-    if (o.entry_price == null || o.pnl_R == null) return   // not a cup-and-handle event
-
-    const entry  = +o.entry_price
-    const stop   = o.stop_price   != null ? +o.stop_price   : null
-    const target = o.target_price != null ? +o.target_price : null
-    const riskR  = o.risk_R != null ? +o.risk_R
-                 : (stop != null ? Math.abs(entry - stop) : 0)
-    const pnlR   = +o.pnl_R
-    // All cup-and-handle setups are long breakouts → exit = entry + R-result × risk
-    const exit   = riskR ? +(entry + pnlR * riskR).toFixed(4) : entry
-
-    // ID must capture the full pattern: a single breakout bar can host several
-    // distinct cup shapes (different cup_left/cup_right), so include cup geometry.
-    const id = `cnh:${o.symbol||'?'}:${o.day||'?'}:${o.timeframe||'?'}:${o.breakout_idx!=null?o.breakout_idx:'?'}:h${o.handle_num||1}:${o.cup_left_idx!=null?o.cup_left_idx:'?'}-${o.cup_bottom_idx!=null?o.cup_bottom_idx:'?'}-${o.cup_right_idx!=null?o.cup_right_idx:'?'}`
-
-    out.push({
-      id,
-      symbol:        o.symbol || 'UNKNOWN',
-      day:           o.day || '',
-      timeframe:     o.timeframe || '',
-      entry, stop, target, exit, riskR, pnlR,
-      mfeR:          o.mfe_R != null ? +o.mfe_R : null,
-      maeR:          o.mae_R != null ? +o.mae_R : null,
-      outcome:       o.outcome != null ? +o.outcome : null,   // 1 target · -1 stop · 0 timeout
-      handleNum:     o.handle_num || 1,
-      sizeTier:      o.size_tier || 'na',
-      returnBucket:  o.return_bucket || 'na',
-      earningsBucket:o.earnings_bucket || 'na',
-      cupDepth:      o.cup_depth,
-      lipDiffFrac:   o.lip_diff_frac
-    })
-  })
+  objs.forEach((o, idx) => { const ev = eventFromRaw(o, idx); if (ev) out.push(ev) })
   return out
 }
 
@@ -1785,11 +1851,11 @@ function exportEventsCSV() {
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
   }
   const ocName = oc => oc === 1 ? 'target' : oc === -1 ? 'stop' : oc === 0 ? 'timeout' : ''
-  const header = ['Date','Symbol','Timeframe','Entry','Stop','Target','Result R','MFE R','MAE R','Outcome','Size Tier','Return Bucket','Earnings','Handle']
+  const header = ['Date','Symbol','Timeframe','Entry','Stop','Target','Result R','MFE R','MAE R','Outcome','Size Tier','Return Bucket','Reason','Earnings','Handle']
   const rows = list.map(e => [
     e.day, e.symbol, e.timeframe, e.entry, e.stop, e.target, e.pnlR,
     e.mfeR != null ? e.mfeR : '', e.maeR != null ? e.maeR : '',
-    ocName(e.outcome), e.sizeTier, e.returnBucket, e.earningsBucket, e.handleNum
+    ocName(e.outcome), e.sizeTier, e.returnBucket, e.reason || 'na', e.earningsBucket, e.handleNum
   ].map(esc).join(','))
   const csv  = [header.join(','), ...rows].join('\r\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -1867,7 +1933,15 @@ function renderCnhBreakdowns(list) {
   render('cnh-bd-size',   'sizeTier')
   render('cnh-bd-return', 'returnBucket')
   render('cnh-bd-tf',     'timeframe')
-  render('cnh-bd-earn',   'earningsBucket')
+
+  // 4th card adapts: show "By Reason" when there's no earnings data but a reason
+  // column exists (e.g. backtest_v2 CSVs); otherwise keep "By Earnings".
+  const hasEarnings = list.some(e => e.earningsBucket && e.earningsBucket !== 'na')
+  const hasReason   = list.some(e => e.reason && e.reason !== 'na')
+  const useReason   = !hasEarnings && hasReason
+  const earnTitle   = document.getElementById('cnh-bd-earn-title')
+  if (earnTitle) earnTitle.textContent = useReason ? 'BY REASON' : 'BY EARNINGS'
+  render('cnh-bd-earn', useReason ? 'reason' : 'earningsBucket')
 }
 
 // ── Events table (sortable + paginated) ──

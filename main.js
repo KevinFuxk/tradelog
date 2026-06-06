@@ -46,8 +46,8 @@ ipcMain.handle('open-csv', async () => {
 ipcMain.handle('open-events', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
-    filters: [{ name: 'JSON / JSONL', extensions: ['jsonl', 'json', 'ndjson', 'txt'] }],
-    title: 'Select Strategy Events File (events.jsonl)'
+    filters: [{ name: 'Strategy data (JSONL / JSON / CSV)', extensions: ['jsonl', 'json', 'ndjson', 'csv', 'txt'] }],
+    title: 'Select Strategy Events File (events.jsonl or backtest CSV)'
   })
   if (canceled || !filePaths[0]) return null
   return fs.readFileSync(filePaths[0], 'utf-8')
