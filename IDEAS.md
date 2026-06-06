@@ -58,3 +58,15 @@
 - **Best-trading-day-of-week breakdown** — expectancy by weekday (Mon–Fri) to spot day-of-week edges/leaks
 - **Per-symbol breakdown: add R + expectancy columns** — extend the new By-Symbol table with avg R and $/trade once Avg R lands
 - **Thousands separators in CSV export numbers stay raw (correct)** — but consider a locale-aware display-only column set if users ask
+
+## 2026-06-06 — Shipped
+- **By-Day-of-Week performance breakdown** on the Dashboard — a mini-table (Day · Trades · Win% · Avg/Trade · Net P&L, with a magnitude bar) grouping every trade by the weekday of its entry, in Mon→Sun order. Answers "do I have a day-of-week edge or leak?" — a common blind spot. Reuses the `.bdt`/`.bd-bar` styling, hides with the rest of the Dashboard when there's no data. (Distinct from the Best/Worst *single* Day stat still pending in open PR #4.)
+- **"Avg/Trade" ($) column on the By-Symbol breakdown** — the existing per-symbol table now shows average $ result per trade alongside the running Net P&L, so a high total driven by one fat trade vs. a steady per-trade edge is distinguishable at a glance.
+- **Unsaved journal-note guard** — closing the trade/journal modal (Cancel, ×, or Escape) while you have unsaved edits now prompts "You have unsaved journal changes. Discard them?" before discarding. Directly protects the app's most precious data — journal notes — from a stray keystroke. Implemented via a `currentModalNote()`/`modalIsDirty()` baseline captured on open; Save bypasses the guard (its state is already the clean baseline). No data-shape change.
+
+### Deferred / next-up ideas (2026-06-06)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **Longest underwater stretch** — complement Current DD with the longest run (trades/days) spent below a prior equity peak
+- **Per-symbol / per-weekday: add Avg R column** once the shared `tradeR()` helper from PR #4 lands (avoid duplicating the R formula)
+- **Dirty-guard the "Clear Data" actions too** — confirm exists, but consider an undo/soft-delete so a mis-click can't wipe an imported log
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
