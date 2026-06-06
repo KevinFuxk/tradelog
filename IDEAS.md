@@ -46,3 +46,15 @@
 - **Thousands separators on money figures** — `1,234.50` formatting on Dashboard stat cards + table P&L for larger accounts (add an `fmtMoney` helper, apply consistently)
 - **Best-trading-day-of-week breakdown** — mini-table of expectancy by weekday (Mon–Fri) to spot day-of-week edges/leaks
 - **Per-symbol performance breakdown** on the Dashboard — win rate / total P&L grouped by symbol (mirrors the Strategy bucket mini-tables)
+
+## 2026-06-05 — Shipped
+- **Thousands separators on money figures** — new `fmtMoney()` helper renders dollar amounts as `+1,234.50` / `-9,870.10`, applied consistently across Dashboard stat cards (Net P&L, Avg Win/Loss, Max Profit/Drawdown, Expectancy), the Trades table P&L cell, the trade-detail modal (P&L + commission), the Journal card header, and the import preview. Much easier to read for larger accounts than raw `1234.5`. No data-shape change.
+- **Current Drawdown stat card** on the Dashboard — shows how far current equity sits below its running high-water mark, in dollars with `% below peak` underneath; reads **"At new high"** when you're at peak equity. Pairs directly with the high-water-mark line shipped 2026-06-04 and the existing Max Drawdown card (worst single trade), so a trader sees *live* risk state, not just the historical worst. Computed in `stats()` from the same peak/cum walk used for `maxDD`.
+- **By-Symbol performance breakdown** on the Dashboard — a mini-table (Symbol · Trades · Win% · Net P&L, with a magnitude bar) grouping all trades by instrument, sorted by total P&L. Instantly answers "which products actually make me money?" — a common blind spot. Reuses the Strategy view's `.bdt`/`.bd-bar` styling; no new CSS.
+
+### Deferred / next-up ideas (2026-06-05)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Best-trading-day-of-week breakdown** — expectancy by weekday (Mon–Fri) to spot day-of-week edges/leaks
+- **Per-symbol breakdown: add R + expectancy columns** — extend the new By-Symbol table with avg R and $/trade once Avg R lands
+- **Thousands separators in CSV export numbers stay raw (correct)** — but consider a locale-aware display-only column set if users ask
