@@ -639,6 +639,7 @@ async function boot() {
     if (dr === '1W' || dr === '1M' || dr === 'all') dailyRange = dr
   } catch {}
   restoreTradeFilters()
+  restoreCnhFilters()
   renderAll()
   applyTradeSortIndicator()
   wire()
@@ -1030,6 +1031,40 @@ function renderDash() {
     'How far your current equity sits below its all-time peak (the running high-water mark on the P&L chart). "At new high" means you are at peak equity right now'
   ]
 
+  // Average realised R-multiple across trades that have a stop set — the
+  // risk-adjusted twin of $ Expectancy (positive = an edge in R terms).
+  const rList = trades.map(t => {
+    const r = calcRisk(t)
+    return (r && !r.breakeven && r.actualRiskPct > 0)
+      ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
+  }).filter(v => v != null)
+  const avgR = rList.length ? rList.reduce((a, b) => a + b, 0) / rList.length : null
+  const avgRCard = avgR != null ? [[
+    'Avg R',
+    `<span class="${avgR >= 0 ? 'col-g' : 'col-r'}">${avgR >= 0 ? '+' : ''}${avgR.toFixed(2)}R</span>`,
+    `${rList.length} trade${rList.length !== 1 ? 's' : ''} w/ stop`,
+    'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
+  ]] : []
+
+  // Best / worst single trading day by net P&L — surfaces outlier days that
+  // can flatter or wreck an otherwise steady-looking curve.
+  const dayMap = {}
+  trades.forEach(t => {
+    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
+  })
+  const dayRows = Object.entries(dayMap)
+  let dayCards = []
+  if (dayRows.length) {
+    const best  = dayRows.reduce((a, b) => b[1] > a[1] ? b : a)
+    const worst = dayRows.reduce((a, b) => b[1] < a[1] ? b : a)
+    const fday  = d => { const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' }) }
+    dayCards = [
+      ['Best Day',  `<span class="col-g">${fmtMoney(best[1])}</span>`,  fday(best[0]),  'Your single most profitable trading day (sum of all P&L on that calendar date)'],
+      ['Worst Day', `<span class="col-r">${fmtMoney(worst[1])}</span>`, fday(worst[0]), 'Your single worst trading day (sum of all P&L on that calendar date)'],
+    ]
+  }
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
@@ -1040,7 +1075,9 @@ function renderDash() {
     ['Max Profit',   `<span class="col-g">${fmtMoney(s.best)}</span>`, 'single trade', 'Your single largest winning trade'],
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ...avgRCard,
     ddCard,
+    ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
   ].map(([l,v,ss,ti]) =>
@@ -1902,13 +1939,59 @@ function cnhPopulateFilters() {
   fill('cnh-f-symbol', [...new Set(events.map(e=>e.symbol))].sort(), 'All products')
   fill('cnh-f-tf', [...new Set(events.map(e=>e.timeframe))].filter(Boolean).sort(), 'All timeframes')
   fill('cnh-f-size', [...new Set(events.map(e=>e.sizeTier))].filter(Boolean).sort(), 'All sizes')
+
+  // Apply any restored dynamic-select values once the options now exist (the
+  // symbol/TF/size lists are built from the imported events above).
+  if (cnhPendingRestore) {
+    const set = (id, val) => {
+      const el = document.getElementById(id)
+      if (el && val && [...el.options].some(o => o.value === val)) el.value = val
+    }
+    set('cnh-f-symbol', cnhPendingRestore.symbol)
+    set('cnh-f-tf', cnhPendingRestore.tf)
+    set('cnh-f-size', cnhPendingRestore.size)
+    cnhPendingRestore = null
+  }
+}
+
+// ── Strategy filter + sort persistence (mirrors the Trades view) ──
+// Remembered locally so the Cup & Handle view keeps your last symbol/TF/size/
+// outcome/date filters and sort across restarts. No JSON-store change.
+const CNH_FILTERS_KEY = 'tradelog.cnhFilters'
+let cnhPendingRestore = null
+function saveCnhFilters() {
+  try {
+    const v = id => document.getElementById(id)?.value || ''
+    localStorage.setItem(CNH_FILTERS_KEY, JSON.stringify({
+      symbol:v('cnh-f-symbol'), tf:v('cnh-f-tf'), size:v('cnh-f-size'),
+      outcome:v('cnh-f-outcome'), from:v('cnh-f-from'), to:v('cnh-f-to'),
+      sort:cnhSort, dir:cnhDir
+    }))
+  } catch {}
+}
+function restoreCnhFilters() {
+  try {
+    const s = JSON.parse(localStorage.getItem(CNH_FILTERS_KEY) || 'null')
+    if (!s) return
+    // Static fields apply immediately; dynamic selects wait for cnhPopulateFilters.
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
+    set('cnh-f-outcome', s.outcome); set('cnh-f-from', s.from); set('cnh-f-to', s.to)
+    if (s.sort) cnhSort = s.sort
+    if (s.dir)  cnhDir  = s.dir
+    cnhPendingRestore = s
+  } catch {}
+}
+function applyCnhSortIndicator() {
+  document.querySelectorAll('#v-strategy thead th').forEach(t => t.classList.remove('sort-asc','sort-desc'))
+  const th = document.querySelector(`#v-strategy thead th[data-col="${cnhSort}"]`)
+  if (th) th.classList.add('sort-' + cnhDir)
 }
 
 function clearCnhFilters() {
   ['cnh-f-symbol','cnh-f-tf','cnh-f-size','cnh-f-outcome','cnh-f-from','cnh-f-to'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = ''
   })
-  cnhPage = 1; renderStrategy()
+  cnhPage = 1; saveCnhFilters(); renderStrategy()
 }
 
 // Export the currently filtered cup & handle setups to CSV — mirrors the
@@ -1951,6 +2034,7 @@ function renderStrategy() {
   empty.style.display = 'none'; content.style.display = 'block'
 
   cnhPopulateFilters()
+  applyCnhSortIndicator()
   const list = cnhFiltered()
   const s = eventStats(list)
 
@@ -2261,7 +2345,7 @@ function wire() {
     e.target.value = ''
   })
   ;['cnh-f-symbol','cnh-f-tf','cnh-f-size','cnh-f-outcome','cnh-f-from','cnh-f-to'].forEach(id =>
-    document.getElementById(id)?.addEventListener('input', () => { cnhPage = 1; renderStrategy() })
+    document.getElementById(id)?.addEventListener('input', () => { cnhPage = 1; renderStrategy(); saveCnhFilters() })
   )
   document.getElementById('cnh-f-clr').addEventListener('click', clearCnhFilters)
   document.querySelectorAll('#v-strategy thead th[data-col]').forEach(th => {
@@ -2271,7 +2355,7 @@ function wire() {
       else { cnhSort = c; cnhDir = 'desc' }
       document.querySelectorAll('#v-strategy thead th').forEach(t => t.classList.remove('sort-asc','sort-desc'))
       th.classList.add('sort-' + cnhDir)
-      cnhPage = 1; renderCnhTable(cnhFiltered())
+      cnhPage = 1; renderCnhTable(cnhFiltered()); saveCnhFilters()
     })
   })
 
