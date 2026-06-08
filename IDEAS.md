@@ -70,3 +70,15 @@
 - **Per-symbol / per-weekday: add Avg R column** once the shared `tradeR()` helper from PR #4 lands (avoid duplicating the R formula)
 - **Dirty-guard the "Clear Data" actions too** — confirm exists, but consider an undo/soft-delete so a mis-click can't wipe an imported log
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-07 — Shipped
+- **Avg R stat card on Dashboard** — shows the average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked), with a `N trades w/ stop` sub-line. The risk-adjusted twin of the existing $ Expectancy card, so R-based traders see their edge in risk units, not just dollars. Reuses `calcRisk`; only the same R formula already used in the Trades table and Journal headers. No data-shape change.
+- **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
+- **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
+
+### Deferred / next-up ideas (2026-06-07)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
