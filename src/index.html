@@ -317,6 +317,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div style="height:140px;position:relative"><canvas id="c-daily"></canvas></div>
     </div>
 
+    <div class="card" id="dow-card" style="margin-bottom:14px">
+      <div class="ct" title="P&amp;L grouped by the weekday of each trade's entry — spot which days carry (or leak) your edge">BY DAY OF WEEK</div>
+      <div id="ds-dow-bd"></div>
+    </div>
+
     <div class="card" id="symbol-card" style="margin-bottom:0">
       <div class="ct">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
@@ -992,14 +997,15 @@ function renderDash() {
   const cr = document.getElementById('charts-row')
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
+  const dwc = document.getElementById('dow-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1042,7 +1048,46 @@ function renderDash() {
   ).join('')
 
   renderSymbolBreakdown()
+  renderDowBreakdown()
   buildCharts(s)
+}
+
+// Day-of-week performance — answers "am I better on certain weekdays?".
+// Groups by the weekday of each trade's entry; rows stay in Mon→Sun order
+// (only weekdays that actually traded are shown). Reuses .bdt / .bd-bar.
+function renderDowBreakdown() {
+  const el = document.getElementById('ds-dow-bd'); if (!el) return
+  const NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+  const ORDER = [1,2,3,4,5,6,0] // Mon-first, Sunday last
+  const groups = {}
+  trades.forEach(t => {
+    const d = new Date(t.entryTime)
+    if (isNaN(d)) return
+    const k = d.getDay();
+    (groups[k] = groups[k] || []).push(t)
+  })
+  const rows = ORDER.filter(k => groups[k]).map(k => {
+    const ts = groups[k]
+    const n = ts.length
+    const wins = ts.filter(t => t.pnl > 0).length
+    const total = ts.reduce((a, t) => a + t.pnl, 0)
+    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n }
+  })
+  if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades</div>'; return }
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  el.innerHTML = `<table class="bdt">
+    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      return `<tr>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
 }
 
 // Per-symbol performance mini-table — which instruments actually make money.
@@ -1055,11 +1100,11 @@ function renderSymbolBreakdown() {
     const n = ts.length
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name, n, wr: (wins / n) * 100, total }
+    return { name, n, wr: (wins / n) * 100, total, avg: total / n }
   }).sort((a, b) => b.total - a.total)
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1067,6 +1112,7 @@ function renderSymbolBreakdown() {
         <td class="bd-name">${r.name}</td>
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
@@ -1480,6 +1526,33 @@ function renderJournal() {
 // ════════════════════════════════════════════════════
 //  MODAL
 // ════════════════════════════════════════════════════
+// Snapshot of the journal fields as they were when the modal opened, so we can
+// warn before discarding unsaved edits — journal notes are a trader's most
+// precious data and must never be lost to a stray Escape / click.
+let modalBaseline = ''
+
+// Read the six structured journal fields straight from the DOM into a note object
+// (same shape saveNote persists). Used for both saving and dirty-checking.
+function currentModalNote() {
+  const note = {}
+  J_FIELDS.forEach(f => {
+    if (f === 'structure') {
+      const yes = document.getElementById('jf-structure-yes')?.classList.contains('active-yes')
+      const no  = document.getElementById('jf-structure-no')?.classList.contains('active-no')
+      if (yes) note.structure = 'yes'
+      else if (no) note.structure = 'no'
+    } else {
+      const v = document.getElementById(`jf-${f}`)?.value.trim() || ''
+      if (v) note[f] = v
+    }
+  })
+  return note
+}
+
+function modalIsDirty() {
+  return JSON.stringify(currentModalNote()) !== modalBaseline
+}
+
 function openModal(id) {
   const t = trades.find(t => t.id === id)
   if (!t) return
@@ -1513,6 +1586,8 @@ function openModal(id) {
     ...(t.commission ? [['Commission', `<span style="color:var(--red)">${fmtMoney(t.commission, false)}</span>`]] : []),
     ...riskItems,
   ].map(([k,v]) => `<div class="mi"><div class="mk">${k}</div><div class="mv">${v}</div></div>`).join('')
+  // Capture the just-populated field state as the clean baseline for dirty-checking
+  modalBaseline = JSON.stringify(currentModalNote())
   document.getElementById('modal').classList.add('on')
 }
 
@@ -1527,25 +1602,20 @@ function setStructure(val) {
 
 async function saveNote() {
   if (!activeTrade) return
-  const note = {}
-  J_FIELDS.forEach(f => {
-    if (f === 'structure') {
-      const yes = document.getElementById('jf-structure-yes')?.classList.contains('active-yes')
-      const no  = document.getElementById('jf-structure-no')?.classList.contains('active-no')
-      if (yes) note.structure = 'yes'
-      else if (no) note.structure = 'no'
-    } else {
-      const v = document.getElementById(`jf-${f}`)?.value.trim() || ''
-      if (v) note[f] = v
-    }
-  })
+  const note = currentModalNote()
   if (Object.keys(note).length) notes[activeTrade.id] = note
   else delete notes[activeTrade.id]
   if (window.api) await window.api.save('notes', notes)
-  closeModal(); renderTrades(); renderJournal()
+  modalBaseline = JSON.stringify(note)   // saved state is now the clean baseline
+  closeModal(true); renderTrades(); renderJournal()
 }
 
-function closeModal() { document.getElementById('modal').classList.remove('on'); activeTrade = null }
+// force = bypass the unsaved-changes guard (used right after a successful save)
+function closeModal(force) {
+  if (!force && activeTrade && modalIsDirty() &&
+      !confirm('You have unsaved journal changes. Discard them?')) return
+  document.getElementById('modal').classList.remove('on'); activeTrade = null
+}
 
 // ════════════════════════════════════════════════════
 //  IMPORT
@@ -2206,8 +2276,8 @@ function wire() {
   })
 
   // Modal
-  document.getElementById('m-close').addEventListener('click', closeModal)
-  document.getElementById('m-cancel').addEventListener('click', closeModal)
+  document.getElementById('m-close').addEventListener('click', () => closeModal())
+  document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
