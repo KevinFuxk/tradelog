@@ -322,6 +322,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div id="ds-dow-bd"></div>
     </div>
 
+    <div class="card" id="hour-card" style="margin-bottom:14px">
+      <div class="ct" title="P&amp;L grouped by the hour of each trade's entry (local time) — find your best and worst hours of the day">BY HOUR OF DAY</div>
+      <div id="ds-hour-bd"></div>
+    </div>
+
     <div class="card" id="symbol-card" style="margin-bottom:0">
       <div class="ct">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
@@ -350,7 +355,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…  ( / )" title="Press / anywhere to jump here" style="width:170px">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -395,7 +400,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
     <!-- Journal filters -->
     <div class="fbar" id="jn-filters" style="margin-bottom:16px">
-      <input class="fi" id="jf-q" placeholder="Search notes…" oninput="renderJournal()" style="width:180px" title="Search the text of your journal notes (and symbol)">
+      <input class="fi" id="jf-q" placeholder="Search notes…  ( / )" oninput="renderJournal()" style="width:190px" title="Search the text of your journal notes (and symbol). Press / anywhere to jump here">
       <select class="fs" id="jf-symbol" onchange="renderJournal()">
         <option value="">All products</option>
       </select>
@@ -966,12 +971,14 @@ function stats(list) {
 
   // max drawdown: largest peak-to-trough drop in cumulative P&L
   const sorted = [...list].sort((a,b)=>new Date(a.entryTime)-new Date(b.entryTime))
-  let peak=0, cum=0, maxDD=0
+  let peak=0, cum=0, maxDD=0, uw=0, maxUW=0
   sorted.forEach(t => {
     cum += t.pnl
     if (cum > peak) peak = cum
     const dd = peak - cum
     if (dd > maxDD) maxDD = dd
+    // Underwater = below a prior equity peak; track the longest such run (in trades)
+    if (dd > 0.0049) { uw++; if (uw > maxUW) maxUW = uw } else uw = 0
   })
   // Current (open) drawdown = how far final equity sits below its running peak
   const curDD    = +(peak - cum).toFixed(2)
@@ -983,7 +990,7 @@ function stats(list) {
     total, avgW, avgL, pf, mw, ml,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
-    maxDD, curDD, curDDPct, peak, atHigh }
+    maxDD, curDD, curDDPct, peak, atHigh, maxUW }
 }
 
 // ════════════════════════════════════════════════════
@@ -999,14 +1006,15 @@ function renderDash() {
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
+  const hoc = document.getElementById('hour-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = hoc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = hoc.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1077,6 +1085,7 @@ function renderDash() {
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
     ddCard,
+    ['Longest Underwater', `<span class="${s.maxUW>0?'col-r':'col-g'}">${s.maxUW}</span>`, s.maxUW>0?'trades below peak':'never underwater', 'The longest run of consecutive trades spent below a previous equity high-water mark — a proxy for your worst recovery period (in number of trades). 0 means you were never underwater'],
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
@@ -1086,6 +1095,7 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderHourBreakdown()
   buildCharts(s)
 }
 
@@ -1114,6 +1124,45 @@ function renderDowBreakdown() {
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
     <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      return `<tr>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
+}
+
+// Hour-of-day performance — answers "which hours of the day carry my edge?".
+// Groups by the entry hour (local time); only trades whose timestamp carries a
+// time-of-day are counted, so pure date-only logs don't collapse into "00:00".
+// Reuses .bdt / .bd-bar, mirroring the weekday breakdown.
+function renderHourBreakdown() {
+  const el = document.getElementById('ds-hour-bd'); if (!el) return
+  const groups = {}
+  trades.forEach(t => {
+    if (!/\d:\d/.test(t.entryTime || '')) return // skip date-only timestamps
+    const d = new Date(t.entryTime)
+    if (isNaN(d)) return
+    const h = d.getHours();
+    (groups[h] = groups[h] || []).push(t)
+  })
+  const hours = Object.keys(groups).map(Number).sort((a, b) => a - b)
+  if (!hours.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No intraday timestamps</div>'; return }
+  const rows = hours.map(h => {
+    const ts = groups[h]
+    const n = ts.length
+    const wins = ts.filter(t => t.pnl > 0).length
+    const total = ts.reduce((a, t) => a + t.pnl, 0)
+    return { name: String(h).padStart(2, '0') + ':00', n, wr: (wins / n) * 100, total, avg: total / n }
+  })
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  el.innerHTML = `<table class="bdt">
+    <thead><tr><th>Hour</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -2372,6 +2421,15 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight to the search box — Journal's if that view is open, else Trades'
+        e.preventDefault()
+        if (document.getElementById('v-journal').classList.contains('on')) {
+          document.getElementById('jf-q')?.focus()
+        } else {
+          go('trades'); document.getElementById('f-q')?.focus()
+        }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })

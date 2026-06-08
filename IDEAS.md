@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-08 — Shipped
+- **By-Hour-of-Day performance breakdown** on the Dashboard — a mini-table (Hour · Trades · Win% · Avg/Trade · Net P&L, with a magnitude bar) grouping every trade by the local hour of its entry, in 00:00→23:00 order. Answers "which hours of the day carry my edge?" — the intraday twin of the existing By-Day-of-Week table. Only trades whose timestamp carries an actual time-of-day are counted (regex `/\d:\d/`), so a pure date-only log doesn't collapse into a misleading single "00:00" row (shows "No intraday timestamps" instead). Reuses `.bdt`/`.bd-bar`; hides with the rest of the Dashboard when there's no data.
+- **Longest Underwater stat card** on the Dashboard — the longest run of consecutive trades spent below a previous equity high-water mark (a proxy for the worst recovery period, in trade count), reading **0 / "never underwater"** when the curve only made new highs. Computed in `stats()` inside the same peak/cum walk that already produces `maxDD`/`curDD`, so no extra pass. Pairs with the existing Current DD and Max Drawdown cards to round out the drawdown picture.
+- **`/` keyboard shortcut to focus search** — pressing `/` anywhere (when not already typing / in a modal) jumps to the Journal search box if the Journal view is open, otherwise switches to Trades and focuses its search box. `preventDefault` keeps the `/` out of the field. Both search placeholders now advertise `( / )` (and a tooltip), mirroring how the sidebar tooltips surface the `[1]`–`[4]` nav keys. Power-user, keyboard-only filtering.
+
+### Deferred / next-up ideas (2026-06-08)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Avg R per symbol / per weekday / per hour** — add an Avg R column to the By-Symbol / By-Day / By-Hour tables once the shared `tradeR()` helper from open PR #4 lands (avoid re-duplicating the R formula)
+- **Hour-of-day as UTC vs local toggle** — intraday session edges (London/NY open) are clearer in a fixed timezone; consider a small local/UTC switch on the By-Hour card
+- **Drawdown duration in days** — complement Longest Underwater (trades) with the longest calendar-time stretch below a prior peak
+- **Dirty-guard / soft-delete the "Clear Data" actions** — an undo so a mis-click can't wipe an imported log
