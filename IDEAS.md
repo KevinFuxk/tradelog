@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-09 — Shipped
+- **Filtered Net P&L + Win% in the Trades sub-header** — the "N trades" line now also shows the net P&L (green/red via `fmtMoney`) and win rate of the *currently filtered* set. Narrowing by symbol / date / result instantly answers "how does this slice actually do?" without eyeballing the table or exporting. Computed in `renderTrades()` from the existing `filtered` array; no data-shape change.
+- **Click-the-backdrop to close the trade/journal modal** — clicking the dark area outside the dialog box now closes it, running through the *same* unsaved-changes guard as Cancel/×/Escape (only fires when `e.target.id === 'modal'`, so clicks inside the dialog don't dismiss it). A standard convenience that never risks losing a half-typed journal note.
+- **"Data storage" card on the Import page** — surfaces the on-disk folder where trades/notes/settings JSON live, via the already-exposed-but-unused `getUserDataPath()` IPC, with a "back up this folder" nudge. Directly serves the app's "never lose your journal" promise by telling traders where their irreplaceable notes actually are. Read-only; no persistence change.
+
+### Deferred / next-up ideas (2026-06-09)
+- **Filtered summary on the Strategy (Cup & Handle) view** — mirror the new Trades sub-header summary (Total R / Win% of the current filter) on the strategy `cnh-sub` line
+- **Click-outside / Escape to dismiss the Import preview** too, for consistency with the modal
+- **"Open data folder" button** next to the new storage path (needs a `shell.openPath` IPC in main.js)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **Avg R per symbol / per weekday** — add an Avg R column to the dashboard breakdown tables (note: a shared `tradeR()` helper is proposed in still-open PR #4)
+- **Best/worst hour-of-day breakdown** — proposed in still-open PR #9 (by-hour table); revisit once that lands or closes

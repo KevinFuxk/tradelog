@@ -541,6 +541,15 @@ textarea.nt::placeholder{color:var(--tx3);}
       </div>
     </div>
 
+    <div class="card" style="margin-bottom:14px">
+      <div class="ct">DATA STORAGE</div>
+      <div style="font-size:11px;color:var(--tx2);line-height:1.9">
+        Your trades, journal notes, and settings are saved as JSON files on this computer — nothing is sent anywhere.<br>
+        <span style="color:var(--tx3)">Folder:</span> <span id="data-loc" style="word-break:break-all">—</span><br>
+        <span style="color:var(--tx3)">Back up this folder to make sure you never lose your journal.</span>
+      </div>
+    </div>
+
     <div id="imp-preview" style="display:none">
       <div class="card">
         <div class="ct" id="prev-title">PREVIEW</div>
@@ -634,6 +643,14 @@ async function boot() {
   }
   document.getElementById('s-balance').value = settings.accountBalance
   document.getElementById('s-risk').value    = settings.targetRisk
+  // Surface where the JSON data files live, so traders can find & back them up
+  if (window.api && window.api.getUserDataPath) {
+    try {
+      const p = await window.api.getUserDataPath()
+      const el = document.getElementById('data-loc')
+      if (el && p) el.textContent = p
+    } catch {}
+  }
   try {
     const dr = localStorage.getItem(DAILY_RANGE_KEY)
     if (dr === '1W' || dr === '1M' || dr === 'all') dailyRange = dr
@@ -1301,7 +1318,20 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Summarise the CURRENTLY filtered set right in the sub-header, so narrowing
+  // by symbol/date/result instantly shows that slice's net P&L and win rate —
+  // no need to eyeball the table or export to a spreadsheet.
+  if (filtered.length) {
+    const net  = filtered.reduce((a, t) => a + t.pnl, 0)
+    const wins = filtered.filter(t => t.pnl > 0).length
+    const wr   = (wins / filtered.length) * 100
+    document.getElementById('tr-sub').innerHTML =
+      `${filtered.length} trade${filtered.length!==1?'s':''} · ` +
+      `<span class="${net>=0?'col-g':'col-r'}">${fmtMoney(net)}</span> · ` +
+      `${wr.toFixed(0)}% win`
+  } else {
+    document.getElementById('tr-sub').textContent = '0 trades'
+  }
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -2363,6 +2393,11 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  // Click the dark backdrop (outside the dialog box) to close — runs through the
+  // same unsaved-changes guard as Cancel/×/Escape, so notes are never lost.
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target.id === 'modal') closeModal()
+  })
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
