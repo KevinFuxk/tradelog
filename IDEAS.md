@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-10 — Shipped
+- **Quick date-range presets on the Trades filter** — Today / This Wk / This Mo / YTD buttons next to the date inputs set the From/To filters in one click, with the active preset highlighted (blue). *Why:* "how did this week go?" is the single most common review question; until now it meant hand-picking two dates every time. Reuses the existing `f-from`/`f-to` inputs and their localStorage persistence — no new filter state, no data-shape change. (`tradePresetRange`/`setTradeDateRange`/`syncTradePresetBtns`; highlight recomputed in `renderTrades`.)
+- **Planned R:R in the trade-detail modal** — when both a stop and a target price are set, the modal now shows the planned reward:risk (distance to TP ÷ distance to SL), e.g. `2.50 : 1`, in gold. *Why:* lets a trader judge whether a setup was structurally worth taking regardless of how it actually closed — a 0.8:1 winner is a process leak even though it banked. Pure derivation in `openModal`; no persistence change.
+- **"Fees Paid" stat card on the Dashboard** — total commission/fees across all trades (already netted out of P&L), with a `across N trades` sub-line and a tooltip on fee drag. *Why:* commission quietly erodes an edge and is invisible when only Net P&L is shown; surfacing it relative to Net P&L flags over-trading / high-cost instruments. Only appears when trades carry commission data. Derived in `renderDash` from existing `commission` fields.
+
+### Deferred / next-up ideas (2026-06-10)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **Avg R per symbol / per weekday** — once a shared `tradeR()` helper lands (PR #4), add an Avg R column to the By-Symbol / By-Day-of-Week tables
+- **Fees as % of gross profit** — extend the Fees Paid card (or a tooltip) with commission as a share of gross winnings, a sharper "drag" signal than the raw dollar total
+- **Quick date presets on the Strategy + Journal date filters** — mirror the Trades presets on the Cup & Handle and Journal views
+- **Realised vs planned R scatter** — pair the new Planned R:R with realised R to show how often setups achieve their intended reward
