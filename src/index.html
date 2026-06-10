@@ -86,7 +86,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tx)
 .btn-g:hover{border-color:var(--b2);color:var(--tx);}
 .btn-r{background:var(--red-bg);color:var(--red);border:1px solid transparent;}
 .btn-r:hover{border-color:var(--red);}
-.daily-range-btn.on{background:var(--blue-bg);color:var(--blue);border-color:var(--blue);}
+.daily-range-btn.on,.tr-range-btn.on{background:var(--blue-bg);color:var(--blue);border-color:var(--blue);}
 
 /* ── Stats ───────────────────────────────── */
 .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px;margin-bottom:24px;}
@@ -355,6 +355,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
       <input class="fi" type="date" id="f-to" title="To date">
+      <span style="font-size:11px;color:var(--tx3)">Quick:</span>
+      <button class="btn btn-g tr-range-btn" data-range="today" style="padding:6px 10px;font-size:11px" title="Show only today's trades">Today</button>
+      <button class="btn btn-g tr-range-btn" data-range="week"  style="padding:6px 10px;font-size:11px" title="Trades since Monday this week">This Wk</button>
+      <button class="btn btn-g tr-range-btn" data-range="month" style="padding:6px 10px;font-size:11px" title="Trades since the 1st of this month">This Mo</button>
+      <button class="btn btn-g tr-range-btn" data-range="ytd"   style="padding:6px 10px;font-size:11px" title="Trades since Jan 1 this year">YTD</button>
       <button class="btn btn-g" id="f-clr">Clear</button>
     </div>
 
@@ -1021,6 +1026,17 @@ function renderDash() {
     'Average hold time of winning trades (losers shown below). If losers are held much longer than winners, you may be letting losses run'
   ]] : []
 
+  // Total commission/fees paid — an often-overlooked cost that quietly erodes
+  // an edge. Already deducted from Net P&L; surfaced here as standalone "drag".
+  const totalComm  = trades.reduce((a, t) => a + (t.commission || 0), 0)
+  const commTrades = trades.filter(t => t.commission).length
+  const feesCard = commTrades ? [[
+    'Fees Paid',
+    `<span class="col-r">${fmtMoney(-Math.abs(totalComm), false)}</span>`,
+    `across ${commTrades} trade${commTrades!==1?'s':''}`,
+    'Total commission/fees paid across all trades (already deducted from Net P&L). Fee drag is easy to overlook — watch it relative to your Net P&L'
+  ]] : []
+
   // Current drawdown — how far equity sits below its running peak right now.
   const curDDsub = s.atHigh ? 'no open drawdown'
     : (s.peak > 0 ? `${s.curDDPct.toFixed(1)}% below peak` : 'below peak')
@@ -1080,6 +1096,7 @@ function renderDash() {
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
+    ...feesCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
   ).join('')
@@ -1302,6 +1319,7 @@ function getFiltered() {
 function renderTrades() {
   filtered = getFiltered()
   document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  syncTradePresetBtns()
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -1423,6 +1441,36 @@ function applyTradeSortIndicator() {
   document.querySelectorAll('#tr-wrap thead th').forEach(t => t.classList.remove('sort-asc','sort-desc'))
   const th = document.querySelector(`#tr-wrap thead th[data-col="${sortCol}"]`)
   if (th) th.classList.add('sort-' + sortDir)
+}
+
+// ── Quick date-range presets for the Trades filter ──
+// One click sets the From/To inputs to a common window (today / this week /
+// this month / year-to-date) so a trader can answer "how did THIS week go?"
+// without picking two dates by hand. Reuses the existing date-filter inputs
+// and their persistence — no new filter state.
+function pad2(n){ return String(n).padStart(2,'0') }
+function ymd(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()) }
+function tradePresetRange(range){
+  const now = new Date(); let from = new Date(now)
+  if (range === 'week')       { const dow = (from.getDay()+6)%7; from.setDate(from.getDate()-dow) }
+  else if (range === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1)
+  else if (range === 'ytd')   from = new Date(now.getFullYear(), 0, 1)
+  return { from: ymd(from), to: ymd(now) }
+}
+function setTradeDateRange(range){
+  const { from, to } = tradePresetRange(range)
+  const fe = document.getElementById('f-from'), te = document.getElementById('f-to')
+  if (fe) fe.value = from
+  if (te) te.value = to
+  page = 1; renderTrades(); saveTradeFilters()
+}
+function syncTradePresetBtns(){
+  const f = document.getElementById('f-from')?.value || ''
+  const t = document.getElementById('f-to')?.value || ''
+  document.querySelectorAll('.tr-range-btn').forEach(b => {
+    const r = tradePresetRange(b.dataset.range)
+    b.classList.toggle('on', f === r.from && t === r.to)
+  })
 }
 
 // ── Journal ───────────────────────────────
@@ -1610,6 +1658,12 @@ function openModal(id) {
     ['Actual %Risk',  risk.breakeven ? `<span style="color:var(--blue)">Breakeven Stop</span>` : `<span style="color:${risk.actualRiskPct > settings.targetRisk ? 'var(--red)' : 'var(--green)'}">${risk.actualRiskPct.toFixed(2)}% <span style="font-size:10px;color:var(--tx3)">(target ${settings.targetRisk}%)</span></span>`],
   ] : []
   const dur = fdur(t.entryTime, t.exitTime)
+  // Planned reward:risk — distance to TP vs distance to SL, when both are set.
+  // Tells a trader whether the setup was structurally worth taking (e.g. 2.5:1)
+  // regardless of how it actually closed.
+  const rr = (t.slPrice && t.tpPrice && t.entryPrice && Math.abs(t.entryPrice - t.slPrice) > 0)
+    ? Math.abs(t.tpPrice - t.entryPrice) / Math.abs(t.entryPrice - t.slPrice)
+    : null
   document.getElementById('m-meta').innerHTML = [
     ['Entry Time',  fdt(t.entryTime)],
     ['Exit Time',   fdt(t.exitTime)],
@@ -1618,6 +1672,7 @@ function openModal(id) {
     ['Exit Price',  t.exitPrice  || '—'],
     ['SL Price',    t.slPrice ? t.slPrice : '—'],
     ['TP Price',    t.tpPrice ? t.tpPrice : '—'],
+    ...(rr != null ? [['Planned R:R', `<span style="color:var(--gold)">${rr.toFixed(2)} : 1</span>`]] : []),
     ['Quantity',    t.qty],
     ['Net P&L',      `<span style="color:${pc}">${fmtMoney(t.pnl)}</span>`],
     ...(t.commission ? [['Commission', `<span style="color:var(--red)">${fmtMoney(t.commission, false)}</span>`]] : []),
@@ -2300,6 +2355,11 @@ function wire() {
 
   // Export filtered trades
   document.getElementById('tr-export').addEventListener('click', exportTradesCSV)
+
+  // Quick date-range presets (Today / This Week / This Month / YTD)
+  document.querySelectorAll('.tr-range-btn').forEach(b =>
+    b.addEventListener('click', () => setTradeDateRange(b.dataset.range))
+  )
 
   // Clear data
   document.getElementById('tr-clear-data').addEventListener('click', async () => {
