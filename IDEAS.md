@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-11 — Shipped
+- **Current Streak stat card on the Dashboard** — shows the run of consecutive winning or losing trades ending at the most recent trade (e.g. `3W` green / `2L` red), with a `wins/losses in a row` sub-line. Distinct from the existing Max Consec Wins (historical longest); this is the *live* state. A long losing streak is a classic tilt cue, so surfacing it nudges sizing-down / stepping away. Computed in `stats()` from the same chronological `sorted` walk already used for drawdown; a breakeven trade ends the streak; hidden when no win/loss exists yet. No data-shape change.
+- **Payoff Ratio stat card on the Dashboard** — average winner ÷ average loser (e.g. `2.15 : 1`), green when ≥ 1. Paired with Win Rate it defines the edge: a low win rate still profits if winners are big enough relative to losers. Reuses the `avgW`/`avgL` already in `stats()`; shows `∞` when there are no losses. No data-shape change.
+- **By-Month performance breakdown on the Dashboard** — a mini-table (Month · Trades · Win% · Avg/Trade · Net P&L, with a magnitude bar) grouping every trade by the calendar month of its entry, in chronological order. Answers "am I consistent month-over-month, or is one month carrying the year?" — the natural complement to the existing By-Symbol / By-Day-of-Week / By-Hour (PR #9) tables. Reuses the `.bdt`/`.bd-bar` styling (no new CSS), hides with the rest of the Dashboard when there's no data, skips undated trades.
+
+### Deferred / next-up ideas (2026-06-11)
+- **Sortable Hold Time column in Trades table** — the `.tw` wrapper already scrolls horizontally, so this is now mostly safe; add a `holdMs` sortable column (special-case it in `getFiltered()`'s sort like `entryTime`)
+- **Drawdown-aware sizing hint** — when Current DD is deep, surface a suggested reduced size on the import/settings panel
+- **By-Month / By-Symbol Avg R column** — once the shared `tradeR()` helper from PR #4 lands, add an Avg R column to the breakdown tables
+- **Expected value / breakeven win rate readout** — given the Payoff Ratio, show the win rate needed to break even (1 ÷ (1 + payoff)) as a tooltip or sub-line
+- **Calendar heat-map of daily P&L** — a month grid coloured by daily net, a richer view than the Daily P&L bar chart

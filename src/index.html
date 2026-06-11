@@ -322,6 +322,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div id="ds-dow-bd"></div>
     </div>
 
+    <div class="card" id="month-card" style="margin-bottom:14px">
+      <div class="ct" title="Net P&amp;L grouped by calendar month — track month-over-month consistency and spot a single month carrying (or sinking) the year">BY MONTH</div>
+      <div id="ds-month-bd"></div>
+    </div>
+
     <div class="card" id="symbol-card" style="margin-bottom:0">
       <div class="ct">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
@@ -978,9 +983,25 @@ function stats(list) {
   const curDDPct = peak > 0 ? (curDD / peak) * 100 : 0
   const atHigh   = curDD <= 0.0049   // within rounding of a fresh high
 
+  // Current streak — the run of consecutive wins/losses ending at the most
+  // recent trade (chronological). A long losing streak is a classic tilt cue.
+  let curStreak = 0, curStreakWin = null
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i].pnl
+    if (p === 0) break                       // a breakeven trade ends the streak
+    const win = p > 0
+    if (curStreakWin === null) { curStreakWin = win; curStreak = 1 }
+    else if (win === curStreakWin) curStreak++
+    else break
+  }
+
+  // Payoff ratio (avg win ÷ avg loss) — how big winners are vs losers. Paired
+  // with win rate it defines the edge; ∞ when there are no losses yet.
+  const payoff = avgL !== 0 ? Math.abs(avgW / avgL) : (avgW > 0 ? Infinity : 0)
+
   return { n:list.length, wins:wins.length, losses:losses.length,
     wr: list.length ? (wins.length/list.length)*100 : 0,
-    total, avgW, avgL, pf, mw, ml,
+    total, avgW, avgL, pf, mw, ml, payoff, curStreak, curStreakWin,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
     maxDD, curDD, curDDPct, peak, atHigh }
@@ -999,14 +1020,15 @@ function renderDash() {
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
+  const mc = document.getElementById('month-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = mc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = mc.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1072,6 +1094,7 @@ function renderDash() {
     ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross profit ÷ gross loss. Above 1.0 is profitable; 2.0+ is strong'],
     ['Avg Win', `<span class="col-g">${fmtMoney(s.avgW)}</span>`, 'per winner', 'Average profit on your winning trades'],
     ['Avg Loss', `<span class="col-r">${fmtMoney(s.avgL)}</span>`, 'per loser', 'Average loss on your losing trades'],
+    ['Payoff Ratio', `<span class="${s.payoff>=1?'col-g':'col-r'}">${isFinite(s.payoff)?s.payoff.toFixed(2)+' : 1':'∞'}</span>`, 'avg win ÷ avg loss', 'Your average winner divided by your average loser. Paired with Win Rate it defines your edge — a low win rate still profits if winners are big enough relative to losers'],
     ['Max Profit',   `<span class="col-g">${fmtMoney(s.best)}</span>`, 'single trade', 'Your single largest winning trade'],
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
@@ -1079,6 +1102,12 @@ function renderDash() {
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
+    ...(s.curStreakWin === null ? [] : [[
+      'Current Streak',
+      `<span class="${s.curStreakWin?'col-g':'col-r'}">${s.curStreak}${s.curStreakWin?'W':'L'}</span>`,
+      s.curStreakWin ? 'wins in a row' : 'losses in a row',
+      'Your current run of consecutive winning or losing trades, most recent first. A long losing streak is a classic tilt warning — consider sizing down or stepping away'
+    ]]),
     ...holdCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
@@ -1086,7 +1115,47 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderMonthBreakdown()
   buildCharts(s)
+}
+
+// Month-over-month performance — answers "am I consistent, or is one month
+// carrying the year?". Groups every trade by the calendar month of its entry,
+// in chronological order. Reuses the .bdt / .bd-bar styling (no new CSS).
+function renderMonthBreakdown() {
+  const el = document.getElementById('ds-month-bd'); if (!el) return
+  const groups = {}
+  trades.forEach(t => {
+    const d = new Date(t.entryTime)
+    if (isNaN(d)) return
+    const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    (groups[k] = groups[k] || []).push(t)
+  })
+  const keys = Object.keys(groups).sort()   // 'YYYY-MM' sorts chronologically
+  if (!keys.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades</div>'; return }
+  const rows = keys.map(k => {
+    const ts = groups[k]
+    const n = ts.length
+    const wins = ts.filter(t => t.pnl > 0).length
+    const total = ts.reduce((a, t) => a + t.pnl, 0)
+    const [y, mo] = k.split('-')
+    const name = new Date(+y, +mo - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+    return { name, n, wr: (wins / n) * 100, total, avg: total / n }
+  })
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  el.innerHTML = `<table class="bdt">
+    <thead><tr><th>Month</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      return `<tr>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
 }
 
 // Day-of-week performance — answers "am I better on certain weekdays?".
