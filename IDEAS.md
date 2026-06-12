@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-12 — Shipped
+_Theme: journaling discipline. Deliberately non-overlapping with the still-open PRs #4, #9, #10, #11, #12 (their stats/cards/filters are all distinct from these)._
+- **"Journaled" coverage stat card on the Dashboard** — shows how many trades carry a journal note, e.g. `12 / 40` with a `% logged` sub-line, coloured green ≥67% / gold ≥34% / red below. Directly serves the app's core promise (review every trade, never lose a note) by making the journaling gap visible and nudging the trader to close it. Pure count over `trades`/`notes` via the existing `hasNote()`; rendered in the same `sg` card grid; hidden with the rest of the Dashboard when there's no data. No data-shape change.
+- **Note filter on the Trades table** — a new `All notes / 📝 Journaled / ○ Not journaled` select in the Trades filter bar. Pairs with the coverage card: one click surfaces exactly the trades still missing a note so a trader can work the backlog down, or pull up only the ones they've already reflected on. Folds into the existing `getFiltered()` chain and the `localStorage` filter persistence (`f-note` added to save/restore + Clear); reuses `hasNote()`. No data-shape change.
+- **Persist Journal-view filters across restarts** — the Journal view now remembers its search / symbol / side / date filters via `localStorage` (`tradelog.journalFilters`), mirroring the Trades (2026-06-01) and Strategy (2026-06-07) persistence. A trader who always reviews one product or the last week no longer re-applies filters every launch. Static fields restore before first render; the dynamic symbol select is re-applied inside `populateJournalSymbols()` via a one-time `jnPendingSymbol`. Routed all journal filter inputs through a single `onJournalFilter()` (render + save). Separate from the JSON notes store — no risk to saved data.
+
+### Deferred / next-up ideas (2026-06-12)
+- **Sortable Hold Time column in Trades table** — still the longest-standing deferral; needs a responsive width pass before adding a 13th column
+- **Journaling streak / "days since last note"** — extend the coverage card with a habit streak to reinforce daily review
+- **Bulk "mark reviewed" or quick-note from the Trades row** — let a trader clear the unjournaled backlog without opening the full 6-section modal each time
+- **Avg R per symbol / per weekday** — add an Avg R column to the By-Symbol / By-Day-of-Week tables (factor out a shared `tradeR()` helper to avoid duplicating the formula)
+- **R-distribution histogram on the Strategy/Dashboard** — visualise the spread of R outcomes, not just the cumulative curve

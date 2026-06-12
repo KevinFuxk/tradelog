@@ -353,6 +353,7 @@ textarea.nt::placeholder{color:var(--tx3);}
       <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
+      <select class="fs" id="f-note" title="Show only trades that do (or don't) have a journal note"><option value="">All notes</option><option value="noted">📝 Journaled</option><option value="unnoted">○ Not journaled</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
       <input class="fi" type="date" id="f-to" title="To date">
       <button class="btn btn-g" id="f-clr">Clear</button>
@@ -395,22 +396,22 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
     <!-- Journal filters -->
     <div class="fbar" id="jn-filters" style="margin-bottom:16px">
-      <input class="fi" id="jf-q" placeholder="Search notes…" oninput="renderJournal()" style="width:180px" title="Search the text of your journal notes (and symbol)">
-      <select class="fs" id="jf-symbol" onchange="renderJournal()">
+      <input class="fi" id="jf-q" placeholder="Search notes…" oninput="onJournalFilter()" style="width:180px" title="Search the text of your journal notes (and symbol)">
+      <select class="fs" id="jf-symbol" onchange="onJournalFilter()">
         <option value="">All products</option>
       </select>
-      <select class="fs" id="jf-side" onchange="renderJournal()">
+      <select class="fs" id="jf-side" onchange="onJournalFilter()">
         <option value="">All sides</option>
         <option value="buy">Buy</option>
         <option value="sell">Sell</option>
       </select>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:12px;color:var(--tx3)">From</span>
-        <input type="date" class="fi" id="jf-date-from" onchange="renderJournal()" style="padding:7px 10px;font-size:12px">
+        <input type="date" class="fi" id="jf-date-from" onchange="onJournalFilter()" style="padding:7px 10px;font-size:12px">
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:12px;color:var(--tx3)">To</span>
-        <input type="date" class="fi" id="jf-date-to" onchange="renderJournal()" style="padding:7px 10px;font-size:12px">
+        <input type="date" class="fi" id="jf-date-to" onchange="onJournalFilter()" style="padding:7px 10px;font-size:12px">
       </div>
       <button class="pb" onclick="clearJournalFilters()" style="font-size:12px;padding:7px 12px">✕ Clear</button>
     </div>
@@ -640,6 +641,7 @@ async function boot() {
   } catch {}
   restoreTradeFilters()
   restoreCnhFilters()
+  restoreJournalFilters()
   renderAll()
   applyTradeSortIndicator()
   wire()
@@ -1065,6 +1067,18 @@ function renderDash() {
     ]
   }
 
+  // Journaling coverage — how many trades carry a written note. A nudge toward
+  // the app's core habit: review every trade. Pure count over `trades`/`notes`.
+  const journaledN = trades.filter(t => hasNote(notes[t.id])).length
+  const jPct = trades.length ? (journaledN / trades.length) * 100 : 0
+  const jCol = jPct >= 67 ? 'col-g' : jPct >= 34 ? 'col-gold' : 'col-r'
+  const journaledCard = [
+    'Journaled',
+    `<span class="${jCol}">${journaledN} / ${trades.length}</span>`,
+    `${jPct.toFixed(0)}% logged`,
+    'How many of your trades have a journal note. Reviewing every trade is the habit that compounds — this nudges you to close the gap'
+  ]
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
@@ -1079,6 +1093,7 @@ function renderDash() {
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
+    journaledCard,
     ...holdCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
@@ -1273,6 +1288,7 @@ function getFiltered() {
   const q    = (document.getElementById('f-q')?.value||'').toLowerCase()
   const side = document.getElementById('f-side')?.value||''
   const res  = document.getElementById('f-res')?.value||''
+  const note = document.getElementById('f-note')?.value||''
   const frm  = document.getElementById('f-from')?.value||''
   const to   = document.getElementById('f-to')?.value||''
 
@@ -1293,6 +1309,8 @@ function getFiltered() {
     if (side === 'sell' && t.side !== 'sell') return false
     if (res  === 'win'  && t.pnl <= 0) return false
     if (res  === 'loss' && t.pnl >= 0) return false
+    if (note === 'noted'   && !hasNote(notes[t.id])) return false
+    if (note === 'unnoted' &&  hasNote(notes[t.id])) return false
     if (frm  && (t.entryTime||'') < frm) return false
     if (to   && (t.entryTime||'') > to + 'z') return false
     return true
@@ -1403,7 +1421,7 @@ function saveTradeFilters() {
   try {
     const v = id => document.getElementById(id)?.value || ''
     localStorage.setItem(TR_FILTERS_KEY, JSON.stringify({
-      q: v('f-q'), side: v('f-side'), res: v('f-res'),
+      q: v('f-q'), side: v('f-side'), res: v('f-res'), note: v('f-note'),
       from: v('f-from'), to: v('f-to'), sortCol, sortDir
     }))
   } catch {}
@@ -1413,7 +1431,7 @@ function restoreTradeFilters() {
     const s = JSON.parse(localStorage.getItem(TR_FILTERS_KEY) || 'null')
     if (!s) return
     const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
-    set('f-q', s.q); set('f-side', s.side); set('f-res', s.res)
+    set('f-q', s.q); set('f-side', s.side); set('f-res', s.res); set('f-note', s.note)
     set('f-from', s.from); set('f-to', s.to)
     if (s.sortCol) sortCol = s.sortCol
     if (s.sortDir) sortDir = s.sortDir
@@ -1465,11 +1483,42 @@ function filledCount(n) {
 function populateJournalSymbols() {
   const sel = document.getElementById('jf-symbol')
   if (!sel) return
-  const current = sel.value
+  // Prefer a one-time restored value (the select is empty on first boot), else
+  // keep whatever is currently selected when the option list is rebuilt.
+  const current = (jnPendingSymbol != null) ? jnPendingSymbol : sel.value
   const symbols = [...new Set(trades.filter(t => hasNote(notes[t.id])).map(t => t.symbol))].sort()
   sel.innerHTML = '<option value="">All products</option>' +
     symbols.map(s => `<option value="${s}"${s===current?' selected':''}>${s}</option>`).join('')
+  if (jnPendingSymbol != null && symbols.includes(jnPendingSymbol)) sel.value = jnPendingSymbol
+  jnPendingSymbol = null
 }
+
+// ── Journal filter persistence (mirrors the Trades / Strategy views) ──
+// Remembered locally so the Journal view keeps your last search / symbol / side /
+// date filters across restarts. Separate from the JSON notes store — no data risk.
+const JN_FILTERS_KEY = 'tradelog.journalFilters'
+let jnPendingSymbol = null
+function saveJournalFilters() {
+  try {
+    const v = id => document.getElementById(id)?.value || ''
+    localStorage.setItem(JN_FILTERS_KEY, JSON.stringify({
+      q: v('jf-q'), symbol: v('jf-symbol'), side: v('jf-side'),
+      from: v('jf-date-from'), to: v('jf-date-to')
+    }))
+  } catch {}
+}
+function restoreJournalFilters() {
+  try {
+    const s = JSON.parse(localStorage.getItem(JN_FILTERS_KEY) || 'null')
+    if (!s) return
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
+    set('jf-q', s.q); set('jf-side', s.side); set('jf-date-from', s.from); set('jf-date-to', s.to)
+    // The symbol select is rebuilt from noted trades — apply it inside populateJournalSymbols.
+    jnPendingSymbol = s.symbol || null
+  } catch {}
+}
+// Single handler for every journal filter input: re-render + persist.
+function onJournalFilter() { renderJournal(); saveJournalFilters() }
 
 function clearJournalFilters() {
   const qEl = document.getElementById('jf-q'); if (qEl) qEl.value = ''
@@ -1477,7 +1526,7 @@ function clearJournalFilters() {
   document.getElementById('jf-side').value = ''
   document.getElementById('jf-date-from').value = ''
   document.getElementById('jf-date-to').value = ''
-  renderJournal()
+  renderJournal(); saveJournalFilters()
 }
 
 function renderJournal() {
@@ -2310,12 +2359,12 @@ function wire() {
   })
 
   // Filters
-  ;['f-q','f-side','f-res','f-from','f-to'].forEach(id =>
+  ;['f-q','f-side','f-res','f-note','f-from','f-to'].forEach(id =>
     document.getElementById(id)?.addEventListener('input', () => { page=1; renderTrades(); saveTradeFilters() })
   )
   document.getElementById('f-clr').addEventListener('click', () => {
     ;['f-q','f-from','f-to'].forEach(id => document.getElementById(id).value = '')
-    ;['f-side','f-res'].forEach(id => document.getElementById(id).value = '')
+    ;['f-side','f-res','f-note'].forEach(id => document.getElementById(id).value = '')
     page = 1; renderTrades(); saveTradeFilters()
   })
 
