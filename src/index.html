@@ -199,6 +199,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tx)
 .mtitle{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;}
 .mx{background:none;border:none;color:var(--tx2);cursor:pointer;font-size:20px;line-height:1;padding:0 6px;border-radius:4px;}
 .mx:hover{background:var(--s2);color:var(--tx);}
+.mx:disabled{opacity:.25;cursor:default;background:none;}
 .mmeta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;}
 .mi{background:var(--s2);border-radius:6px;padding:10px 12px;}
 .mk{font-size:10px;color:var(--tx2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
@@ -377,6 +378,7 @@ textarea.nt::placeholder{color:var(--tx3);}
             <th data-col="slPrice">SL Price</th>
             <th data-col="tpPrice">TP Price</th>
             <th data-col="qty">Qty</th>
+            <th data-col="hold">Hold ↕</th>
             <th data-col="riskPct">%Risk</th>
             <th data-col="pnl">P&amp;L ↕</th>
             <th>Note</th>
@@ -560,7 +562,12 @@ textarea.nt::placeholder{color:var(--tx3);}
   <div class="md">
     <div class="mh">
       <div class="mtitle" id="m-title">Trade Journal</div>
-      <button class="mx" id="m-close">×</button>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="mx" id="m-prev" title="Previous trade (←)">‹</button>
+        <span id="m-pos" style="font-size:11px;color:var(--tx3);min-width:46px;text-align:center"></span>
+        <button class="mx" id="m-next" title="Next trade (→)">›</button>
+        <button class="mx" id="m-close" style="margin-left:6px">×</button>
+      </div>
     </div>
     <div class="mmeta" id="m-meta"></div>
 
@@ -1280,8 +1287,14 @@ function getFiltered() {
 
   // Sort
   list.sort((a,b) => {
-    let va = a[sortCol], vb = b[sortCol]
-    if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    let va, vb
+    if (sortCol === 'hold') {            // computed column — undated trades sort last
+      va = holdMs(a); vb = holdMs(b)
+      va = va == null ? -Infinity : va; vb = vb == null ? -Infinity : vb
+    } else {
+      va = a[sortCol]; vb = b[sortCol]
+      if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    }
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -1343,6 +1356,7 @@ function renderTrades() {
       <td>${slStr}</td>
       <td>${t.tpPrice ? fp(t.tpPrice) : '<span style="color:var(--tx3)">—</span>'}</td>
       <td style="color:var(--tx2)">${t.qty}</td>
+      <td style="color:var(--tx2);white-space:nowrap">${holdMs(t)!=null?fmtDur(holdMs(t)):'<span style="color:var(--tx3)">—</span>'}</td>
       <td>${riskStr}</td>
 
       <td class="${pc}">${ps}${rLine}</td>
@@ -1357,8 +1371,9 @@ function renderTrades() {
     <button class="pb" onclick="chPg(1)" ${page>=pages?'disabled':''}>→</button>
   `
 
+  const trIds = filtered.map(t => t.id)
   document.querySelectorAll('#tr-body tr').forEach(tr =>
-    tr.addEventListener('click', () => openModal(tr.dataset.id))
+    tr.addEventListener('click', () => openModal(tr.dataset.id, trIds))
   )
 }
 
@@ -1555,8 +1570,9 @@ function renderJournal() {
     </div>`
   }).join('')
 
+  const jnIds = noted.map(t => t.id)
   document.querySelectorAll('.jc').forEach(c =>
-    c.addEventListener('click', () => openModal(c.dataset.id))
+    c.addEventListener('click', () => openModal(c.dataset.id, jnIds))
   )
 }
 
@@ -1567,6 +1583,22 @@ function renderJournal() {
 // warn before discarding unsaved edits — journal notes are a trader's most
 // precious data and must never be lost to a stray Escape / click.
 let modalBaseline = ''
+
+// The ordered list of trade ids the modal can step through (the current filtered
+// Trades list, or the noted list in the Journal). Lets a trader review trades
+// back-to-back without closing — the core fast-review workflow.
+let modalList = []
+
+// Step to the previous/next trade in modalList, honouring the unsaved-note guard.
+function navModal(dir) {
+  if (!activeTrade || modalList.length < 2) return
+  const i = modalList.indexOf(activeTrade.id)
+  if (i < 0) return
+  const ni = i + dir
+  if (ni < 0 || ni >= modalList.length) return
+  if (modalIsDirty() && !confirm('You have unsaved journal changes. Discard them?')) return
+  openModal(modalList[ni], modalList)
+}
 
 // Read the six structured journal fields straight from the DOM into a note object
 // (same shape saveNote persists). Used for both saving and dirty-checking.
@@ -1590,10 +1622,18 @@ function modalIsDirty() {
   return JSON.stringify(currentModalNote()) !== modalBaseline
 }
 
-function openModal(id) {
+function openModal(id, list) {
   const t = trades.find(t => t.id === id)
   if (!t) return
   activeTrade = t
+  modalList = Array.isArray(list) ? list : [id]
+  // Prev/Next position indicator + button enable state
+  const idx = modalList.indexOf(id)
+  const pos = document.getElementById('m-pos')
+  if (pos) pos.textContent = (idx >= 0 && modalList.length > 1) ? `${idx + 1} / ${modalList.length}` : ''
+  const pv = document.getElementById('m-prev'), nx = document.getElementById('m-next')
+  if (pv) pv.disabled = idx <= 0
+  if (nx) nx.disabled = idx < 0 || idx >= modalList.length - 1
   const pc = t.pnl > 0 ? 'var(--green)' : 'var(--red)'
   document.getElementById('m-title').textContent = `${t.symbol} · ${t.side.toUpperCase()}`
   // Populate structured journal fields (handle legacy string notes)
@@ -2043,6 +2083,12 @@ function renderStrategy() {
   if (!s) { sg.innerHTML = `<div class="sc"><div class="sl">No setups match filters</div></div>` }
   else {
     const tgtRate = s.n ? (s.tgt/s.n)*100 : 0
+    // Surface the already-computed average MFE (max favourable excursion) when the
+    // imported data carries it — shows how far setups ran in your favour vs. what
+    // you actually banked (Expectancy), i.e. how much was left on the table.
+    const mfeCard = list.some(e => e.mfeR != null) ? [
+      ['Avg MFE', `<span class="col-gold">${rNum(s.avgMfe)}R</span>`, 'peak before exit', 'Average maximum favourable excursion — how far in your favour (in R) setups ran at their best. Compare with Expectancy to gauge how much you gave back']
+    ] : []
     sg.innerHTML = [
       ['Setups', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L${s.flat?` / ${s.flat} BE`:''}`, 'Number of cup & handle setups matching the current filters'],
       ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} of ${s.n} closed green`, 'Share of setups that closed with a positive R-multiple'],
@@ -2053,6 +2099,7 @@ function renderStrategy() {
       ['Avg Win', `<span class="col-g">${rNum(s.avgW)}R</span>`, 'per winner', 'Average R-multiple on winning setups'],
       ['Avg Loss', `<span class="col-r">${rNum(s.avgL)}R</span>`, 'per loser', 'Average R-multiple on losing setups'],
       ['Best R', `<span class="col-g">${rNum(s.bestR)}R</span>`, `worst ${rNum(s.worstR)}R`, 'Best single-setup R-multiple (worst shown below)'],
+      ...mfeCard,
       ['Max Consec', `<span class="col-g">${s.mw}W</span> / <span class="col-r">${s.ml}L</span>`, 'win / loss streak', 'Longest streak of consecutive winning / losing setups'],
     ].map(([l,v,ss,ti]) =>
       `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
@@ -2363,6 +2410,8 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  document.getElementById('m-prev').addEventListener('click', () => navModal(-1))
+  document.getElementById('m-next').addEventListener('click', () => navModal(1))
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
@@ -2372,6 +2421,11 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+    }
+    // Step through trades with ←/→ while reviewing (only when not editing a field)
+    if (isModalOpen && !isTyping) {
+      if (e.key === 'ArrowLeft')  { navModal(-1); return }
+      if (e.key === 'ArrowRight') { navModal(1);  return }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })

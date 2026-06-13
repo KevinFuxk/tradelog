@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-13 — Shipped
+- **Prev / Next trade navigation in the modal** — the trade/journal modal now has `‹` / `›` buttons (and ←/→ keys when not editing a field) plus an `N / total` position indicator, stepping through the *current filtered Trades list* or the *Journal's noted list* without closing. Directly serves the core fast-review loop: open the first trade, journal it, arrow to the next. Honours the existing unsaved-note guard before leaving a dirty entry. Buttons disable at the ends. New `modalList` state + `navModal()`; `openModal(id, list)` now takes the ordered id list from the caller. No data-shape change.
+- **Sortable Hold Time column in the Trades table** — added the long-deferred `Hold` column (e.g. `2h 10m`, `3d 4h`) between Qty and %Risk, click-to-sort like the other headers (undated trades sort last). Lets traders scan scalps vs. swings in the table — not just the modal — and sort to find their longest holds. The table already has `overflow-x:auto`, so the extra column scrolls cleanly. Reuses `holdMs`/`fmtDur`.
+- **Avg MFE stat card on the Strategy view** — surfaces the `avgMfe` value `eventStats` was already computing but never displaying. Shows the average maximum favourable excursion (in R) of cup & handle setups, so a trader can compare it with Expectancy to see how much of the move they gave back. Only appears when the imported events carry MFE data.
+
+### Deferred / next-up ideas (2026-06-13)
+- **Hold column in the CSV export** — the new sortable Hold column isn't yet mirrored in the trades CSV export
+- **Modal nav jump keys** — Home/End to first/last trade for very large logs
+- **MFE capture ratio** — pair Avg MFE with `Expectancy ÷ Avg MFE` as a single "how much of the available move you bank" %
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour (still open)
+- **Avg R per symbol / per weekday** — extend the dashboard breakdown tables with an Avg R column (factor out a shared `tradeR()` helper)
