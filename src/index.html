@@ -322,6 +322,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div id="ds-dow-bd"></div>
     </div>
 
+    <div class="card" id="dir-card" style="margin-bottom:14px">
+      <div class="ct" title="P&amp;L grouped by trade direction — spot a long-only or short-only edge (or leak)">BY DIRECTION</div>
+      <div id="ds-dir-bd"></div>
+    </div>
+
     <div class="card" id="symbol-card" style="margin-bottom:0">
       <div class="ct">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
@@ -942,6 +947,16 @@ function calcRisk(trade) {
   }
 }
 
+// Realised R-multiple for a single trade (P&L ÷ amount risked at the stop), or
+// null when no stop is set / risk is zero. Single source of truth — used by the
+// Dashboard Avg R card, the Trades table & export, the Journal headers, and the
+// per-group breakdown tables, so the R formula never drifts between them.
+function tradeR(t) {
+  const r = calcRisk(t)
+  if (!r || r.breakeven || !(r.actualRiskPct > 0)) return null
+  return t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance)
+}
+
 // ════════════════════════════════════════════════════
 //  STATS
 // ════════════════════════════════════════════════════
@@ -999,14 +1014,15 @@ function renderDash() {
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
+  const dirc = document.getElementById('dir-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = dirc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = dirc.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1033,11 +1049,7 @@ function renderDash() {
 
   // Average realised R-multiple across trades that have a stop set — the
   // risk-adjusted twin of $ Expectancy (positive = an edge in R terms).
-  const rList = trades.map(t => {
-    const r = calcRisk(t)
-    return (r && !r.breakeven && r.actualRiskPct > 0)
-      ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
-  }).filter(v => v != null)
+  const rList = trades.map(tradeR).filter(v => v != null)
   const avgR = rList.length ? rList.reduce((a, b) => a + b, 0) / rList.length : null
   const avgRCard = avgR != null ? [[
     'Avg R',
@@ -1086,12 +1098,50 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderDirectionBreakdown()
   buildCharts(s)
+}
+
+// Summarise a list of trades into one breakdown row (shared by the By-Symbol,
+// By-Day-of-Week and By-Direction tables). Includes Avg R for groups where a
+// stop was set, computed off the shared tradeR() helper.
+function breakdownRow(name, ts) {
+  const n     = ts.length
+  const wins  = ts.filter(t => t.pnl > 0).length
+  const total = ts.reduce((a, t) => a + t.pnl, 0)
+  const rs    = ts.map(tradeR).filter(v => v != null)
+  const avgR  = rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null
+  return { name, n, wr: (wins / n) * 100, total, avg: total / n, avgR }
+}
+
+// Render a breakdown mini-table from pre-computed rows. Columns:
+// Name · Trades · Win% · Avg R · Avg/Trade · Net P&L (with a magnitude bar).
+// Reuses the Strategy view's .bdt / .bd-bar styling — no new CSS.
+function breakdownTable(rows, nameHeader, emptyMsg) {
+  if (!rows.length) return `<div style="font-size:12px;color:var(--tx3)">${emptyMsg || 'No data'}</div>`
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  return `<table class="bdt">
+    <thead><tr><th>${nameHeader}</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average realised R-multiple for this group (trades that have a stop-loss set)">Avg R</th><th class="r" title="Average $ result per trade in this group — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      const rCell = r.avgR == null
+        ? '<span style="color:var(--tx3)">—</span>'
+        : `<span style="color:${r.avgR>=0?'var(--green)':'var(--red)'}">${r.avgR>=0?'+':''}${r.avgR.toFixed(2)}R</span>`
+      return `<tr>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r">${rCell}</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
 }
 
 // Day-of-week performance — answers "am I better on certain weekdays?".
 // Groups by the weekday of each trade's entry; rows stay in Mon→Sun order
-// (only weekdays that actually traded are shown). Reuses .bdt / .bd-bar.
+// (only weekdays that actually traded are shown).
 function renderDowBreakdown() {
   const el = document.getElementById('ds-dow-bd'); if (!el) return
   const NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
@@ -1103,56 +1153,29 @@ function renderDowBreakdown() {
     const k = d.getDay();
     (groups[k] = groups[k] || []).push(t)
   })
-  const rows = ORDER.filter(k => groups[k]).map(k => {
-    const ts = groups[k]
-    const n = ts.length
-    const wins = ts.filter(t => t.pnl > 0).length
-    const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n }
-  })
-  if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades</div>'; return }
-  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
-  el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
-    <tbody>${rows.map(r => {
-      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
-      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
-      return `<tr>
-        <td class="bd-name">${r.name}</td>
-        <td class="r">${r.n}</td>
-        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
-        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
-        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
-      </tr>`
-    }).join('')}</tbody></table>`
+  const rows = ORDER.filter(k => groups[k]).map(k => breakdownRow(NAMES[k], groups[k]))
+  el.innerHTML = breakdownTable(rows, 'Day', 'No dated trades')
 }
 
 // Per-symbol performance mini-table — which instruments actually make money.
-// Reuses the Strategy view's breakdown table styling (.bdt / .bd-bar).
 function renderSymbolBreakdown() {
   const el = document.getElementById('ds-symbol-bd'); if (!el) return
   const groups = {}
   trades.forEach(t => { (groups[t.symbol || 'UNKNOWN'] = groups[t.symbol || 'UNKNOWN'] || []).push(t) })
-  const rows = Object.entries(groups).map(([name, ts]) => {
-    const n = ts.length
-    const wins = ts.filter(t => t.pnl > 0).length
-    const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name, n, wr: (wins / n) * 100, total, avg: total / n }
-  }).sort((a, b) => b.total - a.total)
-  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
-  el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
-    <tbody>${rows.map(r => {
-      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
-      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
-      return `<tr>
-        <td class="bd-name">${r.name}</td>
-        <td class="r">${r.n}</td>
-        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
-        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
-        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
-      </tr>`
-    }).join('')}</tbody></table>`
+  const rows = Object.entries(groups).map(([name, ts]) => breakdownRow(name, ts))
+    .sort((a, b) => b.total - a.total)
+  el.innerHTML = breakdownTable(rows, 'Symbol')
+}
+
+// Long vs Short performance — surfaces a directional bias edge or leak, a
+// common blind spot (e.g. "I only make money on the long side").
+function renderDirectionBreakdown() {
+  const el = document.getElementById('ds-dir-bd'); if (!el) return
+  const groups = {}
+  trades.forEach(t => { const k = t.side === 'sell' ? 'Short' : 'Long'; (groups[k] = groups[k] || []).push(t) })
+  const order = ['Long','Short']
+  const rows = order.filter(k => groups[k]).map(k => breakdownRow(k, groups[k]))
+  el.innerHTML = breakdownTable(rows, 'Direction')
 }
 
 let dailyRange = '1M'
@@ -1327,9 +1350,7 @@ function renderTrades() {
     const riskStr    = risk
       ? (risk.breakeven ? `<span style="color:var(--blue)">BE</span>` : `<span class="${risk.actualRiskPct > settings.targetRisk ? 'col-r' : 'col-g'}">${risk.actualRiskPct.toFixed(1)}%</span>`)
       : '<span style="color:var(--tx3)">—</span>'
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
@@ -1378,9 +1399,8 @@ function exportTradesCSV() {
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
-      : ''
+    const rv    = tradeR(t)
+    const rMult = rv != null ? +rv.toFixed(2) : ''
     return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
             t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
       .map(esc).join(',')
@@ -1519,10 +1539,7 @@ function renderJournal() {
 
     // Realised R-multiple in the header — mirrors the Trades table sub-line so
     // R-based traders can scan their journal in risk units, not just dollars.
-    const risk  = calcRisk(t)
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
 
     // Build per-section rows
     const sectionRows = typeof n === 'object' ? J_FIELDS.map((f, i) => {

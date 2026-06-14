@@ -71,6 +71,18 @@
 - **Dirty-guard the "Clear Data" actions too** — confirm exists, but consider an undo/soft-delete so a mis-click can't wipe an imported log
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
 
+## 2026-06-14 — Shipped
+- **Avg R column on the Dashboard breakdown tables** — the By-Symbol and By-Day-of-Week mini-tables now show an **Avg R** column (average realised R-multiple for the group, for trades that have a stop set), alongside the existing Avg/Trade ($). Lets R-based traders see which symbols/weekdays carry a risk-adjusted edge, not just a dollar one. Shows `—` for groups with no stop data. (Realises the long-deferred "Avg R per symbol / per weekday" idea.)
+- **By Direction (Long vs Short) breakdown** on the Dashboard — a new mini-table grouping every trade into Long/Short with Trades · Win% · Avg R · Avg/Trade · Net P&L. Surfaces a directional bias edge or leak ("I only make money on the long side"), a common blind spot. Mirrors the By-Symbol / By-Day-of-Week tables; reuses `.bdt`/`.bd-bar` styling — no new CSS.
+- **Refactor: single `tradeR()` helper + shared `breakdownRow()`/`breakdownTable()`** — the realised-R formula was duplicated in 4 places (Dashboard Avg R card, Trades table, CSV export, Journal header); now all call one `tradeR(t)` so the math can never drift. The three Dashboard breakdown tables share one row-builder and one renderer instead of near-identical copies. Pure internal cleanup; no behavior change to existing cells. JS parse-checked.
+
+### Deferred / next-up ideas (2026-06-14)
+- **Net R total stat card** on the Dashboard (sum of realised R across trades with a stop) — the R-denominated twin of Net P&L, pairing with the existing Avg R card
+- **Per-direction split inside the By-Symbol table** (long vs short per instrument) for traders who are directional only on certain products
+- **Consistency / std-dev-of-R stat** — surface variability of per-trade R to flag a lumpy vs steady edge
+- **Sortable Avg R / %Risk columns in the Trades table** — these are computed, not raw fields, so the sort comparator needs a computed-value path first
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour (note: also in flight as PR #9)
+
 ## 2026-06-07 — Shipped
 - **Avg R stat card on Dashboard** — shows the average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked), with a `N trades w/ stop` sub-line. The risk-adjusted twin of the existing $ Expectancy card, so R-based traders see their edge in risk units, not just dollars. Reuses `calcRisk`; only the same R formula already used in the Trades table and Journal headers. No data-shape change.
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
