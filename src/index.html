@@ -282,7 +282,7 @@ textarea.nt::placeholder{color:var(--tx3);}
 
   <div class="nav nav-bottom" data-v="import">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-    <span class="tip">Import CSV</span>
+    <span class="tip">Import CSV [i]</span>
   </div>
 </nav>
 
@@ -1008,7 +1008,15 @@ function renderDash() {
   em.style.display = 'none'
   sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
 
-  document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
+  // Date span of the loaded trades — quick context on which period is on screen
+  const spanTimes = trades.map(t => new Date(t.entryTime)).filter(d => !isNaN(d))
+  let span = ''
+  if (spanTimes.length) {
+    const fd  = d => d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'})
+    const min = new Date(Math.min(...spanTimes)), max = new Date(Math.max(...spanTimes))
+    span = min.getTime() === max.getTime() ? ` · ${fd(min)}` : ` · ${fd(min)} → ${fd(max)}`
+  }
+  document.getElementById('ds-sub').textContent = `${trades.length} trades loaded${span}`
 
   // Avg hold time of winners vs losers — surfaces "do I hold losers too long?"
   const avgMs = list => { const a = list.map(holdMs).filter(v => v != null); return a.length ? a.reduce((x,y)=>x+y,0)/a.length : null }
@@ -1069,6 +1077,12 @@ function renderDash() {
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
     ['Net P&L', `<span class="${s.total>=0?'col-g':'col-r'}">${fmtMoney(s.total)}</span>`, 'all trades', 'Sum of profit/loss across every trade, net of commission'],
+    ...(settings.accountBalance > 0 ? [[
+      'Return %',
+      `<span class="${s.total>=0?'col-g':'col-r'}">${s.total>=0?'+':''}${((s.total/settings.accountBalance)*100).toFixed(1)}%</span>`,
+      `on ${fmtMoney(settings.accountBalance, false)} balance`,
+      'Net P&L as a percentage of your configured account balance (Net P&L ÷ balance). Set your balance under Import → Account Settings'
+    ]] : []),
     ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross profit ÷ gross loss. Above 1.0 is profitable; 2.0+ is strong'],
     ['Avg Win', `<span class="col-g">${fmtMoney(s.avgW)}</span>`, 'per winner', 'Average profit on your winning trades'],
     ['Avg Loss', `<span class="col-r">${fmtMoney(s.avgL)}</span>`, 'per loser', 'Average loss on your losing trades'],
@@ -2372,6 +2386,7 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === 'i' || e.key === 'I') go('import')
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })

@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-15 — Shipped
+- **Account Return % stat card on Dashboard** — Net P&L expressed as a percentage of the configured account balance (Net P&L ÷ balance), with the dollar balance as the sub-line. Dollars alone don't tell a trader whether `+5,000` is a great month or a rounding error — % return does, and it ties the existing Account Balance setting into the stats. Only appears when a balance is set; pure derivation, no persistence change.
+- **Loaded date-range in the Dashboard subtitle** — the subtitle now reads e.g. `40 trades loaded · Jan 3 → Jun 12 '26`, so a trader instantly knows which period the stats/charts cover (single-date logs show just the one date). Derived from the min/max valid `entryTime`; invalid/undated rows ignored.
+- **`i` keyboard shortcut to open the Import view** — mirrors the existing `1`–`4` nav shortcuts (fires only when not typing and no modal is open); the sidebar Import tooltip now advertises `[i]`. Keeps the keyboard-driven workflow consistent.
+
+### Deferred / next-up ideas (2026-06-15)
+- **Undo / soft-delete for "Clear Data"** — a one-click restore (in-memory snapshot + a temporary toast) so a mis-click can't orphan an imported log and hide every journal entry built on it; needs a small toast UI
+- **Month-to-date / year-to-date % return cards** — extend the new Return % idea with rolling-period return figures
+- **Time-weighted / compounding return** — once Return % exists, consider compounding across the equity curve rather than a flat Net P&L ÷ balance
+- **Avg MAE companion card on Strategy** — mirror the Avg MFE card (open PR #14) with average max-adverse-excursion, to show typical heat taken before exit
+- **Persist Account Balance/Risk inputs live** — auto-save on blur so a trader who forgets to click "Save Settings" doesn't lose the %Risk/Return math
