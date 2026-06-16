@@ -340,7 +340,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     <div class="ph">
       <div><div class="pt">Trade History</div><div class="ps" id="tr-sub">0 trades</div></div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-g" id="tr-export" title="Download the currently filtered trades as a CSV file">Export CSV</button>
+        <button class="btn btn-g" id="tr-export" title="Download the currently filtered trades as a CSV file (Ctrl/⌘+E)">Export CSV</button>
         <button class="btn btn-g" id="tr-clear-data" title="Clear all trades">Clear Data</button>
         <button class="btn btn-p" id="tr-import">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -369,17 +369,17 @@ textarea.nt::placeholder{color:var(--tx3);}
         <thead>
           <tr>
             <th data-col="#">#</th>
-            <th data-col="entryTime">Date / Time ↕</th>
-            <th data-col="symbol">Symbol ↕</th>
-            <th data-col="side">Side</th>
-            <th data-col="entryPrice">Entry</th>
-            <th data-col="exitPrice">Exit</th>
-            <th data-col="slPrice">SL Price</th>
-            <th data-col="tpPrice">TP Price</th>
-            <th data-col="qty">Qty</th>
-            <th data-col="riskPct">%Risk</th>
-            <th data-col="pnl">P&amp;L ↕</th>
-            <th>Note</th>
+            <th data-col="entryTime" title="Date and time the position was opened — click to sort">Date / Time ↕</th>
+            <th data-col="symbol" title="Instrument traded — click to sort">Symbol ↕</th>
+            <th data-col="side" title="Trade direction: Buy = long, Sell = short">Side</th>
+            <th data-col="entryPrice" title="Average fill price on entry">Entry</th>
+            <th data-col="exitPrice" title="Average fill price on exit">Exit</th>
+            <th data-col="slPrice" title="Stop-loss price for this trade (— if none was recorded)">SL Price</th>
+            <th data-col="tpPrice" title="Take-profit / target price for this trade (— if none was recorded)">TP Price</th>
+            <th data-col="qty" title="Position size (lots / contracts / units)">Qty</th>
+            <th data-col="riskPct" title="Actual % of account risked if the stop had been hit (needs a stop price + account balance). Green = within your target risk, red = over. Click to sort">%Risk</th>
+            <th data-col="pnl" title="Net profit / loss for the trade after commission. The smaller line is the realised R-multiple. Click to sort">P&amp;L ↕</th>
+            <th title="Whether this trade has a journal note (gold pencil = noted). Click any row to add or edit notes">Note</th>
           </tr>
         </thead>
         <tbody id="tr-body"></tbody>
@@ -427,7 +427,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     <div class="ph">
       <div><div class="pt">Cup &amp; Handle</div><div class="ps" id="cnh-sub">No strategy data loaded</div></div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-g" id="cnh-export" title="Download the currently filtered setups as a CSV file">Export CSV</button>
+        <button class="btn btn-g" id="cnh-export" title="Download the currently filtered setups as a CSV file (Ctrl/⌘+E)">Export CSV</button>
         <button class="btn btn-g" id="cnh-clear" title="Clear strategy data">Clear Data</button>
         <button class="btn btn-p" id="cnh-import">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -480,18 +480,18 @@ textarea.nt::placeholder{color:var(--tx3);}
         <table>
           <thead>
             <tr>
-              <th data-col="day">Date ↕</th>
-              <th data-col="symbol">Symbol ↕</th>
-              <th data-col="timeframe">TF</th>
-              <th data-col="entry">Entry</th>
-              <th data-col="stop">Stop</th>
-              <th data-col="target">Target</th>
-              <th data-col="pnlR">Result ↕</th>
-              <th data-col="mfeR">MFE</th>
-              <th data-col="maeR">MAE</th>
-              <th data-col="outcome">Outcome</th>
-              <th data-col="sizeTier">Size</th>
-              <th data-col="returnBucket">Gap</th>
+              <th data-col="day" title="Date of the cup & handle breakout — click to sort">Date ↕</th>
+              <th data-col="symbol" title="Instrument — click to sort">Symbol ↕</th>
+              <th data-col="timeframe" title="Chart timeframe the setup was found on">TF</th>
+              <th data-col="entry" title="Breakout entry price">Entry</th>
+              <th data-col="stop" title="Initial stop-loss price (1R risk)">Stop</th>
+              <th data-col="target" title="Take-profit target price">Target</th>
+              <th data-col="pnlR" title="Realised result in R-multiples (1R = the amount risked from entry to stop). Click to sort">Result ↕</th>
+              <th data-col="mfeR" title="Maximum Favourable Excursion — the best unrealised gain the setup reached, in R">MFE</th>
+              <th data-col="maeR" title="Maximum Adverse Excursion — the deepest unrealised drawdown the setup reached, in R">MAE</th>
+              <th data-col="outcome" title="How the setup closed: 🎯 hit target · 🛑 stopped out · ⏱ timed out">Outcome</th>
+              <th data-col="sizeTier" title="Position-size tier bucket assigned in the backtest">Size</th>
+              <th data-col="returnBucket" title="Opening-gap bucket for the breakout bar">Gap</th>
             </tr>
           </thead>
           <tbody id="cnh-body"></tbody>
@@ -1279,9 +1279,18 @@ function getFiltered() {
   let list = [...trades]
 
   // Sort
+  // %Risk is computed (not a stored field), so derive it; trades with no usable
+  // stop sort to the bottom regardless of direction rather than silently no-op.
+  const sortVal = t => {
+    if (sortCol === 'entryTime') return new Date(t.entryTime) || 0
+    if (sortCol === 'riskPct') {
+      const r = calcRisk(t)
+      return (r && !r.breakeven) ? r.actualRiskPct : -Infinity
+    }
+    return t[sortCol]
+  }
   list.sort((a,b) => {
-    let va = a[sortCol], vb = b[sortCol]
-    if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    const va = sortVal(a), vb = sortVal(b)
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -2374,6 +2383,13 @@ function wire() {
       else if (e.key === '4') go('strategy')
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
+    // Ctrl/⌘+E exports the active view's table to CSV (Trades or Strategy),
+    // reusing the same filtered export as the on-screen Export buttons.
+    if (!isModalOpen && (e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'E')) {
+      const active = document.querySelector('.view.on')?.id
+      if (active === 'v-trades')        { e.preventDefault(); exportTradesCSV() }
+      else if (active === 'v-strategy') { e.preventDefault(); exportEventsCSV() }
+    }
   })
 }
 
