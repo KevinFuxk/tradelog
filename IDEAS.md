@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-16 — Shipped
+- **Helpful column-header tooltips on the Trades & Strategy tables** — every column header in the main Trades table (%Risk, SL/TP Price, Entry/Exit, Qty, Side, P&L, Note) and the Cup & Handle SETUPS table (TF, Result, MFE, MAE, Outcome, Size, Gap) now has a plain-English `title=` tooltip. The cryptic ones — `%Risk`, `MFE`/`MAE`, `Gap`, `Size` — were opaque to anyone but the author; hovering now explains them and notes which columns are click-to-sort. Pure HTML attributes, no JS/CSS, zero data-shape risk. Complements the existing stat-card tooltips.
+- **Fixed the %Risk column sort in the Trades table** — clicking the `%Risk` header used to sort by `t.riskPct`, a field that doesn't exist (risk % is computed on the fly via `calcRisk`), so it silently did nothing. `getFiltered()` now derives the actual risk % for sorting (trades with no usable stop sink to the bottom regardless of direction). Latent-bug fix; no other column behavior changed.
+- **`Ctrl/⌘+E` exports the active view to CSV** — pressing the chord on the Trades view runs the existing filtered-trades export, and on the Strategy view runs the filtered-setups export (no-op elsewhere / when a modal is open). Reuses `exportTradesCSV()` / `exportEventsCSV()` verbatim; both Export buttons' tooltips now advertise the shortcut, matching the app's keyboard-driven workflow (`1`–`4`, `/`, `Ctrl+Enter`).
+
+### Deferred / next-up ideas (2026-06-16)
+- **Show the ↕ sort affordance on *all* sortable Trades columns** — they're all clickable, but only Date/Symbol/P&L advertise it; add the hint (or a hover cursor cue) to Entry/Exit/SL/TP/Qty/%Risk so sortability is discoverable.
+- **Auto-download a CSV backup before "Clear Data"** — the clear action is irreversible; writing a timestamped backup first (reusing the export path) would make a mis-click recoverable without any new persistence.
+- **In-session Undo for "Clear Data"** — stash the cleared trades/events in memory and surface a transient "Undo" for the rest of the session.
+- **Sortable computed R column** — the realised R-multiple shows as a sub-line under P&L but can't be sorted; a dedicated derived sort key would let traders rank by risk-adjusted result.
+- **Tooltip/legend for the Cup & Handle CUMULATIVE R chart** — clarify that 1R = amount risked, mirroring the table's Result tooltip.
