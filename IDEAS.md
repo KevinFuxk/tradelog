@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-17 — Shipped
+_(Note: open PRs #4, #9–#17 already cover most Dashboard/Trades/Journal ideas — this batch deliberately targets the under-served Strategy / Cup & Handle view's risk side.)_
+- **Max R Drawdown stat card (Strategy)** — the largest peak-to-trough drop in the cumulative-R curve, computed in `eventStats()` in the same chronological walk used for streaks. A strong Total R can still hide a deep underwater stretch; this surfaces it as a first-class risk metric. Pairs with the new Peak R line on the chart.
+- **Peak-R high-water-mark line on the Cumulative R chart (Strategy)** — a dashed grey "Peak R" line tracks the running maximum (mirrors the Dashboard equity HWM line shipped 2026-06-04), so every R drawdown is visible directly on the curve; the hover tooltip reports the live drawdown below peak, and a compact top legend labels the two lines.
+- **Avg MAE stat card (Strategy)** — average max adverse excursion (in R), surfacing the `maeR` field the parser already stores but never aggregated. The risk-side twin of the per-row MAE column; informs stop placement (how deep setups dig before working). Only renders when imported events carry MAE data.
+
+### Deferred / next-up ideas (2026-06-17)
+- **Avg MFE stat card (Strategy)** — `eventStats.avgMfe` is computed but not shown as a card (note: claimed by open PR #14 — skip if that merges)
+- **Strategy "R drawdown duration"** — longest run of consecutive setups spent below a prior R peak (the R-curve twin of the Dashboard "longest underwater" idea)
+- **Clickable Strategy rows → detail modal** — show full pattern geometry (cup/handle indices, depth, lip diff) for a setup; rows are currently inert
+- **Expectancy in $ on Strategy** — multiply R-expectancy by the account's per-trade risk ($) to translate backtest edge into dollars
+- **R-multiple distribution histogram (Strategy)** — bucket setups by realised R to show the shape of the edge, not just the average
