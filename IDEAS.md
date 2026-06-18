@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-18 — Shipped
+- **Shared `tradeR()` helper + Avg R columns** — factored the realised R-multiple formula (which was copy-pasted in the Trades table, Journal headers, Dashboard Avg R card and CSV export) into a single `tradeR(t)` source of truth, plus `avgTradeR(list)` / `fmtRCell()`. Added an **Avg R** column to both the Dashboard **By-Symbol** and **By-Day-of-Week** breakdown tables, so a trader sees per-instrument and per-weekday edge in risk units — not just dollars — and "—" where no stop was set. DRY win removes the risk of these four R figures drifting apart. No data-shape change.
+- **`/` keyboard shortcut to focus the search box** — pressing `/` anywhere (when not already typing / no modal open) jumps the cursor straight into the active list view's search box (Trades symbol search or Journal note search) and selects its contents. Surfaced via the search-box tooltips. Fast keyboard-driven filtering for power users; mirrors the `/`-to-search convention from GitHub/Gmail.
+- **Filtered Net P&L / Win% summary in the Trades footer** — the trades table footer now reads e.g. `42 trades · +1,234.50 net · 57% win` for the *current filtered set* (not just the page). Filter to one symbol, a date range, or just losers and instantly read the net result and hit rate without exporting or eyeballing rows. Pure derivation from the already-filtered list.
+
+### Deferred / next-up ideas (2026-06-18)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **`/`-to-search on the Strategy view** — focus a (future) text search or the symbol filter when `/` is pressed on the Cup & Handle tab
+- **Avg R column on the Strategy breakdown tables** is already R-native; consider an Avg R column on the Trades-table footer summary too (alongside Net P&L)
