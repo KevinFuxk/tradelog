@@ -322,6 +322,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div id="ds-dow-bd"></div>
     </div>
 
+    <div class="card" id="rdist-card" style="margin-bottom:14px">
+      <div class="ct" title="How many trades fell into each R-multiple bucket (P&amp;L ÷ amount risked). A healthy edge shows tightly clustered losses near -1R and a long right tail of large winners">R-MULTIPLE DISTRIBUTION</div>
+      <div id="ds-rdist-bd"></div>
+    </div>
+
     <div class="card" id="symbol-card" style="margin-bottom:0">
       <div class="ct">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
@@ -999,14 +1004,15 @@ function renderDash() {
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
+  const rdc = document.getElementById('rdist-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = rdc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = rdc.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1065,6 +1071,10 @@ function renderDash() {
     ]
   }
 
+  // Recovery Factor — net profit relative to the worst peak-to-trough drawdown.
+  // Surfaces s.maxDD (true equity drawdown), which the cards otherwise don't show.
+  const recovery = s.maxDD > 0 ? s.total / s.maxDD : (s.total > 0 ? Infinity : 0)
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
@@ -1075,6 +1085,7 @@ function renderDash() {
     ['Max Profit',   `<span class="col-g">${fmtMoney(s.best)}</span>`, 'single trade', 'Your single largest winning trade'],
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ['Recovery Factor', `<span class="${recovery>=1?'col-g':recovery>0?'col-gold':'col-r'}">${isFinite(recovery)?recovery.toFixed(2):'∞'}</span>`, `vs ${fmtMoney(-s.maxDD)} max DD`, 'Net P&L ÷ maximum peak-to-trough equity drawdown — how many times over your total profit covers your worst losing stretch. Above 1.0 means you have earned back more than your deepest hole; higher is more resilient'],
     ...avgRCard,
     ddCard,
     ...dayCards,
@@ -1086,6 +1097,7 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderRDistBreakdown()
   buildCharts(s)
 }
 
@@ -1123,6 +1135,48 @@ function renderDowBreakdown() {
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
+}
+
+// R-multiple distribution — the *shape* of the edge, not just its average.
+// Buckets every trade that has a stop set by its realised R-multiple so a trader
+// can see whether losses cluster near -1R (disciplined stops) and whether the
+// right tail of big winners exists. Reuses .bdt / .bd-bar (no new CSS).
+function renderRDistBreakdown() {
+  const el = document.getElementById('ds-rdist-bd'); if (!el) return
+  const rOf = t => {
+    const r = calcRisk(t)
+    return (r && !r.breakeven && r.actualRiskPct > 0)
+      ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
+  }
+  const rs = trades.map(rOf).filter(v => v != null)
+  if (!rs.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No trades with a stop-loss set — add SL prices on import to see your R distribution</div>'
+    return
+  }
+  const buckets = [
+    { label: '≤ -2R',     loss: true,  test: r => r <= -2 },
+    { label: '-2 to -1R', loss: true,  test: r => r > -2 && r <= -1 },
+    { label: '-1 to 0R',  loss: true,  test: r => r > -1 && r < 0 },
+    { label: '0 to 1R',   loss: false, test: r => r >= 0 && r < 1 },
+    { label: '1 to 2R',   loss: false, test: r => r >= 1 && r < 2 },
+    { label: '2 to 3R',   loss: false, test: r => r >= 2 && r < 3 },
+    { label: '≥ 3R',      loss: false, test: r => r >= 3 },
+  ]
+  const rows = buckets.map(b => ({ label: b.label, loss: b.loss, n: rs.filter(b.test).length }))
+  const maxN = Math.max(1, ...rows.map(r => r.n))
+  el.innerHTML = `<table class="bdt">
+    <thead><tr><th>R Bucket</th><th class="r">Trades</th><th class="r">Share</th><th class="r">Count</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.loss ? 'var(--red)' : 'var(--green)'
+      const w = Math.round(r.n / maxN * 56)
+      const pct = (r.n / rs.length * 100)
+      return `<tr>
+        <td class="bd-name" style="color:${col}">${r.label}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:var(--tx2)">${pct.toFixed(0)}%</td>
+        <td class="r" style="color:${col}">${r.n}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
 }
@@ -1374,14 +1428,14 @@ function exportTradesCSV() {
     const s = v == null ? '' : String(v)
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
   }
-  const header = ['#','Entry Time','Exit Time','Symbol','Side','Entry Price','Exit Price','SL Price','TP Price','Qty','Risk %','R Multiple','Net P&L','Commission']
+  const header = ['#','Entry Time','Exit Time','Hold Time','Symbol','Side','Entry Price','Exit Price','SL Price','TP Price','Qty','Risk %','R Multiple','Net P&L','Commission']
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
     const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
       ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
       : ''
-    return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
+    return [i+1, t.entryTime, t.exitTime, fdur(t.entryTime, t.exitTime) || '', t.symbol, t.side, t.entryPrice, t.exitPrice,
             t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
       .map(esc).join(',')
   })
