@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-19 — Shipped
+> NOTE: as of this run there are 13 open, unmerged daily PRs (#4, #9–#19) on the repo. Almost every idea in the "deferred" lists above is already implemented inside one of those open PRs (tradeR refactor + Avg R columns #4/#15/#19, `/` shortcut #9/#19, longest-underwater #9, by-hour #9, payoff/streak/by-month #12, hold-time *table* column #14, etc.). Today's batch was deliberately chosen to NOT overlap any of them — confirmed by reading all 13 PR bodies.
+- **Recovery Factor stat card (Dashboard)** — Net P&L ÷ maximum peak-to-trough equity drawdown, coloured green ≥1 / gold >0 / red ≤0, with `vs <max DD>` as the sub-line. Surfaces `s.maxDD` (the *true* equity drawdown), which `stats()` already computed but no card displayed (the "Max Drawdown" card shows the worst *single* trade per an old user preference). Tells a trader how many times over their profit covers their worst losing stretch — a standard resilience metric. Pure derivation; `∞` when there's been no drawdown.
+- **R-Multiple Distribution breakdown (Dashboard)** — a `.bdt` mini-table bucketing every trade that has a stop set by its realised R (≤-2R, -2..-1R, -1..0R, 0..1R, 1..2R, 2..3R, ≥3R) with count, share %, and a magnitude bar; losing buckets red, winning green. Shows the *shape* of the edge (do losses cluster near -1R? is there a big-winner right tail?), which the existing Avg R *average* hides. Renders a hint row when no trade has an SL. Reuses existing breakdown styling; R formula inlined locally to avoid colliding with the `tradeR()` refactor owned by open PRs #4/#15/#19.
+- **Hold Time column in the Trades CSV export** — the export now includes each trade's entry→exit duration (e.g. `2h 10m`) right after Exit Time, so the hold time already shown in the modal is available for spreadsheet pivots. Distinct from #14's on-screen sortable table column. Reuses `fdur()`; blank when timestamps are missing.
+
+### Deferred / next-up ideas (2026-06-19)
+- **Merge the backlog of open PRs (#4, #9–#19)** — the biggest lever now is reviewing/merging the 13 stacked daily PRs rather than adding more parallel ones; many will conflict in `renderDash`/the stat-card array and should be reconciled.
+- **R-distribution as Avg-$ per bucket** — extend the new R-distribution table with the average $ result per bucket, or a separate P&L-distribution histogram for trades without a stop.
+- **Profit Factor / Recovery Factor on the Strategy view** — mirror the new Recovery Factor idea in R-space (Total R ÷ Max R drawdown) once #18's `maxRDD` lands.
+- **Expectancy in "R per trade" already exists (Avg R, #4)** — consider a combined edge card: Win% × AvgWin − Loss% × AvgLoss.
+- **Std-dev / consistency of per-trade results** — a volatility-of-returns card to flag lumpy vs steady equity curves.
