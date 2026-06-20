@@ -1,5 +1,18 @@
 # TradeLog — Ideas Log
 
+## 2026-06-20 — Shipped
+Theme: **large-log review ergonomics for the Trades table** — deliberately distinct from the 13 still-open daily PRs (#4, #9–#20), none of which touch pagination/page-size.
+- **Rows-per-page selector (25 / 50 / 100 / 250)** in the Trades filter bar — traders with hundreds of imported positions can see far more at once instead of clicking through 25-row pages. Persisted alongside the existing trade filters (`tradelog.tradeFilters`, new `pageSize` field — backward-compatible: missing/invalid values fall back to 25). New `tradePageSize` variable replaces the hard-coded `PG` in the Trades render/paging path; the Strategy table keeps its own `PG` const untouched.
+- **First / Last page-jump buttons (« »)** plus a **"Showing X–Y of Z"** label in the Trades pagination footer — instant jump to the newest or oldest trade in a big log, and a clear sense of position. New `goPg()` helper mirrors the existing `chPg()`.
+- **Arrow-key paging (← / →)** on the Trades view — page through history hands-on-keyboard, matching the existing `1`–`4` nav shortcuts. Gated to the active Trades view and ignored while typing or with the modal open.
+
+### Deferred / next-up ideas (2026-06-20)
+- **Rows-per-page + first/last on the Strategy (Cup & Handle) table too** — mirror today's Trades paging once it has settled (Strategy still uses the fixed `PG`/Prev-Next).
+- **Sortable Hold Time column in Trades table** — long-standing; still needs a responsive width pass before adding another column.
+- **Sticky table header** when scrolling a long trade list — needs `.tw` to become its own scroll container (max-height + overflow-y) first; layout change, do carefully.
+- **"Jump to page N" input** for very large logs, alongside the new « » buttons.
+- **Remember the active Trades page** across the session (currently resets to page 1 on filter/sort change — intentional, but a "stay on page" option could help mid-review).
+
 ## 2026-06-01 — Shipped
 - **Keyboard shortcuts** (`1`–`4` navigate Dashboard/Trades/Journal/Strategy; `Ctrl+Enter` saves journal note in modal; `Escape` already worked)
 - **Sidebar tooltip hints** — tooltips now show `[1]`–`[4]` to surface the shortcuts to new users

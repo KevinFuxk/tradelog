@@ -356,6 +356,13 @@ textarea.nt::placeholder{color:var(--tx3);}
       <input class="fi" type="date" id="f-from" title="From date">
       <input class="fi" type="date" id="f-to" title="To date">
       <button class="btn btn-g" id="f-clr">Clear</button>
+      <span class="sep"></span>
+      <select class="fs" id="f-pagesize" title="How many trades to show per page">
+        <option value="25">25 / page</option>
+        <option value="50">50 / page</option>
+        <option value="100">100 / page</option>
+        <option value="250">250 / page</option>
+      </select>
     </div>
 
     <div class="empty" id="tr-empty" style="display:none">
@@ -609,6 +616,7 @@ let settings = { accountBalance: 10000, targetRisk: 10 }
 let filtered = []
 let page     = 1
 const PG     = 25
+let tradePageSize = 25   // rows per page in the Trades table (user-selectable, persisted with filters)
 let sortCol  = 'entryTime'
 let sortDir  = 'desc'
 let pending  = null
@@ -1308,9 +1316,9 @@ function renderTrades() {
   if (!filtered.length) { em.style.display='flex'; wr.style.display='none'; return }
   em.style.display='none'; wr.style.display='block'
 
-  const pages = Math.ceil(filtered.length / PG)
+  const pages = Math.max(1, Math.ceil(filtered.length / tradePageSize))
   if (page > pages) page = 1
-  const slice = filtered.slice((page-1)*PG, page*PG)
+  const slice = filtered.slice((page-1)*tradePageSize, page*tradePageSize)
 
   const fp = (n, dec=5) => {
     if (!n) return '—'
@@ -1350,11 +1358,15 @@ function renderTrades() {
     </tr>`
   }).join('')
 
+  const from = filtered.length ? (page-1)*tradePageSize + 1 : 0
+  const to   = Math.min(page*tradePageSize, filtered.length)
   document.getElementById('pg').innerHTML = `
-    <span>${filtered.length} trades</span><span class="sep"></span>
-    <button class="pb" onclick="chPg(-1)" ${page<=1?'disabled':''}>←</button>
+    <span>Showing ${from}–${to} of ${filtered.length}</span><span class="sep"></span>
+    <button class="pb" onclick="goPg(1)" ${page<=1?'disabled':''} title="First page">«</button>
+    <button class="pb" onclick="chPg(-1)" ${page<=1?'disabled':''} title="Previous page (←)">←</button>
     <span>Page ${page} / ${pages}</span>
-    <button class="pb" onclick="chPg(1)" ${page>=pages?'disabled':''}>→</button>
+    <button class="pb" onclick="chPg(1)" ${page>=pages?'disabled':''} title="Next page (→)">→</button>
+    <button class="pb" onclick="goPg(${pages})" ${page>=pages?'disabled':''} title="Last page">»</button>
   `
 
   document.querySelectorAll('#tr-body tr').forEach(tr =>
@@ -1362,7 +1374,8 @@ function renderTrades() {
   )
 }
 
-window.chPg = (d) => { const p=Math.ceil(filtered.length/PG); page=Math.max(1,Math.min(p,page+d)); renderTrades() }
+window.chPg = (d) => { const p=Math.max(1,Math.ceil(filtered.length/tradePageSize)); page=Math.max(1,Math.min(p,page+d)); renderTrades() }
+window.goPg = (p) => { const pages=Math.max(1,Math.ceil(filtered.length/tradePageSize)); page=Math.max(1,Math.min(pages,p)); renderTrades() }
 
 // ── Export filtered trades to CSV ─────────
 // Exports whatever the current filters/sort produce — including the
@@ -1404,7 +1417,8 @@ function saveTradeFilters() {
     const v = id => document.getElementById(id)?.value || ''
     localStorage.setItem(TR_FILTERS_KEY, JSON.stringify({
       q: v('f-q'), side: v('f-side'), res: v('f-res'),
-      from: v('f-from'), to: v('f-to'), sortCol, sortDir
+      from: v('f-from'), to: v('f-to'), sortCol, sortDir,
+      pageSize: tradePageSize
     }))
   } catch {}
 }
@@ -1417,6 +1431,8 @@ function restoreTradeFilters() {
     set('f-from', s.from); set('f-to', s.to)
     if (s.sortCol) sortCol = s.sortCol
     if (s.sortDir) sortDir = s.sortDir
+    if ([25,50,100,250].includes(+s.pageSize)) tradePageSize = +s.pageSize
+    set('f-pagesize', String(tradePageSize))
   } catch {}
 }
 function applyTradeSortIndicator() {
@@ -2313,6 +2329,13 @@ function wire() {
   ;['f-q','f-side','f-res','f-from','f-to'].forEach(id =>
     document.getElementById(id)?.addEventListener('input', () => { page=1; renderTrades(); saveTradeFilters() })
   )
+  // Rows-per-page selector — keeps big trade logs reviewable without endless paging
+  document.getElementById('f-pagesize')?.addEventListener('change', e => {
+    const n = +e.target.value
+    if ([25,50,100,250].includes(n)) tradePageSize = n
+    page = 1; renderTrades(); saveTradeFilters()
+  })
+
   document.getElementById('f-clr').addEventListener('click', () => {
     ;['f-q','f-from','f-to'].forEach(id => document.getElementById(id).value = '')
     ;['f-side','f-res'].forEach(id => document.getElementById(id).value = '')
@@ -2372,6 +2395,11 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // ←/→ page through the Trades table when that view is active
+      else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+               document.getElementById('v-trades').classList.contains('on')) {
+        chPg(e.key === 'ArrowRight' ? 1 : -1)
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
