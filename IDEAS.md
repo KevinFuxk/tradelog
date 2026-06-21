@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-21 — Shipped
+- **Full Backup & Restore (JSON)** — new "Backup & Restore" card on the Import view. *Download Backup* writes one portable JSON file containing **trades + journal notes + strategy setups + settings**; *Restore Backup* reads it back. Directly serves the app's prime directive (never lose journal notes): the existing CSV exports omit notes, and the JSON store was trapped in one machine's userData dir. Restore **merges** by stable id and **never overwrites an existing non-empty note** — only missing notes are filled in, nothing is deleted; a confirm spells this out and the result alert reports notes added vs kept. Pure client-side Blob download + file-input read; no IPC/preload/main.js change, no network, no data-shape change.
+- **Breakeven Win% stat card on Dashboard** — shows the win rate you'd need *just to break even* given your current payoff (|avg loss| ÷ (avg win + |avg loss|)), green when your actual win rate clears it, red when it doesn't, with `you win X%` underneath. Distinct from payoff ratio (open PR #12): it tells a trader directly whether their win rate is high enough for their reward:risk. Pure derivation from existing `stats()`; only renders when there are both winners and losers.
+- **Journal-note hover preview in the Trades table** — the ✎ pencil now carries a `title` tooltip with the first ~140 chars of the note (attribute-escaped), so traders can scan their notes without opening every row's modal. Reuses `notePreview()`/`hasNote()`; no data change.
+
+### Deferred / next-up ideas (2026-06-21)
+- **Restore: option to *replace* (not just merge)** — power users re-imaging a machine may want a clean overwrite; gate behind a second confirm so the safe merge stays the default
+- **Auto-backup reminder** — nudge to download a backup every N launches (no network; just a localStorage counter), since notes only live in userData
+- **Backup includes localStorage prefs** — fold filter/sort/last-view/daily-range settings into the backup payload for a true full-state restore
+- **Longest underwater stretch** — complement Current DD with the longest run (trades/days) spent below a prior peak (still open)
+- **Soft-delete / undo for Clear Data** — a mis-click on Clear Data still wipes the log; keep a one-step in-memory undo
