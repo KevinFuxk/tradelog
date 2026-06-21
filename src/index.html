@@ -526,6 +526,18 @@ textarea.nt::placeholder{color:var(--tx3);}
       </div>
     </div>
 
+    <!-- Backup & Restore -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="ct">BACKUP &amp; RESTORE</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-g" id="bk-export" title="Download a single JSON file with all your trades, journal notes, strategy setups, and settings">⭳ Download Backup</button>
+        <button class="btn btn-g" id="bk-import" title="Restore from a backup file. Existing journal notes are never overwritten — only missing data is merged in">⭱ Restore Backup</button>
+      </div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:10px">
+        Saves <span style="color:var(--tx2)">trades, journal notes, strategy setups &amp; settings</span> to one portable JSON file — so your notes are never trapped on a single machine. Restore <span style="color:var(--tx2)">merges safely</span>: existing notes are never overwritten.
+      </div>
+    </div>
+
     <div class="dz" id="dz">
       <span class="dz-icon">📂</span>
       <div class="dz-title">Drop your CSV here</div>
@@ -598,6 +610,7 @@ textarea.nt::placeholder{color:var(--tx3);}
 
 <input type="file" id="file-in" accept=".csv" style="display:none">
 <input type="file" id="file-events" accept=".jsonl,.json,.ndjson,.csv,.txt" style="display:none">
+<input type="file" id="file-backup" accept=".json,application/json" style="display:none">
 
 <script>
 // ════════════════════════════════════════════════════
@@ -1065,9 +1078,22 @@ function renderDash() {
     ]
   }
 
+  // Break-even win rate — the win rate you'd need just to break even given your
+  // current payoff (avg win vs avg loss). If your actual win rate clears it, your
+  // payoff hands you an edge; if not, you need bigger winners or fewer losers.
+  const beLoss = Math.abs(s.avgL)
+  const beWR   = (s.avgW + beLoss) > 0 ? (beLoss / (s.avgW + beLoss)) * 100 : null
+  const beWRCard = (beWR != null && s.wins && s.losses) ? [[
+    'Breakeven Win%',
+    `<span class="${s.wr >= beWR ? 'col-g' : 'col-r'}">${beWR.toFixed(1)}%</span>`,
+    `you win ${s.wr.toFixed(1)}%`,
+    'The win rate you would need just to break even given your current average win vs average loss. If your actual win rate (shown below) is above this number, your payoff ratio gives you an edge'
+  ]] : []
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
+    ...beWRCard,
     ['Net P&L', `<span class="${s.total>=0?'col-g':'col-r'}">${fmtMoney(s.total)}</span>`, 'all trades', 'Sum of profit/loss across every trade, net of commission'],
     ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross profit ÷ gross loss. Above 1.0 is profitable; 2.0+ is strong'],
     ['Avg Win', `<span class="col-g">${fmtMoney(s.avgW)}</span>`, 'per winner', 'Average profit on your winning trades'],
@@ -1333,6 +1359,11 @@ function renderTrades() {
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
+    // Hover preview of the journal note so traders can scan notes without
+    // opening every row; truncated + attribute-escaped.
+    const noteTip = hasNote(notes[t.id])
+      ? notePreview(notes[t.id]).replace(/\s+/g, ' ').trim().slice(0, 140).replace(/"/g, '&quot;').replace(/</g, '&lt;')
+      : ''
     return `<tr data-id="${t.id}">
       <td style="color:var(--tx3)">${idx}</td>
       <td style="color:var(--tx2);white-space:nowrap">${fdt(t.entryTime)}</td>
@@ -1346,7 +1377,7 @@ function renderTrades() {
       <td>${riskStr}</td>
 
       <td class="${pc}">${ps}${rLine}</td>
-      <td><span class="ni ${hasNote(notes[t.id])?'has':''}">✎</span></td>
+      <td><span class="ni ${hasNote(notes[t.id])?'has':''}"${noteTip?` title="${noteTip}"`:''}>✎</span></td>
     </tr>`
   }).join('')
 
@@ -1393,6 +1424,76 @@ function exportTradesCSV() {
   a.download = `tradelog-export-${new Date().toISOString().slice(0,10)}.csv`
   document.body.appendChild(a); a.click(); a.remove()
   URL.revokeObjectURL(url)
+}
+
+// ── Full data backup / restore ────────────
+// One portable JSON file containing trades + journal notes + strategy setups
+// + settings, so a trader's notes are never trapped in one machine's userData
+// dir. Restore MERGES and never overwrites an existing non-empty note — the
+// app's prime directive is to never lose journal notes. Pure client-side
+// Blob download + file input; no IPC, no network, no data-shape change.
+function backupAllData() {
+  const payload = {
+    app: 'tradelog', kind: 'backup', version: 1,
+    exportedAt: new Date().toISOString(),
+    trades, notes, events, settings
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `tradelog-backup-${new Date().toISOString().slice(0,10)}.json`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
+}
+
+async function restoreBackup(text) {
+  let data
+  try { data = JSON.parse(text) } catch { alert('Could not read that file — it is not valid JSON.'); return }
+  if (!data || typeof data !== 'object') { alert('That does not look like a TradeLog backup file.'); return }
+  const bTrades = Array.isArray(data.trades) ? data.trades : []
+  const bEvents = Array.isArray(data.events) ? data.events : []
+  const bNotes  = (data.notes && typeof data.notes === 'object') ? data.notes : {}
+  const noteIds = Object.keys(bNotes)
+  if (!bTrades.length && !bEvents.length && !noteIds.length) {
+    alert('No trades, journal notes, or strategy setups were found in that file.'); return
+  }
+  if (!confirm(
+    `Restore from this backup?\n\n` +
+    `• ${bTrades.length} trades\n• ${noteIds.length} journal notes\n• ${bEvents.length} strategy setups\n\n` +
+    `This MERGES with your current data. Existing journal notes are never overwritten — only missing notes are filled in. Nothing is deleted.`
+  )) return
+
+  // Trades / events: merge by stable id (backup overlays matching ids)
+  const tMap = new Map(); trades.forEach(t => t && t.id && tMap.set(t.id, t)); bTrades.forEach(t => t && t.id && tMap.set(t.id, t))
+  trades = [...tMap.values()].sort((a, b) => new Date(b.entryTime) - new Date(a.entryTime))
+  const eMap = new Map(); events.forEach(e => e && e.id && eMap.set(e.id, e)); bEvents.forEach(e => e && e.id && eMap.set(e.id, e))
+  events = [...eMap.values()]
+
+  // Notes: never clobber an existing non-empty note; only restore missing ones
+  let restored = 0, kept = 0
+  for (const id of noteIds) {
+    if (hasNote(notes[id])) { kept++; continue }
+    notes[id] = bNotes[id]; restored++
+  }
+
+  // Settings: adopt only if present and sane
+  if (data.settings && typeof data.settings === 'object') {
+    const bal = parseFloat(data.settings.accountBalance), rk = parseFloat(data.settings.targetRisk)
+    if (isFinite(bal) && bal > 0) settings.accountBalance = bal
+    if (isFinite(rk)  && rk  > 0) settings.targetRisk    = rk
+    document.getElementById('s-balance').value = settings.accountBalance
+    document.getElementById('s-risk').value    = settings.targetRisk
+  }
+
+  if (window.api) {
+    await window.api.save('trades', trades)
+    await window.api.save('notes', notes)
+    await window.api.save('events', events)
+    await window.api.save('settings', settings)
+  }
+  renderAll()
+  alert(`Backup restored.\n${restored} note${restored !== 1 ? 's' : ''} added${kept ? `, ${kept} existing note${kept !== 1 ? 's' : ''} kept` : ''}.`)
 }
 
 // ── Trade filter + sort persistence ───────
@@ -2300,6 +2401,15 @@ function wire() {
 
   // Export filtered trades
   document.getElementById('tr-export').addEventListener('click', exportTradesCSV)
+
+  // Backup / restore all data
+  document.getElementById('bk-export')?.addEventListener('click', backupAllData)
+  document.getElementById('bk-import')?.addEventListener('click', () => document.getElementById('file-backup').click())
+  document.getElementById('file-backup')?.addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return
+    const r = new FileReader(); r.onload = ev => restoreBackup(ev.target.result); r.readAsText(f)
+    e.target.value = ''
+  })
 
   // Clear data
   document.getElementById('tr-clear-data').addEventListener('click', async () => {
