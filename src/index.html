@@ -1046,6 +1046,30 @@ function renderDash() {
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
+  // Risk discipline — are you sizing consistently around your target risk %?
+  // Reuses calcRisk over the same set of trades that have a usable stop (as Avg R).
+  // Avg Risk % = how big the average bet actually is; Over-Risk = how often you oversize.
+  const riskPcts = trades.map(t => {
+    const r = calcRisk(t)
+    return (r && !r.breakeven && r.actualRiskPct > 0) ? r.actualRiskPct : null
+  }).filter(v => v != null)
+  let riskCards = []
+  if (riskPcts.length) {
+    const avgRisk = riskPcts.reduce((a, b) => a + b, 0) / riskPcts.length
+    const over    = riskPcts.filter(p => p > settings.targetRisk).length
+    const overPct = (over / riskPcts.length) * 100
+    riskCards = [
+      ['Avg Risk %',
+        `<span class="${avgRisk > settings.targetRisk ? 'col-r' : 'col-g'}">${avgRisk.toFixed(2)}%</span>`,
+        `target ${settings.targetRisk}%`,
+        'Average actual risk taken per trade (stop distance × size ÷ balance), across trades that have a stop. Consistently above your target % means you are oversizing'],
+      ['Over-Risk Trades',
+        `<span class="${over ? 'col-r' : 'col-g'}">${over}</span>`,
+        `${overPct.toFixed(0)}% of ${riskPcts.length} w/ stop`,
+        'How many trades risked MORE than your target risk % (the red %Risk values in the Trades table). Fewer is better sizing discipline'],
+    ]
+  }
+
   // Best / worst single trading day by net P&L — surfaces outlier days that
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
@@ -1076,6 +1100,7 @@ function renderDash() {
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
+    ...riskCards,
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
@@ -1669,10 +1694,19 @@ function handleText(text) {
   pending = parseCSV(text)
   if (!pending.length) { alert('Could not parse CSV. Check the format and try again.'); return }
   const s = stats(pending)
+  // Merge transparency: how many of these rows are brand-new positions vs updates
+  // to trades already in the log (matched by stable id). Imports merge, never wipe,
+  // so this tells a trader exactly what "Load These Trades" will change.
+  const existingIds = new Set(trades.map(t => t.id))
+  const updates = pending.filter(t => existingIds.has(t.id)).length
+  const fresh   = pending.length - updates
+  const mergeLine = trades.length
+    ? `<span style="color:var(--tx2)"><span style="color:var(--green)">${fresh}</span> new · <span style="color:var(--tx)">${updates}</span> update${updates!==1?'s':''} to existing trades</span><br>`
+    : ''
   document.getElementById('prev-title').textContent = `PREVIEW — ${pending.length} trades detected`
   document.getElementById('prev-body').innerHTML =
     `<strong style="color:var(--tx)">${pending.length}</strong> trades detected<br>
-     Net P&L: <span style="color:${s.total>=0?'var(--green)':'var(--red)'}">${fmtMoney(s.total)}</span><br>
+     ${mergeLine}Net P&L: <span style="color:${s.total>=0?'var(--green)':'var(--red)'}">${fmtMoney(s.total)}</span><br>
      Win Rate: <span style="color:var(--tx)">${s.wr.toFixed(1)}%</span> (${s.wins}W / ${s.losses}L)<br>
      Symbols: ${[...new Set(pending.map(t=>t.symbol))].slice(0,8).join(', ')}<br>
      <br>
