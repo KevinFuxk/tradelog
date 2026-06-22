@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-22 — Shipped
+- **Avg Risk % stat card (Dashboard)** — average actual risk taken per trade (stop distance × size ÷ balance) across trades that have a stop, colored green/red against the target risk %. Reuses `calcRisk`; the app already computed per-trade %Risk but never aggregated it. Tells a trader whether they size consistently near their plan. No data-shape change.
+- **Over-Risk Trades stat card (Dashboard)** — count + % of stopped trades that risked MORE than the target risk % (the red %Risk values in the Trades table). A pure discipline metric — how often you oversize. Pairs with Avg Risk %. Only renders when there are trades with a usable stop.
+- **Import merge transparency** — the import Preview now shows `N new · M updates to existing trades` (matched by stable id) whenever there is already data in the log, so a trader knows exactly what "Load These Trades" will change before confirming a merge. Pure display; the merge logic itself is unchanged (existing trades + notes always preserved).
+
+### Deferred / next-up ideas (2026-06-22)
+- **Risk-discipline trend** — plot actual %Risk per trade over time (are you creeping above target as the account grows?)
+- **Avg Risk % per symbol** — extend the By-Symbol table with the average actual risk taken, to spot instruments you habitually oversize
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Import: flag trades that would be dropped** — surface any incomplete (entry/exit ≤ 0) pending rows in the preview, since `confirmImport` silently filters them
