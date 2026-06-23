@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-23 — Shipped
+- **Journal sort control** — a Newest / Oldest / Largest win / Largest loss selector in the Journal filter bar. Traders reviewing their log can now jump straight to their biggest winners or worst losers (the entries most worth re-reading), or step through chronologically, instead of only seeing newest-first. Pure display ordering of the already-filtered `noted` list; no data-shape change. Reset by "Clear filters".
+- **Contextual Journal empty state** — when filters hide every entry the empty panel now reads "No entries match your filters" with a one-click **Clear filters** button, instead of the misleading "No journal entries yet" (which looked as if saved notes had vanished). The genuine first-run "nothing journaled yet" message is preserved by checking whether *any* note exists.
+- **Thousands separators on position size (Qty)** — the Trades table and trade-detail modal now render quantity via a new `fmtQty()` helper (`100,000` instead of `100000`), matching the `fmtMoney` treatment shipped 2026-06-05. Fractional forex lots (e.g. `0.01`) are preserved. Display-only.
+- **Page-change scroll-to-top** — paging the Trades or Strategy table now scrolls the table back into view, so stepping through a long log no longer leaves you stranded scrolled past the rows. Pure UX; `scrollIntoView({block:'start'})`.
+
+### Deferred / next-up ideas (2026-06-23)
+- **Persist the Journal sort choice** across restarts (mirror the Trades/Strategy filter persistence; new `localStorage` key, no JSON-store change)
+- **Sticky table headers** — keep column headers visible while scrolling; needs a `.tw` overflow/fixed-height pass first (current `overflow:hidden` clips a `position:sticky` thead, so a naive add is a no-op)
+- **Right-align numeric table columns** (Entry/Exit/Qty/P&L) for easier magnitude comparison in financial tables
+- **Hide the "Break Even" slice/legend from the Win/Loss donut when there are zero breakevens** — removes a confusing empty legend entry
+- **Note: many open PRs (#9–#23) remain unmerged** — future runs should keep checking the open-PR list, not just `git log`, to avoid duplicating that backlog (by-hour/month/direction breakdowns, `/` search, filtered P&L footer, JSON backup, Avg R columns, rows-per-page, etc.)

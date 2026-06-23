@@ -404,6 +404,12 @@ textarea.nt::placeholder{color:var(--tx3);}
         <option value="buy">Buy</option>
         <option value="sell">Sell</option>
       </select>
+      <select class="fs" id="jf-sort" onchange="renderJournal()" title="Order journal entries">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="best">Largest win</option>
+        <option value="worst">Largest loss</option>
+      </select>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:12px;color:var(--tx3)">From</span>
         <input type="date" class="fi" id="jf-date-from" onchange="renderJournal()" style="padding:7px 10px;font-size:12px">
@@ -1342,7 +1348,7 @@ function renderTrades() {
       <td style="color:var(--tx2)">${fp(t.exitPrice)}</td>
       <td>${slStr}</td>
       <td>${t.tpPrice ? fp(t.tpPrice) : '<span style="color:var(--tx3)">—</span>'}</td>
-      <td style="color:var(--tx2)">${t.qty}</td>
+      <td style="color:var(--tx2)">${fmtQty(t.qty)}</td>
       <td>${riskStr}</td>
 
       <td class="${pc}">${ps}${rLine}</td>
@@ -1362,7 +1368,12 @@ function renderTrades() {
   )
 }
 
-window.chPg = (d) => { const p=Math.ceil(filtered.length/PG); page=Math.max(1,Math.min(p,page+d)); renderTrades() }
+window.chPg = (d) => {
+  const p=Math.ceil(filtered.length/PG); page=Math.max(1,Math.min(p,page+d)); renderTrades()
+  // Bring the first rows of the new page into view so paging a long log doesn't
+  // leave you stranded scrolled past the table.
+  document.getElementById('tr-wrap')?.scrollIntoView({ block:'start' })
+}
 
 // ── Export filtered trades to CSV ─────────
 // Exports whatever the current filters/sort produce — including the
@@ -1475,6 +1486,7 @@ function clearJournalFilters() {
   const qEl = document.getElementById('jf-q'); if (qEl) qEl.value = ''
   document.getElementById('jf-symbol').value = ''
   document.getElementById('jf-side').value = ''
+  const sortEl = document.getElementById('jf-sort'); if (sortEl) sortEl.value = 'newest'
   document.getElementById('jf-date-from').value = ''
   document.getElementById('jf-date-to').value = ''
   renderJournal()
@@ -1505,11 +1517,34 @@ function renderJournal() {
     return true
   })
 
+  // Order the entries — newest is the natural default, but traders often want to
+  // review their biggest wins/losses or step through chronologically.
+  const sortBy = document.getElementById('jf-sort')?.value || 'newest'
+  noted.sort((a, b) => {
+    if (sortBy === 'best')  return b.pnl - a.pnl
+    if (sortBy === 'worst') return a.pnl - b.pnl
+    const ta = new Date(a.entryTime), tb = new Date(b.entryTime)
+    return sortBy === 'oldest' ? ta - tb : tb - ta
+  })
+
   const em = document.getElementById('jn-empty')
   const ls = document.getElementById('jn-list')
   document.getElementById('jn-sub').textContent = `${noted.length} entr${noted.length!==1?'ies':'y'}`
 
-  if (!noted.length) { em.style.display='flex'; ls.style.display='none'; return }
+  if (!noted.length) {
+    // Distinguish "you haven't journaled anything yet" from "your filters hid
+    // everything" — the latter would otherwise read as if all notes vanished.
+    const anyNotes = trades.some(t => hasNote(notes[t.id]))
+    em.innerHTML = anyNotes
+      ? `<div class="empty-icon">🔍</div>
+         <div class="empty-title">No entries match your filters</div>
+         <div class="empty-sub">Try widening the search, symbol, side or date range.</div>
+         <button class="btn btn-g" style="margin-top:18px" onclick="clearJournalFilters()">Clear filters</button>`
+      : `<div class="empty-icon">📝</div>
+         <div class="empty-title">No journal entries yet</div>
+         <div class="empty-sub">Click any trade row to add notes,<br>set your thesis, or log what you learned.</div>`
+    em.style.display='flex'; ls.style.display='none'; return
+  }
   em.style.display='none'; ls.style.display='flex'
 
   ls.innerHTML = noted.map(t => {
@@ -1618,7 +1653,7 @@ function openModal(id) {
     ['Exit Price',  t.exitPrice  || '—'],
     ['SL Price',    t.slPrice ? t.slPrice : '—'],
     ['TP Price',    t.tpPrice ? t.tpPrice : '—'],
-    ['Quantity',    t.qty],
+    ['Quantity',    fmtQty(t.qty)],
     ['Net P&L',      `<span style="color:${pc}">${fmtMoney(t.pnl)}</span>`],
     ...(t.commission ? [['Commission', `<span style="color:var(--red)">${fmtMoney(t.commission, false)}</span>`]] : []),
     ...riskItems,
@@ -2140,8 +2175,9 @@ function renderCnhTable(list) {
     <button class="pb" id="cnh-prev" ${cnhPage<=1?'disabled':''}>‹ Prev</button>
     <span>Page ${cnhPage} / ${pages} · ${sorted.length} setups</span>
     <button class="pb" id="cnh-next" ${cnhPage>=pages?'disabled':''}>Next ›</button>`
-  document.getElementById('cnh-prev').onclick = () => { if (cnhPage>1){cnhPage--; renderCnhTable(cnhFiltered())} }
-  document.getElementById('cnh-next').onclick = () => { if (cnhPage<pages){cnhPage++; renderCnhTable(cnhFiltered())} }
+  const cnhTop = () => document.getElementById('cnh-body')?.closest('.tw')?.scrollIntoView({ block:'start' })
+  document.getElementById('cnh-prev').onclick = () => { if (cnhPage>1){cnhPage--; renderCnhTable(cnhFiltered()); cnhTop()} }
+  document.getElementById('cnh-next').onclick = () => { if (cnhPage<pages){cnhPage++; renderCnhTable(cnhFiltered()); cnhTop()} }
 }
 
 // ── Charts: cumulative R + outcomes donut ──
@@ -2233,6 +2269,13 @@ function fmtMoney(n, sign = true) {
   if (n == null || !isFinite(n)) return '—'
   const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (n < 0 ? '-' : sign ? '+' : '') + s
+}
+
+// Format a position size with thousands separators (e.g. 100,000 share lots stay
+// readable) while keeping fractional forex lots intact. Display-only.
+function fmtQty(q) {
+  if (q == null || q === '' || !isFinite(q)) return q
+  return Number(q).toLocaleString('en-US', { maximumFractionDigits: 8 })
 }
 
 // ════════════════════════════════════════════════════
