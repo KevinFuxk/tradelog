@@ -1305,7 +1305,19 @@ function renderTrades() {
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
-  if (!filtered.length) { em.style.display='flex'; wr.style.display='none'; return }
+  if (!filtered.length) {
+    // Distinguish "nothing imported yet" from "filters hid everything" so the
+    // user never dead-ends wondering where their trades went.
+    em.innerHTML = (trades.length && anyTradeFilterActive())
+      ? `<div class="empty-icon">🔍</div>
+         <div class="empty-title">No trades match your filters</div>
+         <div class="empty-sub">${trades.length} trade${trades.length!==1?'s':''} are hidden by the current filters.</div>
+         <button class="btn btn-g" style="margin-top:16px" onclick="clearTradeFilters()">Clear filters</button>`
+      : `<div class="empty-icon">📋</div>
+         <div class="empty-title">No trades yet</div>
+         <div class="empty-sub">Import a TradingView or broker CSV to get started.</div>`
+    em.style.display='flex'; wr.style.display='none'; return
+  }
   em.style.display='none'; wr.style.display='block'
 
   const pages = Math.ceil(filtered.length / PG)
@@ -1423,6 +1435,17 @@ function applyTradeSortIndicator() {
   document.querySelectorAll('#tr-wrap thead th').forEach(t => t.classList.remove('sort-asc','sort-desc'))
   const th = document.querySelector(`#tr-wrap thead th[data-col="${sortCol}"]`)
   if (th) th.classList.add('sort-' + sortDir)
+}
+
+// Any active Trades filter? Used to tailor the empty state's message/CTA.
+function anyTradeFilterActive() {
+  return ['f-q','f-side','f-res','f-from','f-to'].some(id => (document.getElementById(id)?.value || '') !== '')
+}
+// Reset every Trades filter (shared by the toolbar "Clear" button and the
+// "Clear filters" button shown in the filtered-empty state).
+function clearTradeFilters() {
+  ;['f-q','f-from','f-to','f-side','f-res'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '' })
+  page = 1; renderTrades(); saveTradeFilters()
 }
 
 // ── Journal ───────────────────────────────
@@ -1609,6 +1632,14 @@ function openModal(id) {
   const riskItems = risk ? [
     ['Actual %Risk',  risk.breakeven ? `<span style="color:var(--blue)">Breakeven Stop</span>` : `<span style="color:${risk.actualRiskPct > settings.targetRisk ? 'var(--red)' : 'var(--green)'}">${risk.actualRiskPct.toFixed(2)}% <span style="font-size:10px;color:var(--tx3)">(target ${settings.targetRisk}%)</span></span>`],
   ] : []
+  // Realised R-multiple for this trade — mirrors the Trades table sub-line and
+  // Journal card header so a single-trade review reads in risk units too.
+  const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
+    ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
+    : null
+  const rItem = rMult != null
+    ? [['R Multiple', `<span style="color:${rMult >= 0 ? 'var(--green)' : 'var(--red)'}">${rMult >= 0 ? '+' : ''}${rMult.toFixed(2)}R</span>`]]
+    : []
   const dur = fdur(t.entryTime, t.exitTime)
   document.getElementById('m-meta').innerHTML = [
     ['Entry Time',  fdt(t.entryTime)],
@@ -1622,6 +1653,7 @@ function openModal(id) {
     ['Net P&L',      `<span style="color:${pc}">${fmtMoney(t.pnl)}</span>`],
     ...(t.commission ? [['Commission', `<span style="color:var(--red)">${fmtMoney(t.commission, false)}</span>`]] : []),
     ...riskItems,
+    ...rItem,
   ].map(([k,v]) => `<div class="mi"><div class="mk">${k}</div><div class="mv">${v}</div></div>`).join('')
   // Capture the just-populated field state as the clean baseline for dirty-checking
   modalBaseline = JSON.stringify(currentModalNote())
@@ -2313,11 +2345,7 @@ function wire() {
   ;['f-q','f-side','f-res','f-from','f-to'].forEach(id =>
     document.getElementById(id)?.addEventListener('input', () => { page=1; renderTrades(); saveTradeFilters() })
   )
-  document.getElementById('f-clr').addEventListener('click', () => {
-    ;['f-q','f-from','f-to'].forEach(id => document.getElementById(id).value = '')
-    ;['f-side','f-res'].forEach(id => document.getElementById(id).value = '')
-    page = 1; renderTrades(); saveTradeFilters()
-  })
+  document.getElementById('f-clr').addEventListener('click', clearTradeFilters)
 
   // Column sort (trades table only)
   document.querySelectorAll('#tr-wrap thead th[data-col]').forEach(th => {
@@ -2373,7 +2401,11 @@ function wire() {
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
     }
-    if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
+    // Save the open journal note with Ctrl/Cmd+Enter or the reflexive Ctrl/Cmd+S
+    // (preventDefault stops the browser/Electron "Save page" dialog stealing it).
+    if (isModalOpen && (e.ctrlKey || e.metaKey) && (e.key === 'Enter' || e.key === 's' || e.key === 'S')) {
+      e.preventDefault(); saveNote()
+    }
   })
 }
 

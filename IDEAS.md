@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-24 — Shipped
+- **Realised R-multiple in the trade-detail modal** — the modal meta grid now shows each trade's R-multiple (P&L ÷ amount risked at the stop), color-coded, right after %Risk. The Trades table and Journal card headers already surfaced R; the modal — where a trader does a focused single-trade review — was the one place it was missing. Reuses the existing inline `calcRisk` formula (deliberately *not* introducing a shared `tradeR()` helper, since open PRs #15/#19 already add one — avoids a merge conflict). No data-shape change.
+- **`Ctrl/Cmd+S` saves the open journal note** — in addition to the existing `Ctrl/Cmd+Enter`, the reflexive Save chord now saves and `preventDefault()`s so it never triggers the browser/Electron "Save page" dialog. Protects the app's most precious data (journal notes) by matching the muscle memory most users already have. Additive to the existing keydown handler.
+- **Smarter Trades empty state** — the "no rows" panel now distinguishes *nothing imported yet* ("Import a TradingView or broker CSV to get started") from *filters hid everything* ("N trades are hidden by the current filters" + a one-click **Clear filters** button), so a trader with an over-tight filter set never dead-ends thinking their data vanished. Factored a shared `clearTradeFilters()` / `anyTradeFilterActive()` (the toolbar Clear button now reuses it).
+
+### Deferred / next-up ideas (2026-06-24)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — longest run (trades/days) spent below a prior equity peak, alongside Current DD
+- **Best/worst hour-of-day breakdown** — mirror the weekday table by entry hour for intraday traders
+- **Same filtered-vs-empty treatment for the Strategy view's empty state** — mirror today's Trades empty-state polish
+- **Account-$ expectancy line on the Strategy view** when an account balance is set (it's R-native today)
