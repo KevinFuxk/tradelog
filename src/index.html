@@ -660,6 +660,8 @@ function go(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.id === 'v-' + v))
   // Rebuild charts that were sized while their view was hidden
   if (v === 'strategy') renderStrategy()
+  // Land each view at its header rather than wherever the last view was scrolled
+  const main = document.querySelector('.main'); if (main) main.scrollTop = 0
   // Remember the last main view so it reopens on next launch (skip Import flow)
   if (MAIN_VIEWS.includes(v)) { try { localStorage.setItem(LAST_VIEW_KEY, v) } catch {} }
 }
@@ -1050,7 +1052,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1242,7 +1244,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -1590,6 +1592,15 @@ function modalIsDirty() {
   return JSON.stringify(currentModalNote()) !== modalBaseline
 }
 
+// Surface unsaved journal edits on the Save button with a gold dot, so a trader
+// can see at a glance they have pending notes (reinforces the discard guard —
+// journal notes are this app's most precious data and must never be lost).
+function updateDirtyIndicator() {
+  const btn = document.getElementById('m-save'); if (!btn) return
+  const dirty = !!(activeTrade && modalIsDirty())
+  btn.innerHTML = dirty ? '<span style="color:var(--gold)">●</span> Save Journal' : 'Save Journal'
+}
+
 function openModal(id) {
   const t = trades.find(t => t.id === id)
   if (!t) return
@@ -1625,6 +1636,7 @@ function openModal(id) {
   ].map(([k,v]) => `<div class="mi"><div class="mk">${k}</div><div class="mv">${v}</div></div>`).join('')
   // Capture the just-populated field state as the clean baseline for dirty-checking
   modalBaseline = JSON.stringify(currentModalNote())
+  updateDirtyIndicator()
   document.getElementById('modal').classList.add('on')
 }
 
@@ -1644,6 +1656,7 @@ async function saveNote() {
   else delete notes[activeTrade.id]
   if (window.api) await window.api.save('notes', notes)
   modalBaseline = JSON.stringify(note)   // saved state is now the clean baseline
+  updateDirtyIndicator()
   closeModal(true); renderTrades(); renderJournal()
 }
 
@@ -2192,6 +2205,12 @@ function buildCnhCharts(list, s) {
 // ════════════════════════════════════════════════════
 //  HELPERS
 // ════════════════════════════════════════════════════
+// Extract the calendar-date key (YYYY-MM-DD) from a timestamp, tolerating both
+// ISO "2026-06-25T14:32" and space-separated "2026-06-25 14:32" broker formats.
+// Splitting on T-or-space keeps day grouping correct for non-ISO exports (a raw
+// split('T') would otherwise return the whole string and group by timestamp).
+function dayKey(s) { return (s || '').split(/[T ]/)[0] }
+
 function fdt(s) {
   if (!s) return '—'
   try {
@@ -2363,6 +2382,11 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  // Live unsaved-edits indicator on the Save button
+  J_FIELDS.filter(f => f !== 'structure').forEach(f =>
+    document.getElementById('jf-' + f)?.addEventListener('input', updateDirtyIndicator))
+  ;['jf-structure-yes','jf-structure-no'].forEach(id =>
+    document.getElementById(id)?.addEventListener('click', updateDirtyIndicator)) // runs after inline setStructure
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
