@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-25 — Shipped
+- **Bug fix: day grouping for non-ISO timestamps** — added a shared `dayKey()` helper and used it for both the **Daily P&L** chart bars and the **Best/Worst Day** stat cards. The old `split('T')[0] || split(' ')[0]` returned the *whole string* for space-separated timestamps (`2026-06-25 14:32`, common in broker exports that aren't ISO `T`-formatted), so every trade was treated as its own "day" — splitting one real day into many bars and producing wrong Best/Worst Day figures. Now splits on `T`-or-space, so non-ISO exports group correctly. No data-shape change.
+- **Scroll-to-top on view switch** — navigating between Dashboard/Trades/Journal/Strategy now resets the main pane to the top, so each view opens at its header instead of wherever the previous view was scrolled. Pure QoL, one line in `go()`.
+- **Unsaved-edits dot on the Save Journal button** — while a journal note has unsaved changes, the modal's Save button shows a gold `●` cue that clears on save (or when edits are reverted). Reinforces the existing discard-guard and the app's core promise of never losing journal notes — the trader can now *see* pending edits, not just be warned on close. Live-updates via `input`/structure-toggle listeners; reuses the existing `modalIsDirty()` baseline. No data-shape change.
+
+### Deferred / next-up ideas (2026-06-25)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **Sticky table headers** — keep column headers visible on long Trades/Strategy tables (needs the table to become its own scroll frame with a `max-height`; deferred to avoid a layout regression)
+- **Strategy filtered-empty state** — when filters exclude every setup, show a friendly empty block instead of an empty table + "Page 1/1 · 0 setups"
+- **Avg R per symbol / per weekday** — add an Avg R column to the dashboard breakdown tables (factor out a shared `tradeR()` helper)
+- **Best/worst hour-of-day breakdown** — mirror the weekday table by entry hour for intraday traders
