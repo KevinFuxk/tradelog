@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-26 — Shipped
+- **`/` keyboard shortcut to focus the Trades search** — pressing `/` from anywhere (outside a text field / open modal) jumps to the Trades view and focuses + selects the symbol search box, so power users can filter without reaching for the mouse. Mirrors the `/`-to-search convention from GitHub/Slack/Vim. Reuses the existing keydown handler in `wire()`; `preventDefault` stops the slash being typed into the field.
+- **Factored out a single `tradeR(t)` helper** — the realised R-multiple formula (P&L ÷ amount risked at the stop) was duplicated in four places (Dashboard Avg R, Trades table sub-line, Journal card header, CSV export). Now one source of truth, so the number can never drift between views. Pure refactor — identical output verified against the old inline formula.
+- **"Avg R" column on the By-Symbol and By-Day-of-Week breakdowns** — each per-symbol / per-weekday row now shows its average realised R-multiple alongside Avg/Trade and Net P&L, so a trader sees risk-adjusted edge per bucket, not just dollars (a fat-dollar symbol on huge size can have a poor Avg R). Rows with no stop-loss data show `—`. New `groupAvgR()` + `fmtR()` helpers (reuse `tradeR`).
+- **"Max DD (Equity)" stat card** — surfaces the largest peak-to-trough drop in the cumulative equity curve, which `stats()` already computed (`maxDD`) but never displayed. Distinct from the existing "Max Drawdown" card (kept as worst *single* trade, per user preference): this one captures compounding losing streaks across several trades. Green `0.00` when the curve never dipped below a prior high.
+
+### Deferred / next-up ideas (2026-06-26)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Avg R column on the Strategy (Cup & Handle) breakdowns already show R** — but consider an Avg R / expectancy column on the Trades CSV export summary footer
+- **Longest underwater stretch** — complement Max DD (Equity) with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **`?` shortcut to show a keyboard-shortcut cheatsheet overlay** — now that there are several shortcuts (1–4, `/`, Esc, Ctrl+Enter), surface them in one place for discoverability
