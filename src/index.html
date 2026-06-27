@@ -247,6 +247,17 @@ textarea.nt::placeholder{color:var(--tx3);}
 .empty-title{font-family:'Syne',sans-serif;font-size:16px;color:var(--tx2);margin-bottom:8px;}
 .empty-sub{font-size:11px;line-height:1.7;}
 
+/* ── Keyboard-shortcut help overlay ──────── */
+.kbd{
+  display:inline-block;background:var(--s2);border:1px solid var(--b2);
+  border-bottom-width:2px;border-radius:5px;padding:2px 8px;
+  font-size:12px;color:var(--tx);font-family:'JetBrains Mono',monospace;line-height:1.4;
+}
+.help-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 2px;border-bottom:1px solid var(--b1);}
+.help-row:last-child{border-bottom:none;}
+.help-row .k{display:flex;gap:5px;flex-shrink:0;align-items:center;}
+.help-row .d{color:var(--tx2);text-align:right;font-size:13px;}
+
 /* ── Misc ────────────────────────────────── */
 ::-webkit-scrollbar{width:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -258,7 +269,7 @@ textarea.nt::placeholder{color:var(--tx3);}
 
 <!-- ── Sidebar ───────────────────────────── -->
 <nav class="sidebar">
-  <div class="logo">TL</div>
+  <div class="logo" id="logo" title="TradeLog — press ? for keyboard shortcuts" style="cursor:pointer">TL</div>
 
   <div class="nav on" data-v="dashboard">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -592,6 +603,22 @@ textarea.nt::placeholder{color:var(--tx3);}
     <div class="ma">
       <button class="btn btn-g" id="m-cancel">Cancel</button>
       <button class="btn btn-p" id="m-save">Save Journal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Keyboard shortcuts help ────────────── -->
+<div class="mo" id="help-modal">
+  <div class="md" style="width:460px">
+    <div class="mh">
+      <div class="mtitle">Keyboard Shortcuts</div>
+      <button class="mx" id="help-close">×</button>
+    </div>
+    <div>
+      <div class="help-row"><span class="k"><span class="kbd">1</span><span class="kbd">2</span><span class="kbd">3</span><span class="kbd">4</span></span><span class="d">Switch to Dashboard / Trades / Journal / Strategy</span></div>
+      <div class="help-row"><span class="k"><span class="kbd">Ctrl</span>/<span class="kbd">⌘</span>+<span class="kbd">Enter</span></span><span class="d">Save the journal note (when a trade is open)</span></div>
+      <div class="help-row"><span class="k"><span class="kbd">Esc</span></span><span class="d">Close this dialog or the trade modal</span></div>
+      <div class="help-row"><span class="k"><span class="kbd">?</span></span><span class="d">Show this shortcuts list</span></div>
     </div>
   </div>
 </div>
@@ -1055,6 +1082,7 @@ function renderDash() {
   })
   const dayRows = Object.entries(dayMap)
   let dayCards = []
+  let activityCards = []
   if (dayRows.length) {
     const best  = dayRows.reduce((a, b) => b[1] > a[1] ? b : a)
     const worst = dayRows.reduce((a, b) => b[1] < a[1] ? b : a)
@@ -1062,6 +1090,15 @@ function renderDash() {
     dayCards = [
       ['Best Day',  `<span class="col-g">${fmtMoney(best[1])}</span>`,  fday(best[0]),  'Your single most profitable trading day (sum of all P&L on that calendar date)'],
       ['Worst Day', `<span class="col-r">${fmtMoney(worst[1])}</span>`, fday(worst[0]), 'Your single worst trading day (sum of all P&L on that calendar date)'],
+    ]
+    // Per-trading-day activity: daily expectancy and a quick overtrading gauge.
+    // Denominator is distinct calendar days actually traded (not all dates).
+    const tradingDays = dayRows.length
+    const avgDay = s.total / tradingDays
+    const tpd    = s.n / tradingDays
+    activityCards = [
+      ['Avg / Day',    `<span class="${avgDay>=0?'col-g':'col-r'}">${fmtMoney(avgDay)}</span>`, `${tradingDays} trading day${tradingDays!==1?'s':''}`, 'Average net P&L per calendar day you traded (Net P&L ÷ number of distinct trading days). Your daily expectancy — complements the Best / Worst Day cards'],
+      ['Trades / Day', `<span class="col-b">${tpd.toFixed(1)}</span>`, 'avg per active day', 'Average number of trades on the days you traded (trade count ÷ distinct trading days). A quick overtrading check — a creeping number can signal forcing setups'],
     ]
   }
 
@@ -1078,6 +1115,7 @@ function renderDash() {
     ...avgRCard,
     ddCard,
     ...dayCards,
+    ...activityCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
   ].map(([l,v,ss,ti]) =>
@@ -2363,15 +2401,25 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  // Keyboard-shortcut help overlay (press ? or click the logo)
+  const helpEl = document.getElementById('help-modal')
+  const showHelp = () => helpEl.classList.add('on')
+  const hideHelp = () => helpEl.classList.remove('on')
+  document.getElementById('help-close').addEventListener('click', hideHelp)
+  helpEl.addEventListener('click', e => { if (e.target === helpEl) hideHelp() })
+  document.getElementById('logo')?.addEventListener('click', showHelp)
+
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeModal(); return }
+    const helpOpen = helpEl.classList.contains('on')
+    if (e.key === 'Escape') { if (helpOpen) { hideHelp(); return } closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
     const isTyping = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)
-    if (!isModalOpen && !isTyping) {
+    if (!isModalOpen && !helpOpen && !isTyping) {
       if (e.key === '1') go('dashboard')
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '?') showHelp()
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
