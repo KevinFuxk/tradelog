@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-27 — Shipped
+> NOTE: a large backlog of *open, unmerged* PRs already covers tradeR()/Avg-R-columns, the `/` search shortcut, by-hour & longest-underwater stats, By-Direction table, Recovery Factor, JSON backup/restore, etc. `main` only contains work through 2026-06-07, so to avoid duplicating those open PRs this run deliberately picked features absent from every existing PR title.
+- **Keyboard-shortcut help overlay** — press `?` (or click the `TL` logo) to open a dialog listing the available shortcuts (`1`–`4` nav, `Ctrl`/`⌘`+`Enter` save, `Esc` close, `?` help). The app has accumulated shortcuts with no in-app reference; this makes them discoverable instead of hidden. Reuses the existing `.mo`/`.md` modal styling; closeable via ×, backdrop click, or `Esc`. No data-shape change.
+- **Avg / Day stat card on Dashboard** — average net P&L per *distinct calendar day traded* (Net P&L ÷ trading days), with a `N trading days` sub-line. Daily expectancy that complements the Best/Worst Day cards — a steady per-day edge vs. one fat outlier day is now distinguishable. Pure derivation from existing `trades`.
+- **Trades / Day stat card on Dashboard** — average number of trades on the days you actually traded (trade count ÷ distinct trading days). A quick overtrading gauge: a creeping number often signals forcing setups. Reuses the same per-day grouping; no persistence change.
+
+### Deferred / next-up ideas (2026-06-27)
+- **Merge/triage the open PR backlog** — many open PRs overlap; a future run (or the maintainer) should rebase/merge the best ones onto `main` so daily work stops diverging
+- **`?`-overlay should auto-list shortcuts** that later PRs add (Ctrl+E export, Ctrl+S save, etc.) once those land on `main`
+- **Avg / Day by weekday** — extend the By-Day-of-Week table with a per-active-day average, not just totals
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
