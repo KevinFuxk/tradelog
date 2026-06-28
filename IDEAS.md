@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-28 — Shipped
+- **Shared `tradeR()` helper** — the realised R-multiple formula (`P&L ÷ dollars risked at the stop`) was copy-pasted in four places (Dashboard Avg R card, Trades table sub-line, Journal card header, CSV export). Factored into one `tradeR(trade)` function so the number can never drift between views and future R features have a single source of truth. Pure refactor, no behaviour change.
+- **Avg R column on the By-Symbol & By-Day-of-Week breakdowns** — both Dashboard mini-tables now show average realised R per group alongside Avg/Trade ($), so R-based traders can see which instruments and which weekdays carry their edge in *risk units*, not just dollars. Shows `—` for groups with no stop-set trades. Built on the new `tradeR()` helper; no new persistence.
+- **`/` shortcut focuses the search box** — pressing `/` on the Trades or Journal view jumps the cursor straight into that view's search field (and selects existing text), matching the muscle memory of GitHub/Slack/Vim users. Tooltips on both search boxes surface the hint. Folded into the existing keydown handler next to the `1`–`4` nav shortcuts; ignored while typing or with the modal open.
+- **Filtered Net P&L + win rate in the Trades header** — the Trade History sub-line now reads e.g. `12 trades · +1,234.50 net · 58% win` and recomputes live as you filter, so narrowing to a symbol or date range instantly shows that subset's bottom line instead of just a count. Derived from the already-filtered list; no data-shape change.
+
+### Deferred / next-up ideas (2026-06-28)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **`/`-search hint as a visible affordance** — the tooltip works, but a subtle inline `/` badge inside the empty search box would surface the shortcut without hover
+- **Extend the CSV export with the per-symbol / per-weekday Avg R summary** as trailing rows, so the dashboard breakdowns travel with the raw trades
