@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-29 — Shipped
+- **Shared `tradeR()` helper (R-multiple single source of truth)** — the realised R formula (`P&L ÷ dollars risked at the stop`) was duplicated inline in four places: the Dashboard Avg R card, the Trades table sub-line, the Journal card header, and the CSV export. Collapsed all four into one `tradeR(t)` helper next to `calcRisk`, so the number can never drift between views and future R features build on one definition. Pure refactor — identical output, verified numerically (win +2R / loss −1R / no-stop → null).
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show average realised R per trade alongside Avg/Trade ($), so a trader can see *risk-adjusted* edge per instrument and per weekday — a symbol can be net-positive in dollars yet weak in R (oversized small edges), or vice-versa. Greyed `—` when a group has no stop-based trades. Uses the new `tradeR()` via small `groupAvgR()` / `rCell()` helpers (reuses the existing `rNum` formatter). No data-shape change.
+- **`/` keyboard shortcut focuses the Trades search box** — pressing `/` anywhere (outside an input/modal) jumps to the Trades view and selects the symbol-search field, for fast keyboard-only filtering. The search placeholder/tooltip now hints `( / )`. Mirrors the existing `1`–`4` nav shortcuts; no persistence change.
+
+### Deferred / next-up ideas (2026-06-29)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Avg R column on the Strategy view is native (R-based already)** — but consider an Avg R / expectancy column on the import preview so a CSV's risk-adjusted quality shows before loading
+- **Profit Factor per symbol/weekday** — extend the breakdown tables with gross-win÷gross-loss now that the row-builder is shared
