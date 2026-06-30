@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-06-30 — Shipped
+- **Shared `tradeR()` helper** — centralised the realised R-multiple formula (P&L ÷ dollars risked at the stop) that was copy-pasted in four places (Trades table sub-line, Journal card header, the Avg R stat card, and the CSV export). One source of truth means the number can't silently diverge between views; returns `null` when there's no usable stop. Pure refactor — no behaviour change.
+- **Avg R column on the By-Symbol and By-Day-of-Week dashboard tables** — both breakdowns now show the average realised R across each group's trades that have a stop set, alongside the existing $ Avg/Trade. R-based traders can now see which instruments and which weekdays carry their edge in risk units, not just dollars (shows `—` for groups with no stop data). Uses the new `tradeR()` helper.
+- **`/` keyboard shortcut** — pressing `/` anywhere (outside an input/modal) jumps to the Trades view and focuses + selects the search box, so power users can filter by symbol without reaching for the mouse. The search placeholder now hints `( / )` for discoverability. Ignored while typing in a field or with the journal modal open.
+- **Underwater Run stat card** on the Dashboard — surfaces the longest run of consecutive trades spent below a prior equity high-water mark. Pairs with the existing Current DD card (how *deep* you are now) to also show how *long* the worst cold streak lasted. Computed in the same peak/cum walk already used for Max Drawdown; no new persistence.
+
+### Deferred / next-up ideas (2026-06-30)
+- **Sortable Hold Time column in Trades table** — still pending; would need a special-case in the sort comparator (like `entryTime`) since hold time is computed, not a stored field
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Underwater duration in *days*** — complement the trade-count Underwater Run with the longest calendar stretch below a prior peak
+- **Avg R column on the Cup & Handle breakdown tables already show R** — but consider a $ -equivalent there if account-size context is ever added
+- **Expectancy in R on the dashboard tooltip** — cross-link the $ Expectancy and Avg R cards so the relationship (R × avg risk) is explicit
