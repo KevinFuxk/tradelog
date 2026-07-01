@@ -1046,6 +1046,16 @@ function renderDash() {
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
+  // Median trade P&L — the "typical" trade, unswayed by a single outlier
+  // win or loss (a robust complement to the mean-based Expectancy card).
+  const medPnl = median(trades.map(t => t.pnl))
+  const medCard = medPnl != null ? [[
+    'Median P&L',
+    `<span class="${medPnl >= 0 ? 'col-g' : 'col-r'}">${fmtMoney(medPnl)}</span>`,
+    'typical trade',
+    'The middle result when every trade is ranked by P&L — your "typical" trade. Unlike Expectancy (the mean), one huge win or loss cannot skew it, so a positive median means most of your everyday trades actually win'
+  ]] : []
+
   // Best / worst single trading day by net P&L — surfaces outlier days that
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
@@ -1075,6 +1085,7 @@ function renderDash() {
     ['Max Profit',   `<span class="col-g">${fmtMoney(s.best)}</span>`, 'single trade', 'Your single largest winning trade'],
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ...medCard,
     ...avgRCard,
     ddCard,
     ...dayCards,
@@ -1386,7 +1397,9 @@ function exportTradesCSV() {
       .map(esc).join(',')
   })
   const csv  = [header.join(','), ...rows].join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  // Prepend a UTF-8 BOM so Excel opens the file as UTF-8 (otherwise it falls
+  // back to the system locale and mangles any non-ASCII symbol/text).
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href = url
@@ -2011,7 +2024,8 @@ function exportEventsCSV() {
     ocName(e.outcome), e.sizeTier, e.returnBucket, e.reason || 'na', e.earningsBucket, e.handleNum
   ].map(esc).join(','))
   const csv  = [header.join(','), ...rows].join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  // Prepend a UTF-8 BOM so Excel opens the export as UTF-8 (see Trades export).
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href = url
@@ -2043,12 +2057,15 @@ function renderStrategy() {
   if (!s) { sg.innerHTML = `<div class="sc"><div class="sl">No setups match filters</div></div>` }
   else {
     const tgtRate = s.n ? (s.tgt/s.n)*100 : 0
+    // Median R — the typical setup result, robust to one outlier runner/stop.
+    const medR = median(list.map(e => e.pnlR))
     sg.innerHTML = [
       ['Setups', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L${s.flat?` / ${s.flat} BE`:''}`, 'Number of cup & handle setups matching the current filters'],
       ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} of ${s.n} closed green`, 'Share of setups that closed with a positive R-multiple'],
       ['Target Hit', `<span class="${tgtRate>=50?'col-g':'col-gold'}">${tgtRate.toFixed(1)}%</span>`, `${s.tgt} reached full TP`, 'Share of setups that reached the full take-profit target (vs stopped out or timed out). Differs from Win Rate, which counts any green close'],
       ['Total R', `<span class="${s.totalR>=0?'col-g':'col-r'}">${rNum(s.totalR,1)}R</span>`, 'sum of results', 'Sum of R-multiple results across all setups. 1R = the amount risked per trade'],
       ['Expectancy', `<span class="${s.expectancy>=0?'col-g':'col-r'}">${rNum(s.expectancy)}R</span>`, 'per setup', 'Average R per setup (Total R ÷ setups). Positive means a profitable edge'],
+      ...(medR != null ? [['Median R', `<span class="${medR>=0?'col-g':'col-r'}">${rNum(medR)}R</span>`, 'typical setup', 'The middle setup result by R once all are ranked — the "typical" setup. Robust to outliers, unlike the mean Expectancy: a positive median means most setups close green, not just a few big runners']] : []),
       ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross R won ÷ gross R lost. Above 1.0 is profitable'],
       ['Avg Win', `<span class="col-g">${rNum(s.avgW)}R</span>`, 'per winner', 'Average R-multiple on winning setups'],
       ['Avg Loss', `<span class="col-r">${rNum(s.avgL)}R</span>`, 'per loser', 'Average R-multiple on losing setups'],
@@ -2225,6 +2242,16 @@ function holdMs(t) {
   if (!t.entryTime || !t.exitTime) return null
   const ms = new Date(t.exitTime) - new Date(t.entryTime)
   return (isFinite(ms) && ms >= 0) ? ms : null
+}
+
+// Median of a numeric array — the middle value once ranked. A robust,
+// outlier-resistant complement to the mean (Expectancy): one monster win or
+// loss can't drag it around. Returns null for an empty list.
+function median(arr) {
+  if (!arr || !arr.length) return null
+  const a = [...arr].sort((x, y) => x - y)
+  const m = a.length >> 1
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2
 }
 
 // Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.

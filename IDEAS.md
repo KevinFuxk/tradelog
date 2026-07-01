@@ -71,6 +71,18 @@
 - **Dirty-guard the "Clear Data" actions too** — confirm exists, but consider an undo/soft-delete so a mis-click can't wipe an imported log
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
 
+## 2026-07-01 — Shipped
+> Context: the repo has a large backlog of ~24 open, unmerged daily PRs (#4, #9–#31) that already claim almost every common idea (shared `tradeR()`/Avg R columns, `/` search shortcut, underwater/equity-drawdown stats, filtered P&L footer, by-hour/by-month/by-direction breakdowns, backup/restore, rows-per-page, Recovery Factor, payoff ratio, account-return %, etc). To genuinely avoid repeating work, this batch was picked to overlap **zero** open PR titles.
+- **Median P&L stat card on Dashboard** — the middle trade result once ranked by P&L, i.e. the *typical* trade. A robust, outlier-resistant complement to the mean-based Expectancy card: a positive median means most everyday trades win, even if a couple of monster wins/losses dominate the average. New `median()` helper; only appears when trades exist. No data-shape change.
+- **Median R stat card on Strategy (Cup & Handle)** — the same idea in R units for backtest setups: the typical setup's R, unswayed by one big runner or stop. Reuses the shared `median()` helper; only shown when setups match the filters.
+- **UTF-8 BOM on both CSV exports** (Trades + Strategy) — prepend the BOM so Excel opens the export as UTF-8 instead of falling back to the system locale and mangling any non-ASCII symbol/text. One-char fix in each export function; no format/column change.
+
+### Deferred / next-up ideas (2026-07-01)
+- **Std-dev of R / SQN (System Quality Number)** — a single consistency card (expectancy ÷ stdev × √N); pairs naturally with the new Median cards and isn't in any open PR
+- **Median hold time / median % risk** — extend the median treatment to other skewed distributions
+- **BOM-aware CSV *import*** — strip a leading BOM when parsing broker CSVs so a BOM in the first header cell never breaks column detection
+- **NOTE for future runs:** the open-PR backlog is the real bottleneck — consider whether the highest-value action is a *consolidation* PR (or flagging the un-merged pile to the maintainer) rather than adding a 25th parallel PR
+
 ## 2026-06-07 — Shipped
 - **Avg R stat card on Dashboard** — shows the average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked), with a `N trades w/ stop` sub-line. The risk-adjusted twin of the existing $ Expectancy card, so R-based traders see their edge in risk units, not just dollars. Reuses `calcRisk`; only the same R formula already used in the Trades table and Journal headers. No data-shape change.
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
