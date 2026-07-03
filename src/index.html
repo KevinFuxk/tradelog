@@ -213,6 +213,18 @@ textarea.nt:focus{border-color:var(--blue);}
 textarea.nt::placeholder{color:var(--tx3);}
 .ma{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;}
 
+/* ── Keyboard-shortcut help ───────────────── */
+.kbd{
+  display:inline-block;min-width:24px;text-align:center;padding:2px 8px;
+  background:var(--s3);border:1px solid var(--b2);border-bottom-width:2px;
+  border-radius:5px;font-size:12px;color:var(--tx);
+  font-family:'JetBrains Mono',monospace;
+}
+.help-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid var(--b1);}
+.help-row:last-child{border-bottom:none;}
+.help-row .desc{font-size:13px;color:var(--tx2);}
+.help-row .keys{display:flex;gap:5px;align-items:center;}
+
 /* ── Drop zone ───────────────────────────── */
 .dz{
   border:2px dashed var(--b2);border-radius:12px;padding:52px;
@@ -280,7 +292,12 @@ textarea.nt::placeholder{color:var(--tx3);}
     <span class="tip">Strategy [4]</span>
   </div>
 
-  <div class="nav nav-bottom" data-v="import">
+  <div class="nav nav-bottom" id="nav-help">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span class="tip">Shortcuts [?]</span>
+  </div>
+
+  <div class="nav" data-v="import">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
     <span class="tip">Import CSV</span>
   </div>
@@ -592,6 +609,23 @@ textarea.nt::placeholder{color:var(--tx3);}
     <div class="ma">
       <button class="btn btn-g" id="m-cancel">Cancel</button>
       <button class="btn btn-p" id="m-save">Save Journal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Keyboard shortcut help ──────────────── -->
+<div class="mo" id="help-modal">
+  <div class="md" style="width:440px">
+    <div class="mh">
+      <div class="mtitle">Keyboard Shortcuts</div>
+      <button class="mx" id="help-close">×</button>
+    </div>
+    <div>
+      <div class="help-row"><span class="desc">Dashboard · Trades · Journal · Strategy</span><span class="keys"><span class="kbd">1</span><span class="kbd">2</span><span class="kbd">3</span><span class="kbd">4</span></span></div>
+      <div class="help-row"><span class="desc">Jump to Trades &amp; focus search</span><span class="keys"><span class="kbd">/</span></span></div>
+      <div class="help-row"><span class="desc">Save journal note (in a trade)</span><span class="keys"><span class="kbd">Ctrl</span><span class="kbd">↵</span></span></div>
+      <div class="help-row"><span class="desc">Close dialog / cancel</span><span class="keys"><span class="kbd">Esc</span></span></div>
+      <div class="help-row"><span class="desc">Show this help</span><span class="keys"><span class="kbd">?</span></span></div>
     </div>
   </div>
 </div>
@@ -1033,17 +1067,31 @@ function renderDash() {
 
   // Average realised R-multiple across trades that have a stop set — the
   // risk-adjusted twin of $ Expectancy (positive = an edge in R terms).
-  const rList = trades.map(t => {
-    const r = calcRisk(t)
-    return (r && !r.breakeven && r.actualRiskPct > 0)
-      ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
-  }).filter(v => v != null)
+  const rList = trades.map(tradeR).filter(v => v != null)
   const avgR = rList.length ? rList.reduce((a, b) => a + b, 0) / rList.length : null
   const avgRCard = avgR != null ? [[
     'Avg R',
     `<span class="${avgR >= 0 ? 'col-g' : 'col-r'}">${avgR >= 0 ? '+' : ''}${avgR.toFixed(2)}R</span>`,
     `${rList.length} trade${rList.length !== 1 ? 's' : ''} w/ stop`,
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
+  ]] : []
+
+  // Median P&L and Median R — outlier-resistant twins of Expectancy / Avg R.
+  // A handful of outsized wins (or one blow-up loss) can flatter or wreck the
+  // mean; the median shows the *typical* trade the mean can hide.
+  const medPnl  = median(trades.map(t => t.pnl))
+  const medPnlCard = medPnl != null ? [[
+    'Median P&L',
+    `<span class="${medPnl >= 0 ? 'col-g' : 'col-r'}">${fmtMoney(medPnl)}</span>`,
+    'typical trade',
+    'The middle trade result — half your trades did better, half worse. Unlike Expectancy (the mean), it ignores outsized wins/losses, so it shows your typical trade, not an average skewed by a few outliers'
+  ]] : []
+  const medR = median(rList)
+  const medRCard = medR != null ? [[
+    'Median R',
+    `<span class="${medR >= 0 ? 'col-g' : 'col-r'}">${medR >= 0 ? '+' : ''}${medR.toFixed(2)}R</span>`,
+    `${rList.length} trade${rList.length !== 1 ? 's' : ''} w/ stop`,
+    'The middle realised R-multiple — half your stopped trades did better, half worse. Outlier-resistant twin of Avg R'
   ]] : []
 
   // Best / worst single trading day by net P&L — surfaces outlier days that
@@ -1075,7 +1123,9 @@ function renderDash() {
     ['Max Profit',   `<span class="col-g">${fmtMoney(s.best)}</span>`, 'single trade', 'Your single largest winning trade'],
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ...medPnlCard,
     ...avgRCard,
+    ...medRCard,
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
@@ -1386,7 +1436,8 @@ function exportTradesCSV() {
       .map(esc).join(',')
   })
   const csv  = [header.join(','), ...rows].join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  // Prepend a UTF-8 BOM so Excel opens the file in UTF-8 (symbols/journal text stay intact).
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href = url
@@ -2011,7 +2062,8 @@ function exportEventsCSV() {
     ocName(e.outcome), e.sizeTier, e.returnBucket, e.reason || 'na', e.earningsBucket, e.handleNum
   ].map(esc).join(','))
   const csv  = [header.join(','), ...rows].join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  // Prepend a UTF-8 BOM so Excel opens the file in UTF-8 (symbols/text stay intact).
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href = url
@@ -2227,6 +2279,24 @@ function holdMs(t) {
   return (isFinite(ms) && ms >= 0) ? ms : null
 }
 
+// Realised R-multiple for a trade (P&L ÷ amount risked at the stop), or null
+// when there's no usable stop. Single source of truth for the R formula reused
+// by the Dashboard cards; mirrors the inline calc in the Trades table & Journal.
+function tradeR(t) {
+  const r = calcRisk(t)
+  return (r && !r.breakeven && r.actualRiskPct > 0)
+    ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance)
+    : null
+}
+
+// Median of a numeric array (outlier-resistant central tendency), or null if empty.
+function median(arr) {
+  if (!arr || !arr.length) return null
+  const s = [...arr].sort((a, b) => a - b)
+  const m = Math.floor(s.length / 2)
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+}
+
 // Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.
 // Keeps larger-account P&L readable. `sign` adds a leading + for non-negatives.
 function fmtMoney(n, sign = true) {
@@ -2240,7 +2310,16 @@ function fmtMoney(n, sign = true) {
 // ════════════════════════════════════════════════════
 function wire() {
   // Nav
-  document.querySelectorAll('.nav').forEach(n => n.addEventListener('click', () => go(n.dataset.v)))
+  document.querySelectorAll('.nav').forEach(n => n.addEventListener('click', () => {
+    if (n.id === 'nav-help') { document.getElementById('help-modal').classList.toggle('on'); return }
+    if (n.dataset.v) go(n.dataset.v)
+  }))
+
+  // Keyboard-shortcut help modal (close via × or backdrop click)
+  document.getElementById('help-close').addEventListener('click', () => document.getElementById('help-modal').classList.remove('on'))
+  document.getElementById('help-modal').addEventListener('click', e => {
+    if (e.target.id === 'help-modal') document.getElementById('help-modal').classList.remove('on')
+  })
 
   // Import triggers
   const doImport = async () => {
@@ -2364,14 +2443,24 @@ function wire() {
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeModal(); return }
+    const helpModal = document.getElementById('help-modal')
+    if (e.key === 'Escape') {
+      if (helpModal.classList.contains('on')) { helpModal.classList.remove('on'); return }
+      closeModal(); return
+    }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
     const isTyping = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)
+    // "?" toggles the shortcut help (Shift+/), unless typing or a trade is open
+    if (e.key === '?' && !isModalOpen && !isTyping) { helpModal.classList.toggle('on'); return }
     if (!isModalOpen && !isTyping) {
       if (e.key === '1') go('dashboard')
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {   // jump to Trades and focus the search box
+        e.preventDefault(); go('trades')
+        const q = document.getElementById('f-q'); if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })

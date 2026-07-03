@@ -82,3 +82,23 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-03 — Shipped
+> ⚠️ Note for maintainer: `main` is still at PR #8 (2026-06-07). PRs #14–#33 from
+> daily runs 2026-06-13 onward are **all open/unmerged**, so many recent ideas
+> (shared `tradeR()`, Avg R breakdown columns, `/` search shortcut, Underwater
+> Run, Median cards, etc.) exist only in unmerged branches. This batch was built
+> fresh off `main`; the shortcut help + `/` focus + Median cards + shared
+> `tradeR()` overlap with those open PRs by necessity. Merging the backlog (or
+> closing stale ones) would let future runs stop re-deriving the same work.
+- **Keyboard-shortcut help overlay** — a new `?` sidebar button (and pressing `?`) opens a dialog listing all shortcuts (`1`–`4` nav, `/` focus search, `Ctrl/⌘+Enter` save note, `Esc` close). The app already had shortcuts but nothing surfaced them; now they're discoverable. Reuses the existing `.mo`/`.md` modal styling; added `.kbd`/`.help-row` styles.
+- **`/` to focus the Trades search box** — pressing `/` jumps to the Trades view and focuses+selects the symbol search, so power users can filter without reaching for the mouse. Guarded so it never fires while typing or with a trade modal open.
+- **Median P&L + Median R stat cards** on the Dashboard — outlier-resistant twins of Expectancy (mean $) and Avg R. A few outsized wins or one blow-up can make the mean lie; the median shows the *typical* trade. Median R only appears when trades have stops. Added a small `median()` helper and a shared `tradeR()` helper (single source of truth for the R formula, used to rebuild the Avg R list too).
+- **UTF-8 BOM on both CSV exports** — Trades and Strategy exports now prepend a `﻿` BOM so Excel opens them as UTF-8. Without it, symbols and the Chinese journal/section text render as mojibake (garbled) when double-clicked into Excel. Display/data shape unchanged; only the download bytes gained a 3-byte prefix.
+
+### Deferred / next-up ideas (2026-07-03)
+- **Merge or close the #14–#33 backlog** — highest leverage; the daily loop keeps re-deriving work that never lands on `main`.
+- **Avg R column on By-Symbol / By-Day-of-Week tables** — now that a shared `tradeR()` helper exists on `main`, extend the breakdown mini-tables with an Avg R column (cheap, no new formula).
+- **Longest underwater stretch** — complement Current DD with the longest run (trades/days) below a prior equity peak.
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass.
+- **Best/worst hour-of-day breakdown** — mirror the weekday table by entry hour for intraday traders.
