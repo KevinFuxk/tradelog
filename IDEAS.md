@@ -82,3 +82,18 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-04 — Shipped
+- **Monthly P&L Calendar on the Dashboard** — a month-grid heat calendar showing net P&L for every trading day (green = up day, red = down day), with the day number, dollar result, and trade count in each cell. Gives traders the at-a-glance "shape of the month" (hot/cold streaks, outlier days) that Tradervue/TradeZella users expect but TradeLog lacked. Pure derivation from `trades`, keyed by the entryTime date prefix so keys line up with the Trades date filter; **no persistence-shape change**. Reuses existing color vars.
+- **Month navigation + running month summary** — ‹ / › step months, the month label acts as a "jump to latest month with trades" button, and the header shows the month's net P&L and number of trading days. Defaults to the most recent trade's month on each launch (in-session only; not persisted, so it always opens on fresh data).
+- **Weekly P&L totals column** — each calendar row ends with that week's summed P&L, so a trader can see which weeks carried (or leaked) the month, not just individual days.
+- **Click a day → filtered Trades view** — clicking any traded cell jumps to the Trades tab pre-filtered to that single date (sets from/to, clears other filters, persists via the existing saveTradeFilters), tying the calendar directly to the underlying trades.
+
+  NOTE for future runs: there is a large backlog of UNMERGED daily PRs (#9–#34) on origin. Many common ideas (shared `tradeR()` helper, Avg R breakdown columns, `/` search shortcut, by-hour breakdown, longest-underwater stat, median cards, UTF-8 BOM CSV, keyboard-help overlay, JSON backup/restore, by-month/by-direction breakdowns, rows-per-page selector, %Risk column-sort fix) are ALREADY sitting in those open PRs — check `gh pr list --state open` before re-implementing them. Prefer novel features until the backlog is merged.
+
+### Deferred / next-up ideas (2026-07-04)
+- **Calendar: persist the viewed month** across restarts, or add a mini month-over-month sparkline of monthly totals above the grid.
+- **Quarter/year heatmap** — a compact 12-month grid of monthly P&L (GitHub-contributions style) for a birds-eye annual view.
+- **Calendar cell R-multiple mode** — toggle day cells between $ and summed R (once a shared `tradeR()` helper lands from the open-PR backlog; avoid duplicating the formula).
+- **Streak highlighting on the calendar** — outline the current win/loss streak of days, mirroring the Max Consec stat.
+- **Merge the open-PR backlog (#9–#34)** — the single highest-value maintenance action; the app is accumulating parallel unmerged improvements that will conflict.
