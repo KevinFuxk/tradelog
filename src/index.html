@@ -115,6 +115,22 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tx)
 .oc-loss{background:var(--red-bg);color:var(--red);}
 .oc-to{background:var(--gold-bg);color:var(--gold);}
 
+/* ── P&L calendar ────────────────────────── */
+.cal{width:100%;border-collapse:separate;border-spacing:4px;table-layout:fixed;min-width:560px;}
+.cal th{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;font-weight:500;padding-bottom:2px;text-align:center;}
+.cal td{height:54px;vertical-align:top;border-radius:6px;padding:5px 7px;background:var(--s2);border:1px solid var(--b1);overflow:hidden;}
+.cal td.empty{background:transparent;border:none;}
+.cal td.win{background:var(--green-bg);border-color:rgba(0,229,153,.35);cursor:pointer;}
+.cal td.loss{background:var(--red-bg);border-color:rgba(255,61,107,.35);cursor:pointer;}
+.cal td.flat{cursor:default;}
+.cal td.win:hover,.cal td.loss:hover{border-color:var(--blue);}
+.cal td.wk{background:var(--s1);}
+.cal td.today{outline:1px solid var(--blue);outline-offset:-1px;}
+.cal .cd{font-size:11px;color:var(--tx3);}
+.cal .cp{font-size:11px;font-weight:600;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal .cn{font-size:9px;color:var(--tx3);margin-top:1px;}
+.cal-wk-h{font-size:9px;color:var(--tx3);text-transform:uppercase;}
+
 /* ── Cards ───────────────────────────────── */
 .card{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);padding:20px;}
 .ct{font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:var(--tx2);letter-spacing:.06em;margin-bottom:14px;}
@@ -315,6 +331,21 @@ textarea.nt::placeholder{color:var(--tx3);}
         </div>
       </div>
       <div style="height:140px;position:relative"><canvas id="c-daily"></canvas></div>
+    </div>
+
+    <div class="card" id="cal-card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div class="ct" style="margin-bottom:0" title="Net P&amp;L for every calendar day of the month — green days made money, red days lost. Click any traded day to see just those trades.">P&amp;L CALENDAR</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="cal-total" style="font-size:12px;color:var(--tx2)"></span>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-g" id="cal-prev" title="Previous month" style="padding:4px 11px;font-size:13px">‹</button>
+            <button class="btn btn-g" id="cal-label" title="Jump back to the most recent month with trades" style="padding:4px 10px;font-size:11px;min-width:118px">—</button>
+            <button class="btn btn-g" id="cal-next" title="Next month" style="padding:4px 11px;font-size:13px">›</button>
+          </div>
+        </div>
+      </div>
+      <div id="ds-cal"></div>
     </div>
 
     <div class="card" id="dow-card" style="margin-bottom:14px">
@@ -999,14 +1030,15 @@ function renderDash() {
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
+  const cac = document.getElementById('cal-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = cac.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = cac.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1086,7 +1118,120 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderCalendar()
   buildCharts(s)
+}
+
+// ── P&L calendar ──────────────────────────
+// A month grid of net P&L per calendar day (green = up, red = down), so a
+// trader can see the shape of a month at a glance — hot streaks, cold streaks,
+// and outlier days — the way Tradervue/TradeZella surface it. Pure derivation
+// from `trades`; no persistence change. Click a traded day to jump to the
+// Trades view filtered to that date. Right-hand column shows the week total.
+let calYM = null   // {y,m} currently shown; null = auto (latest trade's month)
+
+// Group P&L by calendar day, keyed by the entryTime date prefix (YYYY-MM-DD) so
+// the keys line up with the Trades date filter used on click.
+function calDayMap() {
+  const m = {}
+  trades.forEach(t => {
+    const raw = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    if (!/^\d{4}-\d{2}-\d{2}/.test(raw)) return
+    const key = raw.slice(0, 10)
+    const e = m[key] || (m[key] = { pnl: 0, n: 0 })
+    e.pnl += t.pnl; e.n++
+  })
+  return m
+}
+
+function calShift(delta) {
+  const keys = Object.keys(calDayMap()).sort()
+  let Y, M
+  if (calYM) { Y = calYM.y; M = calYM.m }
+  else if (keys.length) { const last = keys[keys.length-1]; Y = +last.slice(0,4); M = +last.slice(5,7) }
+  else { const n = new Date(); Y = n.getFullYear(); M = n.getMonth()+1 }
+  M += delta
+  while (M < 1)  { M += 12; Y-- }
+  while (M > 12) { M -= 12; Y++ }
+  calYM = { y: Y, m: M }
+  renderCalendar()
+}
+
+function renderCalendar() {
+  const el = document.getElementById('ds-cal'); if (!el) return
+  const map  = calDayMap()
+  const keys = Object.keys(map).sort()
+  if (!keys.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades to chart</div>'; return }
+
+  // Resolve month to display (fixed once navigated; else the latest trade month)
+  let Y, M
+  if (calYM) { Y = calYM.y; M = calYM.m }
+  else { const last = keys[keys.length-1]; Y = +last.slice(0,4); M = +last.slice(5,7) }
+  const MM   = String(M).padStart(2,'0')
+  const first = new Date(Y, M-1, 1).getDay()   // 0 = Sunday
+  const days  = new Date(Y, M, 0).getDate()    // day count of month
+  document.getElementById('cal-label').textContent =
+    new Date(Y, M-1, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' })
+
+  // Month summary
+  let mTotal = 0, mDays = 0
+  for (let d = 1; d <= days; d++) {
+    const e = map[`${Y}-${MM}-${String(d).padStart(2,'0')}`]
+    if (e) { mTotal += e.pnl; mDays++ }
+  }
+  document.getElementById('cal-total').innerHTML = mDays
+    ? `<span style="color:${mTotal>=0?'var(--green)':'var(--red)'}">${fmtMoney(mTotal)}</span> · ${mDays} day${mDays!==1?'s':''}`
+    : '<span style="color:var(--tx3)">no trades this month</span>'
+
+  const now = new Date()
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+
+  // Lay out cells (leading blanks + days, padded to a full final week)
+  const cells = []
+  for (let i = 0; i < first; i++) cells.push(null)
+  for (let d = 1; d <= days; d++) {
+    const key = `${Y}-${MM}-${String(d).padStart(2,'0')}`
+    cells.push({ d, key, e: map[key] })
+  }
+  while (cells.length % 7) cells.push(null)
+
+  const HDR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+  let rows = ''
+  for (let r = 0; r < cells.length; r += 7) {
+    const week = cells.slice(r, r+7)
+    let wkTotal = 0, wkHas = false
+    const tds = week.map(c => {
+      if (!c) return '<td class="empty"></td>'
+      const e = c.e
+      const today = c.key === todayKey ? ' today' : ''
+      if (!e) return `<td class="flat${today}"><div class="cd">${c.d}</div></td>`
+      wkTotal += e.pnl; wkHas = true
+      const cls = e.pnl > 0 ? 'win' : e.pnl < 0 ? 'loss' : 'flat'
+      const col = e.pnl > 0 ? 'var(--green)' : e.pnl < 0 ? 'var(--red)' : 'var(--tx2)'
+      return `<td class="${cls}${today}" data-day="${c.key}" title="${c.key} · ${e.n} trade${e.n!==1?'s':''} · click to view">
+        <div class="cd">${c.d}</div>
+        <div class="cp" style="color:${col}">${fmtMoney(e.pnl)}</div>
+        <div class="cn">${e.n} tr</div>
+      </td>`
+    }).join('')
+    const wkCell = wkHas
+      ? `<td class="wk"><div class="cal-wk-h">Wk</div><div class="cp" style="color:${wkTotal>=0?'var(--green)':'var(--red)'}">${fmtMoney(wkTotal)}</div></td>`
+      : '<td class="wk"></td>'
+    rows += `<tr>${tds}${wkCell}</tr>`
+  }
+
+  el.innerHTML = `<div style="overflow-x:auto"><table class="cal">
+    <thead><tr>${HDR.map(h=>`<th>${h}</th>`).join('')}<th class="cal-wk-h">Week</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`
+
+  // Click a traded day → Trades view filtered to that single date
+  el.querySelectorAll('td[data-day]').forEach(td => td.addEventListener('click', () => {
+    const day = td.dataset.day
+    const set = (id, v) => { const x = document.getElementById(id); if (x) x.value = v }
+    set('f-from', day); set('f-to', day)
+    set('f-q', ''); set('f-side', ''); set('f-res', '')
+    page = 1; saveTradeFilters(); renderTrades(); go('trades')
+  }))
 }
 
 // Day-of-week performance — answers "am I better on certain weekdays?".
@@ -2286,6 +2431,11 @@ function wire() {
   document.querySelectorAll('.daily-range-btn').forEach(b =>
     b.addEventListener('click', () => { dailyRange = b.dataset.range; try { localStorage.setItem(DAILY_RANGE_KEY, dailyRange) } catch {} ; buildDailyChart() })
   )
+
+  // P&L calendar month navigation
+  document.getElementById('cal-prev')?.addEventListener('click', () => calShift(-1))
+  document.getElementById('cal-next')?.addEventListener('click', () => calShift(1))
+  document.getElementById('cal-label')?.addEventListener('click', () => { calYM = null; renderCalendar() })
 
   // Settings save
   document.getElementById('s-save').addEventListener('click', async () => {
