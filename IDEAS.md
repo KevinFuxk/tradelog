@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-05 — Shipped
+- **Copy journal entry to clipboard** — a `⧉ Copy` button in the trade/journal modal copies the entry (trade header + P&L + every filled section, labelled) as readable plain text, using the *live* field values so it works even before saving. Lets a trader paste a review into a chat, notes app, or off-app backup without retyping. Local clipboard API only (async `writeText` with an `execCommand('copy')` fallback) — no network, no data-shape change. Directly serves the "never lose your notes" value.
+- **Price thousands separators** — new `fmtPrice()` helper groups the integer part of Entry / Exit / SL / TP prices (e.g. `42,350.5`) while keeping up to 5 decimals and trimming trailing zeros, so forex like `1.23456` is untouched. Applied in the Trades table and the trade-detail modal (which previously showed raw unformatted numbers). Replaced the old local `fp()` formatter. Display-only; stored prices unchanged.
+- **Total R stat card on Dashboard** — sums the realised R-multiple across every trade that has a stop-loss set, shown next to the Avg R card as the R-based twin of Net P&L (total edge in units of risk taken). Pure derivation from the same inline R computation already used by the Avg R card; no new persistence.
+- *(Context note: PRs #9–#35 from prior daily runs are still OPEN/unmerged — most obvious ideas, incl. shared `tradeR()` helper, `/` search shortcut, underwater/by-hour/median/monthly-calendar cards, are already claimed there. Today's batch was deliberately chosen to NOT collide with any open PR.)*
+
+### Deferred / next-up ideas (2026-07-05)
+- **Merge the open PR backlog (#9–#35)** — 27 unmerged daily PRs are piling up and blocking forward progress; many overlap. Worth a human triage/merge pass before more stat cards are added.
+- **Copy the whole trades table / a filtered slice to clipboard** — mirror the journal copy for tabular paste into Sheets
+- **Longest underwater stretch** & **by-hour breakdown** — already sitting in open PRs #9/#31; fold in once those land
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
