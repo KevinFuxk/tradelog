@@ -241,6 +241,12 @@ textarea.nt::placeholder{color:var(--tx3);}
 .jc-section-yn{font-size:13px;font-weight:600;}
 .jc-divider{border:none;border-top:1px solid var(--b1);margin:2px 0;}
 
+/* ── Journal rule-adherence summary ─────── */
+.jn-sum{display:flex;flex-wrap:wrap;gap:22px;align-items:center;background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);padding:12px 18px;margin-bottom:14px;}
+.jn-sum-item{display:flex;flex-direction:column;gap:3px;}
+.jn-sum-k{font-size:10px;color:var(--tx2);text-transform:uppercase;letter-spacing:.07em;}
+.jn-sum-v{font-size:15px;font-weight:600;}
+
 /* ── Empty state ─────────────────────────── */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center;color:var(--tx3);}
 .empty-icon{font-size:52px;margin-bottom:16px;opacity:.4;}
@@ -392,6 +398,7 @@ textarea.nt::placeholder{color:var(--tx3);}
   <div class="view" id="v-journal">
     <div class="ph">
       <div><div class="pt">Journal</div><div class="ps" id="jn-sub">Your notes &amp; reflections</div></div>
+      <button class="btn btn-g" id="jn-export" title="Download the currently filtered journal entries as a readable Markdown backup">Export Markdown</button>
     </div>
     <!-- Journal filters -->
     <div class="fbar" id="jn-filters" style="margin-bottom:16px">
@@ -414,6 +421,8 @@ textarea.nt::placeholder{color:var(--tx3);}
       </div>
       <button class="pb" onclick="clearJournalFilters()" style="font-size:12px;padding:7px 12px">✕ Clear</button>
     </div>
+    <!-- Rule-adherence summary: did following the system actually pay? -->
+    <div id="jn-summary"></div>
     <div class="empty" id="jn-empty">
       <div class="empty-icon">📝</div>
       <div class="empty-title">No journal entries yet</div>
@@ -1480,16 +1489,16 @@ function clearJournalFilters() {
   renderJournal()
 }
 
-function renderJournal() {
-  populateJournalSymbols()
-
+// Currently-filtered journal entries (trades that have a note) — shared by the
+// list render, the rule-adherence summary, and the Markdown export.
+function journalFiltered() {
   const q          = (document.getElementById('jf-q')?.value || '').toLowerCase().trim()
   const symFilter  = document.getElementById('jf-symbol')?.value || ''
   const sideFilter = document.getElementById('jf-side')?.value || ''
   const dateFrom   = document.getElementById('jf-date-from')?.value  // 'YYYY-MM-DD' or ''
   const dateTo     = document.getElementById('jf-date-to')?.value
 
-  const noted = trades.filter(t => {
+  return trades.filter(t => {
     if (!hasNote(notes[t.id])) return false
     if (q && !noteText(notes[t.id]).toLowerCase().includes(q) && !t.symbol.toLowerCase().includes(q)) return false
     if (symFilter  && t.symbol !== symFilter)  return false
@@ -1504,10 +1513,37 @@ function renderJournal() {
     }
     return true
   })
+}
+
+// Rule-adherence summary — turns the yes/no "交易结构是否符合系统" field into an
+// edge signal: how often you followed your system, and whether your P&L is
+// actually better when you did. Only rated entries (structure set) count.
+function renderJournalSummary(noted) {
+  const el = document.getElementById('jn-summary'); if (!el) return
+  const rated = noted.filter(t => { const n = notes[t.id]; return n && typeof n === 'object' && (n.structure === 'yes' || n.structure === 'no') })
+  if (!rated.length) { el.innerHTML = ''; return }
+  const followed = rated.filter(t => notes[t.id].structure === 'yes')
+  const broken   = rated.filter(t => notes[t.id].structure === 'no')
+  const avg = ts => ts.length ? ts.reduce((a,t)=>a+t.pnl,0)/ts.length : null
+  const fAvg = avg(followed), bAvg = avg(broken)
+  const pct  = (followed.length / rated.length) * 100
+  const item = (k, v) => `<div class="jn-sum-item"><div class="jn-sum-k">${k}</div><div class="jn-sum-v">${v}</div></div>`
+  el.innerHTML = `<div class="jn-sum" title="Based on the 交易结构是否符合系统 (did this follow my system?) field in your journal entries">
+    ${item('System Followed', `<span class="${pct>=50?'col-g':'col-r'}">${pct.toFixed(0)}%</span> <span style="font-size:11px;color:var(--tx3)">${followed.length}/${rated.length} rated</span>`)}
+    ${fAvg!=null ? item('Avg P&amp;L · Followed', `<span class="${fAvg>=0?'col-g':'col-r'}">${fmtMoney(fAvg)}</span>`) : ''}
+    ${bAvg!=null ? item('Avg P&amp;L · Broke Rules', `<span class="${bAvg>=0?'col-g':'col-r'}">${fmtMoney(bAvg)}</span>`) : ''}
+  </div>`
+}
+
+function renderJournal() {
+  populateJournalSymbols()
+
+  const noted = journalFiltered()
 
   const em = document.getElementById('jn-empty')
   const ls = document.getElementById('jn-list')
   document.getElementById('jn-sub').textContent = `${noted.length} entr${noted.length!==1?'ies':'y'}`
+  renderJournalSummary(noted)
 
   if (!noted.length) { em.style.display='flex'; ls.style.display='none'; return }
   em.style.display='none'; ls.style.display='flex'
@@ -1558,6 +1594,48 @@ function renderJournal() {
   document.querySelectorAll('.jc').forEach(c =>
     c.addEventListener('click', () => openModal(c.dataset.id))
   )
+}
+
+// ── Export journal entries to Markdown ────
+// Journal notes are a trader's most precious data. This writes the currently
+// filtered entries to a readable .md file so they can be backed up, printed,
+// or reviewed outside the app. Pure client-side Blob download — no network.
+function exportJournalMarkdown() {
+  const list = journalFiltered()
+  if (!list.length) { alert('No journal entries to export. Adjust your filters or write a note first.'); return }
+  const risk = t => {
+    const r = calcRisk(t)
+    return (r && !r.breakeven && r.actualRiskPct > 0)
+      ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
+  }
+  const lines = [`# TradeLog Journal`, ``, `Exported ${new Date().toISOString().slice(0,10)} · ${list.length} entr${list.length!==1?'ies':'y'}`, ``]
+  list.forEach(t => {
+    const n = notes[t.id] || {}
+    const rM = risk(t)
+    lines.push(`## ${t.symbol} · ${t.side.toUpperCase()} · ${fdt(t.entryTime)}`)
+    lines.push(``)
+    lines.push(`- **Net P&L:** ${fmtMoney(t.pnl)}${rM!=null?`  ·  **R:** ${rM>=0?'+':''}${rM.toFixed(2)}R`:''}`)
+    if (t.entryPrice || t.exitPrice) lines.push(`- **Entry / Exit:** ${t.entryPrice||'—'} → ${t.exitPrice||'—'}${t.slPrice?`  ·  SL ${t.slPrice}`:''}${t.tpPrice?`  ·  TP ${t.tpPrice}`:''}`)
+    lines.push(``)
+    if (typeof n === 'string') {
+      lines.push(n.trim(), ``)
+    } else {
+      J_FIELDS.forEach(f => {
+        const v = n[f]
+        if (!v || (typeof v === 'string' && !v.trim())) return
+        const body = f === 'structure' ? (v === 'yes' ? '是 ✓' : '否 ✗') : v.trim()
+        lines.push(`**${J_LABELS[f]}**`, ``, body, ``)
+      })
+    }
+    lines.push(`---`, ``)
+  })
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `tradelog-journal-${new Date().toISOString().slice(0,10)}.md`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
 }
 
 // ════════════════════════════════════════════════════
@@ -2359,10 +2437,17 @@ function wire() {
     })
   })
 
+  // Journal export
+  document.getElementById('jn-export')?.addEventListener('click', exportJournalMarkdown)
+
   // Modal
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  // Click the dark backdrop (outside the card) to close — honours the unsaved guard
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal()
+  })
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
