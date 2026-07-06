@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-06 — Shipped
+- **Export Journal to Markdown** — an "Export Markdown" button on the Journal view downloads the *currently filtered* entries as a readable `.md` file (per entry: symbol/side/date header, Net P&L + realised R, entry/exit/SL/TP line, then each of the six 是否-structured sections). Journal notes are the app's most precious, hardest-to-recreate data and had **no export at all** (only Trades & Strategy did) — this gives traders a portable, printable backup. Pure client-side Blob download; no IPC, no network, no data-shape change. Reuses the new `journalFiltered()` helper.
+- **Rule-adherence summary on the Journal view** — a compact bar under the filters turns the existing `交易结构是否符合系统` (是/否) field into an edge signal: **System Followed %** (of rated entries) plus **Avg P&L when Followed vs when Rules Broken**. Answers the single most valuable journaling question — "does sticking to my system actually pay?" — from data already captured but never aggregated. Only counts entries where structure was rated; hides entirely when none are. Respects all journal filters.
+- **Click-outside-to-close the trade/journal modal** — clicking the dark backdrop outside the card now closes the modal, honouring the existing unsaved-changes guard (so a stray backdrop click can't silently discard notes). Small mouse-convenience parity with the Escape key.
+
+### Deferred / next-up ideas (2026-07-06)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (trades/days) spent below a prior peak
+- **`/` shortcut to focus Trades search** + **`e` to export** — keyboard-driven power-user flow
+- **Correlate rule-adherence with R, not just $** — extend the new Journal summary with Avg R (followed vs broken) once a shared `tradeR()` helper is factored out
+- **Journal export to PDF / print stylesheet** — Markdown lands now; a print-friendly view would let traders archive a monthly review
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
