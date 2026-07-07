@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-07 — Shipped
+- **By-Symbol drill-down** — clicking any row in the Dashboard's "By Symbol" breakdown now jumps straight to the Trades tab pre-filtered to that instrument (sets the search box, persists the filter, switches view). Turns the "which product makes/loses me money?" table into a one-click gateway to review those exact trades, instead of manually retyping the ticker into the Trades filter. Rows get a pointer cursor + "Click to view X trades" title. No data-shape change.
+- **Running "Balance" column in the Trades CSV export** — the export now appends a chronological running-equity column (account balance + cumulative net P&L up to and including each trade), keyed by trade id so it stays correct regardless of the current table sort. Lets a trader plot their real equity curve in Excel/Sheets without re-deriving it. On-screen table and JSON store untouched.
+- **"Green Days %" stat card on the Dashboard** — shows the share of trading days that closed net positive (P&L summed per calendar date), with an "X of Y days" sub-line. A day-level consistency read that's distinct from the per-trade win rate — a trader can have a high per-trade win rate but still bleed on most days (or vice-versa). Pure derivation from the existing per-day map used by Best/Worst Day; no new persistence.
+
+### Deferred / next-up ideas (2026-07-07)
+- **Drill-down from the By-Day-of-Week table** — would need a weekday filter on the Trades view (current date filters are ranges, not weekdays); add a `weekday` filter select first, then wire the click.
+- **On-screen running "Balance"/equity column in the Trades table** — mirror the new export column in the UI (needs a responsive width/scroll pass before adding another column).
+- **Current Equity stat card** — headline the live account size (balance + net P&L) with return % as a sub-line, complementing Green Days.
+- **Green-day streak** — longest run of consecutive net-positive trading days, mirroring Max Consec Wins but at the day level.
+- **NOTE for future runs:** open PRs #9–#37 are stacked and unmerged — before adding the popular ideas (shared `tradeR()` helper, `/` search-focus, Avg R breakdown columns, median cards, markdown/clipboard journal export, click-outside modal, monthly calendar, keyboard-help overlay, UTF-8 BOM exports) check those PRs first; they are already implemented there.

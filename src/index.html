@@ -1055,6 +1055,7 @@ function renderDash() {
   })
   const dayRows = Object.entries(dayMap)
   let dayCards = []
+  let greenCard = []
   if (dayRows.length) {
     const best  = dayRows.reduce((a, b) => b[1] > a[1] ? b : a)
     const worst = dayRows.reduce((a, b) => b[1] < a[1] ? b : a)
@@ -1062,6 +1063,13 @@ function renderDash() {
     dayCards = [
       ['Best Day',  `<span class="col-g">${fmtMoney(best[1])}</span>`,  fday(best[0]),  'Your single most profitable trading day (sum of all P&L on that calendar date)'],
       ['Worst Day', `<span class="col-r">${fmtMoney(worst[1])}</span>`, fday(worst[0]), 'Your single worst trading day (sum of all P&L on that calendar date)'],
+    ]
+    // Green Days — share of trading days that closed net positive. A read on
+    // day-to-day consistency that's distinct from the per-trade win rate.
+    const green = dayRows.filter(([, v]) => v > 0).length
+    const gpct  = (green / dayRows.length) * 100
+    greenCard = [
+      ['Green Days', `<span class="${gpct>=50?'col-g':'col-r'}">${gpct.toFixed(0)}%</span>`, `${green} of ${dayRows.length} day${dayRows.length!==1?'s':''}`, 'Share of your trading days that closed net positive (summing P&L per calendar date). A day-level consistency read — distinct from the per-trade win rate above']
     ]
   }
 
@@ -1078,6 +1086,7 @@ function renderDash() {
     ...avgRCard,
     ddCard,
     ...dayCards,
+    ...greenCard,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
   ].map(([l,v,ss,ti]) =>
@@ -1145,7 +1154,7 @@ function renderSymbolBreakdown() {
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
-      return `<tr>
+      return `<tr data-sym="${r.name}" style="cursor:pointer" title="Click to view ${r.name} trades">
         <td class="bd-name">${r.name}</td>
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
@@ -1153,6 +1162,20 @@ function renderSymbolBreakdown() {
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
+  // Drill-down: clicking a symbol row jumps to the Trades tab pre-filtered to it.
+  el.querySelectorAll('tr[data-sym]').forEach(tr =>
+    tr.addEventListener('click', () => drillToSymbol(tr.dataset.sym))
+  )
+}
+
+// Jump from a Dashboard breakdown into the Trades view, filtered to one symbol.
+function drillToSymbol(sym) {
+  const q = document.getElementById('f-q')
+  if (q) q.value = sym
+  page = 1
+  renderTrades()
+  saveTradeFilters()
+  go('trades')
 }
 
 let dailyRange = '1M'
@@ -1374,7 +1397,14 @@ function exportTradesCSV() {
     const s = v == null ? '' : String(v)
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
   }
-  const header = ['#','Entry Time','Exit Time','Symbol','Side','Entry Price','Exit Price','SL Price','TP Price','Qty','Risk %','R Multiple','Net P&L','Commission']
+  // Running account balance (equity) computed in chronological order, keyed by
+  // trade id, so a trader can chart their equity curve in Excel/Sheets even when
+  // the export is currently sorted some other way.
+  const balById = {}
+  let run = settings.accountBalance || 0
+  ;[...list].sort((a, b) => new Date(a.entryTime) - new Date(b.entryTime))
+    .forEach(t => { run += t.pnl; balById[t.id] = +run.toFixed(2) })
+  const header = ['#','Entry Time','Exit Time','Symbol','Side','Entry Price','Exit Price','SL Price','TP Price','Qty','Risk %','R Multiple','Net P&L','Commission','Balance']
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
@@ -1382,7 +1412,8 @@ function exportTradesCSV() {
       ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
       : ''
     return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
-            t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
+            t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0,
+            balById[t.id]]
       .map(esc).join(',')
   })
   const csv  = [header.join(','), ...rows].join('\r\n')
