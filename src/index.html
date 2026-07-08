@@ -154,6 +154,13 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tx)
 .pnl-n{color:var(--red);font-weight:600;}
 .ni{color:var(--tx3);font-size:14px;}
 .ni.has{color:var(--gold);}
+/* Right-align numeric columns so prices/decimals line up when scanning.
+   Trades table: Entry·Exit·SL·TP·Qty·%Risk·P&L (cols 5–11).
+   Strategy table: Entry·Stop·Target·Result·MFE·MAE (cols 4–9). */
+#tr-wrap th:nth-child(n+5):nth-child(-n+11),
+#tr-wrap td:nth-child(n+5):nth-child(-n+11){text-align:right;}
+#v-strategy .tw th:nth-child(n+4):nth-child(-n+9),
+#v-strategy .tw td:nth-child(n+4):nth-child(-n+9){text-align:right;}
 
 /* ── Pagination ──────────────────────────── */
 .pg{
@@ -615,6 +622,10 @@ let pending  = null
 let activeTrade = null
 let charts   = {}
 
+// By-Symbol dashboard breakdown sort (default: most profitable first)
+let symBdSort = 'total'
+let symBdDir  = 'desc'
+
 // Cup & Handle strategy state
 let events    = []
 let cnhPage   = 1
@@ -1046,6 +1057,26 @@ function renderDash() {
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
+  // Kelly-optimal risk fraction from win rate + payoff ratio (avg win ÷ avg loss).
+  // A sizing sanity-check: how much of capital theory says to risk per trade.
+  // Most traders use a fraction (¼–½) of it, so we surface half-Kelly too.
+  let kellyCard = []
+  {
+    const decided = s.wins + s.losses
+    const p = decided ? s.wins / decided : 0            // win probability (excl. breakeven)
+    const b = s.avgL !== 0 ? Math.abs(s.avgW / s.avgL) : 0  // payoff ratio
+    if (decided && b > 0) {
+      const f   = p - (1 - p) / b                       // Kelly fraction of capital
+      const pct = f * 100
+      kellyCard = [[
+        'Kelly %',
+        `<span class="${f > 0 ? 'col-gold' : 'col-r'}">${pct.toFixed(1)}%</span>`,
+        f > 0 ? `½-Kelly ${(pct / 2).toFixed(1)}%` : 'no positive edge',
+        'Kelly-optimal fraction of capital to risk per trade, from your win rate and payoff ratio (avg win ÷ avg loss). Most traders use ¼–½ Kelly and treat it as a ceiling, not a target. A negative value means no positive expectancy'
+      ]]
+    }
+  }
+
   // Best / worst single trading day by net P&L — surfaces outlier days that
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
@@ -1076,6 +1107,7 @@ function renderDash() {
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
+    ...kellyCard,
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
@@ -1138,10 +1170,20 @@ function renderSymbolBreakdown() {
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
     return { name, n, wr: (wins / n) * 100, total, avg: total / n }
-  }).sort((a, b) => b.total - a.total)
+  })
+  // Sort by the clicked column (click a header to re-rank by trades / win% /
+  // per-trade edge / net P&L, not just total profit).
+  const dir = symBdDir === 'asc' ? 1 : -1
+  rows.sort((a, b) => {
+    const A = a[symBdSort], B = b[symBdSort]
+    if (typeof A === 'string') return (A < B ? -1 : A > B ? 1 : 0) * dir
+    return (A - B) * dir
+  })
+  const arrow = c => symBdSort === c ? (symBdDir === 'asc' ? ' ↑' : ' ↓') : ''
+  const hh = (c, label, cls) => `<th class="${cls}" style="cursor:pointer" onclick="sortSymbolBd('${c}')">${label}${arrow(c)}</th>`
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr>${hh('name','Symbol','')}${hh('n','Trades','r')}${hh('wr','Win%','r')}${hh('avg','Avg/Trade','r')}${hh('total','Net P&L','r')}</tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1153,6 +1195,14 @@ function renderSymbolBreakdown() {
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
+}
+
+// Re-rank the By-Symbol breakdown when a column header is clicked; clicking the
+// active column flips direction. Numeric columns default to descending.
+window.sortSymbolBd = (col) => {
+  if (symBdSort === col) symBdDir = symBdDir === 'asc' ? 'desc' : 'asc'
+  else { symBdSort = col; symBdDir = col === 'name' ? 'asc' : 'desc' }
+  renderSymbolBreakdown()
 }
 
 let dailyRange = '1M'

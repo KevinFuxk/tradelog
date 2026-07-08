@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-08 — Shipped
+_Context: 31 daily PRs (#4, #9–#38) are open but unmerged against `main`; they already claim nearly every common idea (shared `tradeR()`/Avg-R columns, `/` search, keyboard-help overlay, median cards, UTF-8 BOM, monthly calendar, by-hour/by-month/by-direction breakdowns, sortable hold-time column, journal export/clipboard, price separators, Recovery Factor/Payoff/Breakeven-WR cards, rows-per-page, backup/restore, click-outside modal, filtered header P&L). This batch was chosen to overlap **zero** of those._
+- **Right-aligned numeric table columns** — the Trades table (Entry·Exit·SL·TP·Qty·%Risk·P&L) and the Strategy setups table (Entry·Stop·Target·Result·MFE·MAE) now right-align their numeric columns via scoped `nth-child` CSS, so decimal points line up down the column and rows of different magnitude are far easier to scan. Pure presentation — no JS, no data touched.
+- **Kelly % suggested-risk card (Dashboard)** — a new stat card computes the Kelly-optimal fraction of capital to risk per trade from win rate + payoff ratio (avg win ÷ avg loss), and shows ½-Kelly in the sub-line (with a tooltip warning to treat it as a ceiling, not a target; negative = no edge). A sizing sanity-check no open PR covers. Pure derivation from existing `stats()`; only renders when there are both winners and losers.
+- **Sortable By-Symbol breakdown** — the Dashboard's By-Symbol mini-table headers are now clickable to re-rank instruments by Trades / Win% / Avg-per-Trade / Net P&L (click the active column to flip direction; numeric columns default descending, symbol ascending). Answers "which product do I trade most / win most often on / bleed on?", not just "most net profit". Default view unchanged (net P&L desc). New `symBdSort`/`symBdDir` state + `window.sortSymbolBd`; no persistence change.
+
+### Deferred / next-up ideas (2026-07-08)
+- **Persist the By-Symbol sort** across restarts (mirror the Trades/Strategy filter persistence)
+- **Right-align numeric columns in the Strategy breakdown mini-tables too** (the `.bdt` tables already use `th.r`/`td.r`, so this is mostly consistency)
+- **SQN (System Quality Number)** card — expectancy-R ÷ std-dev-R × √N, Van Tharp's system-quality metric (no open PR covers std-dev-based stats)
+- **Sortable By-Day-of-Week / Strategy bucket tables** — same click-to-sort affordance, though weekday order is meaningful so make it opt-in
+- **⚠️ Backlog is 31 PRs deep and unmerged** — future runs should assume almost every "obvious" idea is already claimed; verify against open PRs before building, and prefer genuinely novel or presentation/readability wins
