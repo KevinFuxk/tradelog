@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-09 — Shipped
+- **`/` keyboard shortcut → focus Trades search** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades view and focuses+selects the search box, and `Escape` blurs it. Fast keyboard-driven filtering for power users; long-deferred idea now landed. Gated by the same `isTyping`/`isModalOpen` checks as the existing 1–4 nav shortcuts, so it never fires mid-typing.
+- **Filtered P&L + win-rate summary in the Trades header** — the sub-line under "Trade History" now reads e.g. `12 trades · +1,450.00 · 58% win` for the *current* filter slice, computed from the same `stats()` used on the Dashboard. Filtering to a symbol or date range instantly doubles as a mini analysis, not just a row count. Colour-coded green/red on the net figure via `fmtMoney`. No data-shape change.
+- **Click-outside-to-close the trade modal** — clicking the dark backdrop (outside the dialog) now closes the journal modal, matching standard modal UX. Routed through the existing `closeModal()` so the unsaved-journal-changes guard still runs — a stray backdrop click can't silently drop edits.
+- **Scroll-to-top on view switch + trades pagination** — navigating to a new view (or paging the Trades table) now resets the main panel to the top instead of leaving you stranded mid-table. Small polish that matters most on long trade logs.
+
+### Deferred / next-up ideas (2026-07-09)
+- **Modal prev/next (← / →) trade navigation** — step through the filtered trade list without closing the modal for fast serial review; needs care to navigate the *right* list (Trades filter vs Journal noted set) and honour the dirty guard on each hop.
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column.
+- **Shared `tradeR(t)` helper** — the realised R-multiple formula is now duplicated in 4 places (Dashboard Avg R, Trades table, Journal header, CSV export); factor it out before adding Avg R breakdown columns to avoid drift.
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak.
+- **UTF-8 BOM on CSV exports** — prepend `﻿` so Excel opens exports without mojibake once non-ASCII (symbol/reason) values appear.
