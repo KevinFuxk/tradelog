@@ -660,6 +660,8 @@ function go(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.id === 'v-' + v))
   // Rebuild charts that were sized while their view was hidden
   if (v === 'strategy') renderStrategy()
+  // Reset scroll so a new view always opens at the top, not mid-table
+  document.querySelector('.main')?.scrollTo(0, 0)
   // Remember the last main view so it reopens on next launch (skip Import flow)
   if (MAIN_VIEWS.includes(v)) { try { localStorage.setItem(LAST_VIEW_KEY, v) } catch {} }
 }
@@ -1301,7 +1303,17 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-line summarises the CURRENT filter slice — net P&L + win rate — so
+  // filtering to a symbol/date range instantly doubles as a mini analysis.
+  const fsub = document.getElementById('tr-sub')
+  const fs = stats(filtered)
+  if (fs) {
+    fsub.innerHTML = `${fs.n} trade${fs.n!==1?'s':''} · ` +
+      `<span class="${fs.total>=0?'col-g':'col-r'}">${fmtMoney(fs.total)}</span> · ` +
+      `${fs.wr.toFixed(0)}% win`
+  } else {
+    fsub.textContent = '0 trades'
+  }
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -1362,7 +1374,7 @@ function renderTrades() {
   )
 }
 
-window.chPg = (d) => { const p=Math.ceil(filtered.length/PG); page=Math.max(1,Math.min(p,page+d)); renderTrades() }
+window.chPg = (d) => { const p=Math.ceil(filtered.length/PG); page=Math.max(1,Math.min(p,page+d)); renderTrades(); document.querySelector('.main')?.scrollTo(0, 0) }
 
 // ── Export filtered trades to CSV ─────────
 // Exports whatever the current filters/sort produce — including the
@@ -2363,8 +2375,18 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  // Click on the dark backdrop (outside the dialog) closes it — closeModal() still
+  // runs the unsaved-changes guard, so a stray click can't silently drop journal edits
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target.id === 'modal') closeModal()
+  })
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeModal(); return }
+    if (e.key === 'Escape') {
+      // Escape blurs the Trades search box first (so it doesn't also try to close the modal)
+      const ae = document.activeElement
+      if (ae && ae.id === 'f-q') { ae.blur(); return }
+      closeModal(); return
+    }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
     const isTyping = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)
     if (!isModalOpen && !isTyping) {
@@ -2372,6 +2394,11 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps to the Trades view and focuses the search box — fast keyboard filtering
+      else if (e.key === '/') {
+        e.preventDefault(); go('trades')
+        const q = document.getElementById('f-q'); if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
