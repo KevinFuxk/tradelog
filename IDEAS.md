@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-10 — Shipped
+- **`/` focuses the search box** of the current view (Trades → symbol search, Journal → notes search), with the field text pre-selected. Fast keyboard-driven filtering without reaching for the mouse — a long-deferred power-user convenience. Ignored while typing or when the modal is open, and `preventDefault`s so the `/` isn't typed into the field.
+- **Click the modal backdrop to close** — clicking the dark area outside the trade/journal dialog now dismisses it, matching the near-universal modal convention. Still routes through `closeModal()` so the existing unsaved-journal-changes guard fires; notes can't be lost by a stray click.
+- **Filtered Net P&L in the Trades sub-header** — the "N trades" line now also shows the summed net P&L of the *currently filtered* subset (green/red), so slicing by symbol/side/date instantly reveals that slice's bottom line instead of only its count.
+- **UTF-8 BOM on both CSV exports** (Trades + Strategy) — a leading `﻿` makes Excel/Google Sheets auto-detect UTF-8, so non-ASCII symbol names render correctly instead of as mojibake. Display-only; the CSV data is unchanged.
+
+### Deferred / next-up ideas (2026-07-10)
+- **Scroll-to-top on view change** — `.main` keeps its scroll offset when switching views; reset it to 0 in `go()` so each view opens at the top.
+- **Filtered Net R / count in the Strategy sub-header** — mirror the new Trades filtered-P&L line for the Cup & Handle view (show filtered Total R next to the setup count).
+- **`/` should also work on the Strategy view** — needs a real text search box there first (currently only dropdown filters).
+- **Keyboard-shortcut help overlay** (`?`) — a small legend listing `1`–`4`, `/`, `Esc`, `Ctrl/Cmd+Enter` for discoverability.
+- **Shared `tradeR()` helper + Avg R columns** on the By-Symbol / By-Day-of-Week breakdowns — the R-multiple formula is duplicated in 4 places; factor it out and extend the dashboard tables.
