@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-11 — Shipped
+- **Money formatting on Dashboard charts** — the Cumulative P&L and Daily P&L charts now render their y-axis ticks with thousands separators (via `fmtAxis`) and their hover tooltips through `fmtMoney` (`+1,234.50` / drawdown `-25.50`), instead of raw `1234.5`. Large-account curves are far easier to read and now match the stat cards. Display-only; the R-based Strategy charts keep their `R` formatting untouched.
+- **Donut center readouts** — the Win/Loss donut shows the win rate (e.g. `62% · win rate`) and the Strategy Outcomes donut shows the target-hit rate (`— · target hit` when no setups match) drawn in the hole via a shared `donutCenter()` Chart.js plugin. The headline number is now readable without hovering. No-ops safely before the chart has a laid-out area.
+- **Totals footer row on CSV exports** — both the Trades export and the Strategy (Cup & Handle) export append a `TOTAL` row: filtered trade/setup count, summed R, net P&L, and total commission (Trades) / summed R (Strategy). Raw numbers (no separators) so Excel/Sheets parse them, and they match the Dashboard's Net P&L for the filtered set — the bottom line is visible without re-summing columns.
+
+### Deferred / next-up ideas (2026-07-11)
+- **Note that 31 daily PRs (#4, #9–#41) are open/unmerged** — future runs should keep reading the open-PR titles first (as this run did) to avoid re-shipping the same tradeR()/Avg-R/`/`-shortcut/underwater/median/Kelly ideas that already sit in review.
+- **Sticky table headers with an explicit table max-height + inner scroll** — only worth it if paired with the rows-per-page selector (open PR #21), otherwise pagination keeps tables short. Needs a scroll-container rework since `.tw` uses `overflow-x:auto`.
+- **Contrast pass on `--tx3` (#3d4f6b)** — muted labels/placeholders are low-contrast on the dark bg; nudge lighter for readability without disturbing the palette.
+- **"Net vs gross P&L" toggle** — a small switch to view P&L including/excluding commission across the Dashboard + table, for traders comparing broker cost drag.
+- **Import loading state** — `boot()` is async; add a brief skeleton/spinner so the first paint isn't an empty-state flash before saved data loads.
