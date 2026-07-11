@@ -1175,7 +1175,7 @@ function buildCharts(s) {
     titleFont:{family:'JetBrains Mono',size:10},
     bodyFont:{family:'JetBrains Mono',size:12}
   }
-  const yAxis = { grid:{color:'#1c2333'}, ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:10}} }
+  const yAxis = { grid:{color:'#1c2333'}, ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},callback:v=>fmtAxis(v)} }
 
   // Cumulative P&L — with date + value tooltip on hover
   if (charts.pnl) charts.pnl.destroy()
@@ -1200,13 +1200,13 @@ function buildCharts(s) {
             label: item => {
               if (item.datasetIndex === 1) {
                 const dd = peakData[item.dataIndex] - cumData[item.dataIndex]
-                return `Peak: ${item.raw>=0?'+':''}${item.raw.toFixed(2)}` + (dd>0 ? `  ·  drawdown -${dd.toFixed(2)}` : '')
+                return `Peak: ${fmtMoney(item.raw)}` + (dd>0 ? `  ·  drawdown ${fmtMoney(-dd)}` : '')
               }
               const v = item.raw
               const trade = sorted[item.dataIndex]
               return [
-                `Cumulative: ${v>=0?'+':''}${v.toFixed(2)}`,
-                `This trade: ${trade.pnl>=0?'+':''}${trade.pnl.toFixed(2)} · ${trade.symbol}`
+                `Cumulative: ${fmtMoney(v)}`,
+                `This trade: ${fmtMoney(trade.pnl)} · ${trade.symbol}`
               ]
             }
           }
@@ -1223,7 +1223,8 @@ function buildCharts(s) {
     type:'doughnut',
     data:{ labels:['Wins','Losses','Break Even'], datasets:[{data:[s.wins,s.losses,be],backgroundColor:['#00e599','#ff3d6b','#4f8cff'],borderWidth:0,hoverOffset:6}] },
     options:{ responsive:true,maintainAspectRatio:false,cutout:'68%',
-      plugins:{ legend:{display:true,position:'bottom',labels:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},boxWidth:10,padding:10}},tooltip:tipBase } }
+      plugins:{ legend:{display:true,position:'bottom',labels:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},boxWidth:10,padding:10}},tooltip:tipBase } },
+    plugins:[ donutCenter(`${s.wr.toFixed(0)}%`, 'win rate') ]
   })
 
   buildDailyChart(tipBase, yAxis)
@@ -1248,7 +1249,7 @@ function buildDailyChart(tipBase, yAxis) {
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
 
   if (!tipBase) tipBase = { backgroundColor:'#131920',borderColor:'#1c2333',borderWidth:1,titleColor:'#7889a8',bodyColor:'#dde2f0',titleFont:{family:'JetBrains Mono',size:10},bodyFont:{family:'JetBrains Mono',size:12} }
-  if (!yAxis)   yAxis   = { grid:{color:'#1c2333'}, ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:10}} }
+  if (!yAxis)   yAxis   = { grid:{color:'#1c2333'}, ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},callback:v=>fmtAxis(v)} }
 
   if (charts.daily) charts.daily.destroy()
   charts.daily = new Chart(document.getElementById('c-daily').getContext('2d'), {
@@ -1257,7 +1258,7 @@ function buildDailyChart(tipBase, yAxis) {
     options:{ responsive:true,maintainAspectRatio:false,
       plugins:{ legend:{display:false}, tooltip:{...tipBase, callbacks:{
         title: items => items[0].label,
-        label: item => `P&L: ${item.raw>=0?'+':''}${item.raw.toFixed(2)}`
+        label: item => `P&L: ${fmtMoney(item.raw)}`
       }}},
       scales:{ x:{ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:9},maxRotation:45},grid:{display:false}}, y:yAxis } }
   })
@@ -1385,7 +1386,18 @@ function exportTradesCSV() {
             t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
       .map(esc).join(',')
   })
-  const csv  = [header.join(','), ...rows].join('\r\n')
+  // Totals footer — matches the Dashboard's Net P&L for the filtered set and
+  // lets a spreadsheet reader see the bottom line without re-summing columns.
+  const totPnl  = list.reduce((a,t) => a + (t.pnl || 0), 0)
+  const totComm = list.reduce((a,t) => a + (t.commission || 0), 0)
+  const totR    = list.reduce((a,t) => {
+    const risk = calcRisk(t)
+    return a + ((risk && !risk.breakeven && risk.actualRiskPct > 0)
+      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance) : 0)
+  }, 0)
+  const totalRow = ['TOTAL', '', '', `${list.length} trades`, '', '', '', '', '', '', '',
+    +totR.toFixed(2), +totPnl.toFixed(2), +totComm.toFixed(2)].map(esc).join(',')
+  const csv  = [header.join(','), ...rows, totalRow].join('\r\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
@@ -2010,7 +2022,12 @@ function exportEventsCSV() {
     e.mfeR != null ? e.mfeR : '', e.maeR != null ? e.maeR : '',
     ocName(e.outcome), e.sizeTier, e.returnBucket, e.reason || 'na', e.earningsBucket, e.handleNum
   ].map(esc).join(','))
-  const csv  = [header.join(','), ...rows].join('\r\n')
+  // Totals footer — sum of R across the filtered setups, so the bottom line is
+  // visible in a spreadsheet without re-summing the Result R column.
+  const totR = list.reduce((a,e) => a + (e.pnlR || 0), 0)
+  const totalRow = ['TOTAL', `${list.length} setups`, '', '', '', '',
+    +totR.toFixed(2), '', '', '', '', '', '', '', ''].map(esc).join(',')
+  const csv  = [header.join(','), ...rows, totalRow].join('\r\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
@@ -2181,11 +2198,13 @@ function buildCnhCharts(list, s) {
 
   // Outcomes donut: target / stop / timeout
   if (charts.cnhOut) charts.cnhOut.destroy()
+  const tgtHit = (s && s.n) ? (s.tgt / s.n) * 100 : null
   charts.cnhOut = new Chart(document.getElementById('c-cnh-out').getContext('2d'), {
     type:'doughnut',
     data:{ labels:['🎯 Target','🛑 Stopped','⏱ Timed out'], datasets:[{data:[s?s.tgt:0,s?s.stopped:0,s?s.timeout:0],backgroundColor:['#00e599','#ff3d6b','#f5c242'],borderWidth:0,hoverOffset:6}] },
     options:{ responsive:true,maintainAspectRatio:false,cutout:'68%',
-      plugins:{ legend:{display:true,position:'bottom',labels:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},boxWidth:10,padding:10}},tooltip:tipBase } }
+      plugins:{ legend:{display:true,position:'bottom',labels:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},boxWidth:10,padding:10}},tooltip:tipBase } },
+    plugins:[ donutCenter(tgtHit != null ? `${tgtHit.toFixed(0)}%` : '—', 'target hit') ]
   })
 }
 
@@ -2233,6 +2252,37 @@ function fmtMoney(n, sign = true) {
   if (n == null || !isFinite(n)) return '—'
   const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (n < 0 ? '-' : sign ? '+' : '') + s
+}
+
+// Compact money for chart axis ticks — thousands separators, no decimals,
+// e.g. 1,250 / -800. Keeps large-account P&L axes readable at a glance.
+function fmtAxis(v) {
+  if (v == null || !isFinite(v)) return v
+  return (v < 0 ? '-' : '') + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 })
+}
+
+// Chart.js plugin factory: draw a big value + small label in the hole of a
+// doughnut chart, so the headline number (win rate / target-hit %) is readable
+// without hovering. Display-only; no-ops until the chart has a laid-out area.
+function donutCenter(value, label) {
+  return {
+    id: 'donutCenter',
+    afterDraw(chart) {
+      const { ctx, chartArea } = chart
+      if (!chartArea) return
+      const cx = (chartArea.left + chartArea.right) / 2
+      const cy = (chartArea.top + chartArea.bottom) / 2
+      ctx.save()
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillStyle = '#dde2f0'
+      ctx.font = '600 22px "JetBrains Mono", monospace'
+      ctx.fillText(value, cx, cy - 6)
+      ctx.fillStyle = '#7889a8'
+      ctx.font = '400 10px "JetBrains Mono", monospace'
+      ctx.fillText(label, cx, cy + 13)
+      ctx.restore()
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════
