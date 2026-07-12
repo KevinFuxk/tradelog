@@ -660,6 +660,9 @@ function go(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.id === 'v-' + v))
   // Rebuild charts that were sized while their view was hidden
   if (v === 'strategy') renderStrategy()
+  // Reset the scroll position so a long view (or a deep page) doesn't leave you
+  // mid-page when you switch tabs — every view opens at the top.
+  document.querySelector('.main')?.scrollTo(0, 0)
   // Remember the last main view so it reopens on next launch (skip Import flow)
   if (MAIN_VIEWS.includes(v)) { try { localStorage.setItem(LAST_VIEW_KEY, v) } catch {} }
 }
@@ -1301,7 +1304,16 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-line shows the count plus the NET P&L of the currently filtered slice, so
+  // narrowing to a symbol/date/side instantly answers "how much did this make?".
+  const sub = document.getElementById('tr-sub')
+  if (filtered.length) {
+    const net = filtered.reduce((a, t) => a + t.pnl, 0)
+    sub.innerHTML = `${filtered.length} trade${filtered.length!==1?'s':''} · ` +
+      `<span class="${net>=0?'col-g':'col-r'}" title="Net P&L across the currently filtered trades">${fmtMoney(net)}</span> net`
+  } else {
+    sub.textContent = '0 trades'
+  }
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -2362,6 +2374,11 @@ function wire() {
   // Modal
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
+  // Click the dark backdrop (outside the dialog) to dismiss — routes through
+  // closeModal() so the unsaved-journal-changes guard still fires.
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target.id === 'modal') closeModal()
+  })
   document.getElementById('m-save').addEventListener('click', saveNote)
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
@@ -2372,6 +2389,14 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps straight to the search box of the current view (Trades/Journal)
+      // — fast keyboard-driven filtering without reaching for the mouse.
+      else if (e.key === '/') {
+        const view = document.querySelector('.view.on')?.id
+        const box = view === 'v-trades' ? document.getElementById('f-q')
+                  : view === 'v-journal' ? document.getElementById('jf-q') : null
+        if (box) { e.preventDefault(); box.focus(); box.select?.() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
