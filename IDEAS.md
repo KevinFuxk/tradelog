@@ -76,6 +76,19 @@
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
 - **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
 
+## 2026-07-12 — Shipped
+- **`/` focuses the current view's search box** — pressing `/` on the Trades or Journal view jumps the cursor straight into its search field (and selects any existing text), so power users can filter without touching the mouse. Wired into the existing global keydown handler alongside the `1`–`4` nav shortcuts; ignored while typing or with the modal open, and `preventDefault` stops the `/` char from being inserted. Long-deferred idea (since 2026-06-07).
+- **Net P&L of the filtered slice in the Trades header** — the sub-line under "Trade History" now reads e.g. `42 trades · +1,234.50 net` (green/red), so narrowing to a symbol / side / date range instantly shows how much that slice actually made. Pure derivation from the already-filtered list via `fmtMoney`; falls back to `0 trades` when empty.
+- **Click-outside to close the trade/journal modal** — clicking the dark backdrop now dismisses the modal, matching the universal expectation. Routed through `closeModal()` so the unsaved-journal-changes guard still fires (clicking away from unsaved edits prompts before discarding). Only the backdrop itself triggers it (`e.target.id === 'modal'`), so clicks inside the dialog are unaffected.
+- **Scroll-to-top on view switch** — navigating between tabs now resets the main scroll container to the top, so a long Trades table or deep Strategy page no longer leaves you stranded mid-page after switching away and back. One line in `go()`.
+
+### Deferred / next-up ideas (2026-07-12)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week tables with an Avg R column (factor out a shared `tradeR()` helper first to avoid duplicating the formula)
+- **Filtered net R next to filtered net $** in the Trades header — mirror the new net-$ summary in risk units for trades that have a stop set
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
