@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-13 — Shipped
+- **`/` focuses the Trades search box** — pressing `/` anywhere (outside a text field or modal) jumps to Trade History and focuses + selects the symbol search, the near-universal "focus search" shortcut. Power users can filter without touching the mouse. Folded into the existing keydown handler alongside the `1`–`4` nav keys; `preventDefault` stops the literal "/" being typed.
+- **Filtered Net P&L + win rate in the Trades sub-header** — the "N trades" line now also shows the net P&L and win rate of the *currently filtered/sorted* set (e.g. filter to one symbol or to losers and instantly see the aggregate result), coloured green/red. Pure derivation in `renderTrades()`; no data-shape change.
+- **Click the backdrop to close the trade/journal modal** — clicking the dark area outside the dialog now closes it, honouring the same unsaved-note guard as Cancel/×/Escape (only fires when the click target is the backdrop itself, not a child). Matches standard modal UX.
+- **Scroll-to-top on view navigation** — switching views now resets the main scroll to the top, so a long Dashboard no longer leaves you scrolled halfway down the next view. One line in `go()`.
+
+### Deferred / next-up ideas (2026-07-13)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Right-align numeric table columns** — Entry/Exit/SL/TP/Qty/%Risk/P&L read easier right-aligned for magnitude comparison (add a `.num` class to those `th`/`td`)
+- **Filtered summary on the Journal + Strategy views too** — mirror the new Trades sub-header aggregate (count + net R/outcome) on the other list views
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column (factor out a shared `tradeR()` helper)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
