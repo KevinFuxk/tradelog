@@ -658,6 +658,9 @@ const MAIN_VIEWS = ['dashboard','trades','journal','strategy']
 function go(v) {
   document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v))
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.id === 'v-' + v))
+  // Land at the top of the newly-shown view (long dashboards otherwise keep
+  // you scrolled down where the previous view left off)
+  const main = document.querySelector('.main'); if (main) main.scrollTop = 0
   // Rebuild charts that were sized while their view was hidden
   if (v === 'strategy') renderStrategy()
   // Remember the last main view so it reopens on next launch (skip Import flow)
@@ -1301,7 +1304,20 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-header summarises the CURRENTLY FILTERED set (not the whole log): count,
+  // net P&L and win rate — so filtering to one symbol or to losers shows the
+  // aggregate at a glance instead of just a row count.
+  const sub = document.getElementById('tr-sub')
+  if (filtered.length) {
+    const net  = filtered.reduce((a, t) => a + t.pnl, 0)
+    const wins = filtered.filter(t => t.pnl > 0).length
+    const wr   = (wins / filtered.length) * 100
+    sub.innerHTML = `${filtered.length} trade${filtered.length!==1?'s':''} · ` +
+      `Net <span class="${net>=0?'col-g':'col-r'}">${fmtMoney(net)}</span> · ` +
+      `<span class="${wr>=50?'col-g':'col-r'}">${wr.toFixed(0)}%</span> win`
+  } else {
+    sub.textContent = '0 trades'
+  }
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -2363,6 +2379,11 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  // Click the dark backdrop (outside the dialog) to close — honours the
+  // unsaved-note guard exactly like Cancel/×/Escape do.
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal()
+  })
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
@@ -2372,6 +2393,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps to Trade History and focuses the search box — the near-universal
+      // "focus search" shortcut, so power users can filter without reaching for the mouse.
+      else if (e.key === '/') {
+        e.preventDefault(); go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
