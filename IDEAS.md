@@ -76,6 +76,18 @@
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
 - **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
 
+## 2026-07-14 — Shipped
+- **"Where your data is saved" panel on the Import view** — surfaces the OS data-folder path (via the previously-exposed-but-unused `getUserDataPath()` IPC) with a note that trades/notes/settings are plain local JSON files. Directly serves the app's core promise — never lose your journal — by telling traders exactly which folder to back up. No data-shape change; the API already existed in `main.js`/`preload.js` but no UI ever called it.
+- **`/` focuses the current view's search box** — pressing `/` on the Trades or Journal view jumps straight into its search field (and selects existing text) for fast keyboard-driven filtering. Long-deferred power-user shortcut; folded into the existing global keydown handler alongside the `1`–`4` nav keys, guarded so it never fires while typing or with the modal open. `preventDefault` stops a stray `/` being typed.
+- **Scroll-to-top on view switch** — navigating between views now resets the shared `.main` scroll container to the top, so a switched-to view opens at its header instead of wherever the previous (often tall) Dashboard was scrolled. One line in `go()`; no behavioural risk.
+
+### Deferred / next-up ideas (2026-07-14)
+- **"Copy path" button** next to the new data-folder display (needs a clipboard call — kept out of this batch to avoid new surface)
+- **Show last-import / last-save timestamp** so a trader can confirm their most recent notes actually persisted
+- **`/` on Strategy view** could focus a (not-yet-existing) setups search box once one is added
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak

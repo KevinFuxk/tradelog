@@ -541,6 +541,14 @@ textarea.nt::placeholder{color:var(--tx3);}
       </div>
     </div>
 
+    <div class="card" style="margin-bottom:14px" id="data-loc-card">
+      <div class="ct">WHERE YOUR DATA IS SAVED</div>
+      <div style="font-size:11px;color:var(--tx2);line-height:1.9">
+        Your trades, journal notes, and settings are stored as plain JSON files on this computer — nothing is ever sent anywhere. Back up this folder to keep your journal safe.<br>
+        <span style="color:var(--tx3)">Folder:</span> <span id="data-path" style="color:var(--green);word-break:break-all;user-select:text">—</span>
+      </div>
+    </div>
+
     <div id="imp-preview" style="display:none">
       <div class="card">
         <div class="ct" id="prev-title">PREVIEW</div>
@@ -634,6 +642,14 @@ async function boot() {
   }
   document.getElementById('s-balance').value = settings.accountBalance
   document.getElementById('s-risk').value    = settings.targetRisk
+  // Surface where the JSON data files live so traders know what to back up.
+  if (window.api && window.api.getUserDataPath) {
+    try {
+      const p = await window.api.getUserDataPath()
+      const el = document.getElementById('data-path')
+      if (el && p) el.textContent = p
+    } catch {}
+  }
   try {
     const dr = localStorage.getItem(DAILY_RANGE_KEY)
     if (dr === '1W' || dr === '1M' || dr === 'all') dailyRange = dr
@@ -658,6 +674,9 @@ const MAIN_VIEWS = ['dashboard','trades','journal','strategy']
 function go(v) {
   document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v))
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.id === 'v-' + v))
+  // Reset scroll so a switched-to view opens at its top, not wherever the last
+  // (often long) view was scrolled — the Dashboard is tall enough to disorient.
+  const main = document.querySelector('.main'); if (main) main.scrollTop = 0
   // Rebuild charts that were sized while their view was hidden
   if (v === 'strategy') renderStrategy()
   // Remember the last main view so it reopens on next launch (skip Import flow)
@@ -2372,6 +2391,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight to the current view's search box for fast keyboard filtering.
+        let box = null
+        if (document.getElementById('v-trades')?.classList.contains('on'))  box = document.getElementById('f-q')
+        else if (document.getElementById('v-journal')?.classList.contains('on')) box = document.getElementById('jf-q')
+        if (box) { e.preventDefault(); box.focus(); box.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
