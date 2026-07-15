@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-15 — Shipped
+- **By-Hour-of-Day performance breakdown** on the Dashboard — a mini-table (Hour · Trades · Win% · Avg/Trade · Net P&L, with a magnitude bar) grouping every trade by the local hour of its entry, in 00→23 order. Answers "which sessions/hours carry or leak my edge?" for intraday traders. Auto-hides when trades span fewer than 2 distinct hours (e.g. date-only imports) so it never shows a useless one-row table. Reuses the `.bdt`/`.bd-bar` styling and `fmtMoney`; no new CSS, no persistence change.
+- **Payoff Ratio stat card** on the Dashboard — average winner size ÷ average loser size (realised reward-to-risk). Distinct from Profit Factor (gross totals): paired with Win Rate, payoff is the core of an edge — 2.0 means winners are twice the size of losers. Gold when ≥1, red below. Pure derivation from the existing `avgW`/`avgL` in `stats()`.
+- **Total Fees stat card** on the Dashboard — sums commissions across all trades and shows the cost drag as a negative figure (already netted into Net P&L). Rendered from `-Math.abs(sum)` so it always reads as a drag regardless of the broker's commission sign. Only appears when any trade carries a commission. Surfaces a commonly under-estimated cost.
+
+### Deferred / next-up ideas (2026-07-15)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Avg R per symbol / per weekday / per hour** — add an Avg R column to the By-Symbol, By-Day-of-Week, and new By-Hour tables (factor out a shared `tradeR()` helper first to avoid duplicating the R formula)
+- **Fees % of gross P&L** — extend the Total Fees card with fees as a share of gross profit, to flag when commission is eating the edge
+- **Session grouping for the hour table** — optionally bucket hours into Asia/London/NY sessions for FX traders instead of raw 00–23 hours

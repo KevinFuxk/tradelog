@@ -322,6 +322,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div id="ds-dow-bd"></div>
     </div>
 
+    <div class="card" id="hour-card" style="margin-bottom:14px">
+      <div class="ct" title="P&amp;L grouped by the hour of each trade's entry — for intraday traders, which sessions/hours carry (or leak) your edge">BY HOUR OF DAY</div>
+      <div id="ds-hour-bd"></div>
+    </div>
+
     <div class="card" id="symbol-card" style="margin-bottom:0">
       <div class="ct">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
@@ -999,14 +1004,15 @@ function renderDash() {
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
+  const hoc = document.getElementById('hour-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = hoc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = hoc.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1065,6 +1071,22 @@ function renderDash() {
     ]
   }
 
+  // Payoff ratio — average winner size ÷ average loser size (realised reward:risk).
+  // Distinct from Profit Factor (which is gross totals): with win rate, this is
+  // the core of an edge — a 2.0 means winners are twice the size of losers.
+  const payoff = s.avgL !== 0 ? Math.abs(s.avgW / s.avgL) : (s.avgW > 0 ? Infinity : 0)
+
+  // Total commissions/fees paid (already netted into P&L) — surfaces cost drag.
+  // Rendered as a negative cost so it always reads as a drag, regardless of the
+  // broker's commission sign convention. Only shown when commissions are present.
+  const feesTotal = trades.reduce((a, t) => a + (t.commission || 0), 0)
+  const feesCard = trades.some(t => t.commission) ? [[
+    'Total Fees',
+    `<span class="col-r">${fmtMoney(-Math.abs(feesTotal), false)}</span>`,
+    'commissions paid',
+    'Total commissions/fees across all trades. Already deducted from Net P&L — shown here so the cost drag of your trading is visible'
+  ]] : []
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
@@ -1072,6 +1094,7 @@ function renderDash() {
     ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross profit ÷ gross loss. Above 1.0 is profitable; 2.0+ is strong'],
     ['Avg Win', `<span class="col-g">${fmtMoney(s.avgW)}</span>`, 'per winner', 'Average profit on your winning trades'],
     ['Avg Loss', `<span class="col-r">${fmtMoney(s.avgL)}</span>`, 'per loser', 'Average loss on your losing trades'],
+    ['Payoff Ratio', `<span class="${payoff>=1?'col-gold':'col-r'}">${isFinite(payoff)?payoff.toFixed(2):'∞'}</span>`, 'avg win ÷ avg loss', 'Average winner size ÷ average loser size — your realised reward-to-risk. Paired with Win Rate this is the core of your edge: 2.0 means winners are twice the size of losers'],
     ['Max Profit',   `<span class="col-g">${fmtMoney(s.best)}</span>`, 'single trade', 'Your single largest winning trade'],
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
@@ -1080,12 +1103,14 @@ function renderDash() {
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
+    ...feesCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
   ).join('')
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderHourBreakdown()
   buildCharts(s)
 }
 
@@ -1114,6 +1139,46 @@ function renderDowBreakdown() {
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
     <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      return `<tr>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
+}
+
+// Hour-of-day performance — for intraday traders, which entry hours carry the
+// edge. Groups by the local hour (00–23) of each trade's entry. Only rendered
+// when trades span at least two distinct hours (date-only data collapses to a
+// single hour and would render a useless one-row table). Reuses .bdt / .bd-bar.
+function renderHourBreakdown() {
+  const card = document.getElementById('hour-card')
+  const el = document.getElementById('ds-hour-bd'); if (!el) return
+  const groups = {}
+  trades.forEach(t => {
+    const d = new Date(t.entryTime)
+    if (isNaN(d)) return
+    const k = d.getHours();
+    (groups[k] = groups[k] || []).push(t)
+  })
+  const hours = Object.keys(groups).map(Number).sort((a, b) => a - b)
+  if (hours.length < 2) { if (card) card.style.display = 'none'; return }
+  if (card) card.style.display = ''
+  const rows = hours.map(k => {
+    const ts = groups[k]
+    const n = ts.length
+    const wins = ts.filter(t => t.pnl > 0).length
+    const total = ts.reduce((a, t) => a + t.pnl, 0)
+    return { name: String(k).padStart(2, '0') + ':00', n, wr: (wins / n) * 100, total, avg: total / n }
+  })
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  el.innerHTML = `<table class="bdt">
+    <thead><tr><th>Hour</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
