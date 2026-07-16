@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-16 — Shipped
+- **Shared `tradeR()` helper + Avg R columns on breakdowns** — the realised R-multiple formula (`P&L ÷ dollars risked`) was copy-pasted in four places (Dashboard Avg R card, Trades table sub-line, Journal card header, CSV export); it is now a single `tradeR(t)` function so the number is guaranteed identical everywhere and future R features build on one source of truth. Used it to add an **Avg R** column to both the **By-Symbol** and **By-Day-of-Week** dashboard breakdown tables (via `groupAvgR()`/`fmtR()`), so a trader can see risk-adjusted edge per instrument and per weekday, not just $ totals. Trades without a stop show a muted `—`. No data-shape change.
+- **Longest Underwater (UW) stat card on Dashboard** — shows the most *consecutive trades* equity spent below a prior high-water mark before making a new peak. The duration companion to the existing Current DD / Max Drawdown ($-depth) cards — answers "how long do my slumps actually last?". Computed in the same peak/cum walk that already produces `maxDD`; only appears when there is a drawdown. No persistence change.
+- **`/` keyboard shortcut to focus the search box** — pressing `/` anywhere (outside a text field / modal) jumps the cursor into the Trades search box (or the Journal notes search when on that view) and selects any existing text, matching the muscle memory of most web apps. Placeholders now hint `( / )`. Folded into the existing keydown handler alongside the `1`–`4` nav shortcuts.
+
+### Deferred / next-up ideas (2026-07-16)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Underwater stretch in *days* (not just trades)** — a calendar-duration version of the Longest UW card for swing traders
+- **Avg R column on the Strategy (Cup & Handle) breakdowns** already exists there; consider unifying the two breakdown renderers to cut duplication
+- **Dirty-guard / soft-delete for the "Clear Data" actions** — a mis-click can still wipe an imported log; an undo would protect it
