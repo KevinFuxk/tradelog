@@ -350,7 +350,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…  [ / ]" title="Search by symbol — press / anywhere to jump here" style="width:160px">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -379,6 +379,7 @@ textarea.nt::placeholder{color:var(--tx3);}
             <th data-col="qty">Qty</th>
             <th data-col="riskPct">%Risk</th>
             <th data-col="pnl">P&amp;L ↕</th>
+            <th data-col="hold" title="Entry→exit hold time — sort to separate scalps from swings">Hold ↕</th>
             <th>Note</th>
           </tr>
         </thead>
@@ -964,12 +965,15 @@ function stats(list) {
     else{cw=0;cl=0}
   })
 
-  // max drawdown: largest peak-to-trough drop in cumulative P&L
+  // max drawdown: largest peak-to-trough drop in cumulative P&L.
+  // maxDDLen = longest run of consecutive trades spent below a prior peak
+  // before reclaiming a new high — how long the worst drawdown took to recover.
   const sorted = [...list].sort((a,b)=>new Date(a.entryTime)-new Date(b.entryTime))
-  let peak=0, cum=0, maxDD=0
+  let peak=0, cum=0, maxDD=0, ddLen=0, maxDDLen=0
   sorted.forEach(t => {
     cum += t.pnl
-    if (cum > peak) peak = cum
+    if (cum >= peak) { peak = cum; ddLen = 0 }        // back at (or above) a high
+    else { ddLen++; if (ddLen > maxDDLen) maxDDLen = ddLen }
     const dd = peak - cum
     if (dd > maxDD) maxDD = dd
   })
@@ -983,7 +987,7 @@ function stats(list) {
     total, avgW, avgL, pf, mw, ml,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
-    maxDD, curDD, curDDPct, peak, atHigh }
+    maxDD, curDD, curDDPct, peak, atHigh, maxDDLen }
 }
 
 // ════════════════════════════════════════════════════
@@ -1077,6 +1081,7 @@ function renderDash() {
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
     ddCard,
+    ['Underwater', `<span class="${s.maxDDLen>0?'col-gold':'col-g'}">${s.maxDDLen}</span>`, s.maxDDLen===1?'trade below peak':'trades below peak', 'Longest run of consecutive trades spent below a prior equity peak before reclaiming a new high — how long your worst drawdown took to recover, measured in trades. 0 means you never traded while underwater'],
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
@@ -1280,8 +1285,15 @@ function getFiltered() {
 
   // Sort
   list.sort((a,b) => {
-    let va = a[sortCol], vb = b[sortCol]
-    if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    let va, vb
+    if (sortCol === 'hold') {                          // sort by real hold ms; undated last
+      va = holdMs(a); vb = holdMs(b)
+      if (va == null) va = -Infinity
+      if (vb == null) vb = -Infinity
+    } else {
+      va = a[sortCol]; vb = b[sortCol]
+      if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    }
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -1346,6 +1358,7 @@ function renderTrades() {
       <td>${riskStr}</td>
 
       <td class="${pc}">${ps}${rLine}</td>
+      <td style="color:var(--tx2);white-space:nowrap">${fdur(t.entryTime,t.exitTime)||'<span style="color:var(--tx3)">—</span>'}</td>
       <td><span class="ni ${hasNote(notes[t.id])?'has':''}">✎</span></td>
     </tr>`
   }).join('')
@@ -1374,7 +1387,7 @@ function exportTradesCSV() {
     const s = v == null ? '' : String(v)
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
   }
-  const header = ['#','Entry Time','Exit Time','Symbol','Side','Entry Price','Exit Price','SL Price','TP Price','Qty','Risk %','R Multiple','Net P&L','Commission']
+  const header = ['#','Entry Time','Exit Time','Symbol','Side','Entry Price','Exit Price','SL Price','TP Price','Qty','Risk %','R Multiple','Net P&L','Commission','Hold Time']
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
@@ -1382,7 +1395,8 @@ function exportTradesCSV() {
       ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
       : ''
     return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
-            t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
+            t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0,
+            fdur(t.entryTime, t.exitTime) || '']
       .map(esc).join(',')
   })
   const csv  = [header.join(','), ...rows].join('\r\n')
@@ -2372,6 +2386,11 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {          // jump to Trades and focus the search box
+        e.preventDefault(); go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })

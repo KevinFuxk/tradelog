@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-17 — Shipped
+- **Sortable "Hold" column in the Trades table** — the entry→exit hold time (e.g. `2h 10m`, `3d 4h`) now shows as its own sortable column, not just in the trade-detail modal. Sorting is by real elapsed milliseconds (`holdMs`), so a trader can instantly separate scalps from swings, or find the trades they sat in far too long. Undated rows sort last. Also added the hold duration to the Trades CSV export for consistency. (Finally lands the long-deferred column — the table already scrolls with `overflow-x:auto`, so no layout regression.)
+- **"Underwater" stat card on the Dashboard** — shows the longest run of consecutive trades spent below a prior equity peak before reclaiming a new high (`maxDDLen`, computed in the same peak/cum walk as Max Drawdown / Current DD). Answers "how long did my worst drawdown take to recover?" in trade count — the duration companion to the *depth* already shown by Current DD. Reads `0` (green) when you never traded while underwater.
+- **`/` keyboard shortcut** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades view and focuses the symbol search box, so power users can filter without reaching for the mouse. The search input now hints `[ / ]` in its placeholder. Complements the existing `1`–`4` nav shortcuts.
+
+### Deferred / next-up ideas (2026-07-17)
+- **Longest underwater stretch in *days*** — the new Underwater card counts trades; a calendar-day version (peak date → recovery date) would help swing traders more than trade count.
+- **Avg R column on the By-Symbol / By-Day-of-Week breakdowns** — factor out a shared `tradeR(t)` helper (the R formula is currently duplicated in the dashboard Avg R card, the Trades table, and the Journal header) and add an Avg R column to both mini-tables.
+- **Best/worst hour-of-day breakdown** — mirror the By-Day-of-Week table by entry hour for intraday traders.
+- **Journal export (CSV/Markdown)** — a read-only export of all structured journal notes so a trader can archive or review their reflections outside the app.
+- **R-multiple distribution histogram** on the Dashboard — visualise the spread of realised R to spot fat-tail losers vs. a tight edge.
