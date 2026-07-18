@@ -640,6 +640,7 @@ async function boot() {
   } catch {}
   restoreTradeFilters()
   restoreCnhFilters()
+  restoreJournalFilters()
   renderAll()
   applyTradeSortIndicator()
   wire()
@@ -1039,6 +1040,19 @@ function renderDash() {
       ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
   }).filter(v => v != null)
   const avgR = rList.length ? rList.reduce((a, b) => a + b, 0) / rList.length : null
+
+  // Average planned reward-to-risk across trades that set BOTH a stop and a target
+  // (|TP−entry| ÷ |entry−SL|). Answers "what R:R did I design my trades around?".
+  const rrList = trades.map(t => (t.slPrice && t.tpPrice && t.entryPrice && Math.abs(t.entryPrice - t.slPrice) > 0)
+    ? Math.abs(t.tpPrice - t.entryPrice) / Math.abs(t.entryPrice - t.slPrice) : null).filter(v => v != null)
+  const avgRR = rrList.length ? rrList.reduce((a, b) => a + b, 0) / rrList.length : null
+  const rrCard = avgRR != null ? [[
+    'Avg Planned R:R',
+    `<span class="${avgRR >= 2 ? 'col-gold' : avgRR >= 1 ? 'col-g' : 'col-r'}">${avgRR.toFixed(2)} : 1</span>`,
+    `${rrList.length} trade${rrList.length !== 1 ? 's' : ''} w/ SL+TP`,
+    'Average planned reward-to-risk you designed your trades around (|TP−entry| ÷ |entry−SL|), across trades that set both a stop and a target. Higher means each winner pays for more losers'
+  ]] : []
+
   const avgRCard = avgR != null ? [[
     'Avg R',
     `<span class="${avgR >= 0 ? 'col-g' : 'col-r'}">${avgR >= 0 ? '+' : ''}${avgR.toFixed(2)}R</span>`,
@@ -1076,6 +1090,7 @@ function renderDash() {
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
+    ...rrCard,
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
@@ -1469,6 +1484,11 @@ function populateJournalSymbols() {
   const symbols = [...new Set(trades.filter(t => hasNote(notes[t.id])).map(t => t.symbol))].sort()
   sel.innerHTML = '<option value="">All products</option>' +
     symbols.map(s => `<option value="${s}"${s===current?' selected':''}>${s}</option>`).join('')
+  // Apply a restored symbol filter once its <option> exists (set before this ran).
+  if (jnPendingSymbol) {
+    if ([...sel.options].some(o => o.value === jnPendingSymbol)) sel.value = jnPendingSymbol
+    jnPendingSymbol = null
+  }
 }
 
 function clearJournalFilters() {
@@ -1480,6 +1500,33 @@ function clearJournalFilters() {
   renderJournal()
 }
 
+// ── Journal filter persistence (mirrors the Trades / Strategy views) ──
+// Remembered locally so the Journal keeps your last search / symbol / side /
+// date filters across restarts. No JSON-store change — journal notes untouched.
+const JN_FILTERS_KEY = 'tradelog.journalFilters'
+let jnPendingSymbol = null
+function saveJournalFilters() {
+  try {
+    const v = id => document.getElementById(id)?.value || ''
+    localStorage.setItem(JN_FILTERS_KEY, JSON.stringify({
+      q: v('jf-q'), symbol: v('jf-symbol'), side: v('jf-side'),
+      from: v('jf-date-from'), to: v('jf-date-to')
+    }))
+  } catch {}
+}
+function restoreJournalFilters() {
+  try {
+    const s = JSON.parse(localStorage.getItem(JN_FILTERS_KEY) || 'null')
+    if (!s) return
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
+    // Static fields apply immediately; the dynamic symbol select is applied by
+    // populateJournalSymbols() once its options are rebuilt from noted trades.
+    set('jf-q', s.q); set('jf-side', s.side)
+    set('jf-date-from', s.from); set('jf-date-to', s.to)
+    jnPendingSymbol = s.symbol || null
+  } catch {}
+}
+
 function renderJournal() {
   populateJournalSymbols()
 
@@ -1488,6 +1535,8 @@ function renderJournal() {
   const sideFilter = document.getElementById('jf-side')?.value || ''
   const dateFrom   = document.getElementById('jf-date-from')?.value  // 'YYYY-MM-DD' or ''
   const dateTo     = document.getElementById('jf-date-to')?.value
+
+  saveJournalFilters()   // persist current filters so they survive a restart
 
   const noted = trades.filter(t => {
     if (!hasNote(notes[t.id])) return false
@@ -1509,7 +1558,20 @@ function renderJournal() {
   const ls = document.getElementById('jn-list')
   document.getElementById('jn-sub').textContent = `${noted.length} entr${noted.length!==1?'ies':'y'}`
 
-  if (!noted.length) { em.style.display='flex'; ls.style.display='none'; return }
+  if (!noted.length) {
+    // Distinguish "no notes at all" from "filters hid everything" — otherwise a
+    // restored filter set can look like the journal notes have vanished.
+    const anyNotes = trades.some(t => hasNote(notes[t.id]))
+    em.innerHTML = anyNotes
+      ? `<div class="empty-icon">🔍</div>
+         <div class="empty-title">No entries match your filters</div>
+         <div class="empty-sub">You have journal notes, but none match the current search / filters.</div>
+         <button class="btn btn-g" style="margin-top:16px" onclick="clearJournalFilters()">Clear filters</button>`
+      : `<div class="empty-icon">📝</div>
+         <div class="empty-title">No journal entries yet</div>
+         <div class="empty-sub">Click any trade row to add notes,<br>set your thesis, or log what you learned.</div>`
+    em.style.display='flex'; ls.style.display='none'; return
+  }
   em.style.display='none'; ls.style.display='flex'
 
   ls.innerHTML = noted.map(t => {
@@ -1610,6 +1672,12 @@ function openModal(id) {
     ['Actual %Risk',  risk.breakeven ? `<span style="color:var(--blue)">Breakeven Stop</span>` : `<span style="color:${risk.actualRiskPct > settings.targetRisk ? 'var(--red)' : 'var(--green)'}">${risk.actualRiskPct.toFixed(2)}% <span style="font-size:10px;color:var(--tx3)">(target ${settings.targetRisk}%)</span></span>`],
   ] : []
   const dur = fdur(t.entryTime, t.exitTime)
+  // Planned reward-to-risk the trade was designed around (|TP−entry| ÷ |entry−SL|).
+  // Only defined when both a stop and target were set — the R:R you chose up front.
+  const planRR = (t.slPrice && t.tpPrice && t.entryPrice && Math.abs(t.entryPrice - t.slPrice) > 0)
+    ? Math.abs(t.tpPrice - t.entryPrice) / Math.abs(t.entryPrice - t.slPrice)
+    : null
+  const rrColor = planRR == null ? '' : planRR >= 2 ? 'var(--gold)' : planRR >= 1 ? 'var(--green)' : 'var(--red)'
   document.getElementById('m-meta').innerHTML = [
     ['Entry Time',  fdt(t.entryTime)],
     ['Exit Time',   fdt(t.exitTime)],
@@ -1618,6 +1686,7 @@ function openModal(id) {
     ['Exit Price',  t.exitPrice  || '—'],
     ['SL Price',    t.slPrice ? t.slPrice : '—'],
     ['TP Price',    t.tpPrice ? t.tpPrice : '—'],
+    ...(planRR != null ? [['Planned R:R', `<span style="color:${rrColor}">${planRR.toFixed(2)} : 1</span>`]] : []),
     ['Quantity',    t.qty],
     ['Net P&L',      `<span style="color:${pc}">${fmtMoney(t.pnl)}</span>`],
     ...(t.commission ? [['Commission', `<span style="color:var(--red)">${fmtMoney(t.commission, false)}</span>`]] : []),
