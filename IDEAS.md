@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-18 — Shipped
+- **Planned R:R in the trade modal** — the trade-detail modal now shows the reward-to-risk the trade was *designed* around (`|TP−entry| ÷ |entry−SL|`, e.g. `3.00 : 1`), colour-coded gold ≥2 / green ≥1 / red <1. Only appears when both a stop and target were set. Lets a trader see, per trade, whether they took a setup with a worthwhile payoff — independent of how it actually resolved. Works for longs and shorts (uses abs distances).
+- **"Avg Planned R:R" Dashboard card** — the risk-planning twin of the above: average planned reward-to-risk across all trades that set both an SL and a TP, with a `N trades w/ SL+TP` sub-line. Answers "what R:R do I habitually design my trades around?" — a discipline metric distinct from realised Avg R. Pure derivation from existing trade fields; no persistence change.
+- **Persist Journal filters across restarts** — the Journal view now remembers its search / symbol / side / from / to filters via `localStorage` (`tradelog.journalFilters`), matching the Trades (`tradelog.tradeFilters`) and Strategy (`tradelog.cnhFilters`) persistence already shipped. The dynamic symbol select is re-applied once its options are rebuilt from noted trades (via a `jnPendingSymbol` hand-off in `populateJournalSymbols`, mirroring the Strategy view's `cnhPendingRestore`). Separate from the notes JSON store — no risk to saved journal data.
+- **Filter-aware Journal empty state** — when filters hide every entry (now more likely because filters persist), the Journal shows "No entries match your filters" with a 🔍 icon and a Clear-filters button, instead of the misleading "No journal entries yet / click a trade to add notes". Directly prevents a restored filter set from looking like the user's notes have vanished.
+
+### Deferred / next-up ideas (2026-07-18)
+- **Realised-vs-planned R:R comparison** — pair the new Planned R:R with the realised R already computed, so a trader sees when they cut winners short of their target (realised << planned)
+- **Planned R:R column in the Trades table** — surface it per-row (behind a responsive width pass, alongside the long-deferred Hold Time column)
+- **By-planned-R:R bucket breakdown** — win rate / expectancy grouped by planned R:R tier (<1, 1–2, 2–3, 3+) to see which payoff ratios actually pay off
+- **Persist the Journal sort order** once a journal sort control lands (filters now persist; sort is the natural companion)
