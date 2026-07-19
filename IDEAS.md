@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-19 — Shipped
+- **Export all journal entries to Markdown** — new "Export All" button on the Journal header downloads every noted trade as a readable `.md` file (symbol/side/date/P&L header + all 6 structured sections). Deliberately exports the *entire* journal (not the filtered view) so a backup is always complete — directly serves the app's core promise of never losing journal notes. Pure client-side Blob download; no IPC/network/data-shape change. Reuses `hasNote`/`J_FIELDS`/`J_LABELS`/`fdt`/`fmtMoney`.
+- **`/` keyboard shortcut to focus the search box** — pressing `/` on the Trades or Journal view (when not already typing and no modal open) jumps straight into that view's search input, `preventDefault`-ing the literal slash. Fast keyboard-driven filtering for power users; folded into the existing keydown handler alongside the `1`–`4` nav keys.
+- **Longest Underwater stat card on Dashboard** — shows the most consecutive trades spent below a prior equity high-water mark, complementing Current/Max Drawdown (which show *depth*) with *duration* — how long the worst slump lasted before a new peak. Computed in the same `stats()` peak/cum walk (`maxUW`); only appears when >0. Pure derivation, no persistence change.
+
+### Deferred / next-up ideas (2026-07-19)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week tables with an Avg R column (factor out a shared `tradeR()` helper to avoid duplicating the R formula)
+- **Underwater in *days* as well as trades** — surface the longest calendar span below peak alongside the trade-count version shipped today
+- **Dirty-guard / soft-undo for Clear Data** — an undo or soft-delete so a mis-click can't wipe an imported log
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column

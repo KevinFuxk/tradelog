@@ -392,6 +392,7 @@ textarea.nt::placeholder{color:var(--tx3);}
   <div class="view" id="v-journal">
     <div class="ph">
       <div><div class="pt">Journal</div><div class="ps" id="jn-sub">Your notes &amp; reflections</div></div>
+      <button class="btn btn-g" id="jn-export" title="Download every journal entry as a Markdown file — a readable backup of your notes (exports all entries, not just the filtered view)">Export All</button>
     </div>
     <!-- Journal filters -->
     <div class="fbar" id="jn-filters" style="margin-bottom:16px">
@@ -967,11 +968,13 @@ function stats(list) {
   // max drawdown: largest peak-to-trough drop in cumulative P&L
   const sorted = [...list].sort((a,b)=>new Date(a.entryTime)-new Date(b.entryTime))
   let peak=0, cum=0, maxDD=0
+  let uw=0, maxUW=0  // longest run of consecutive trades spent below a prior peak
   sorted.forEach(t => {
     cum += t.pnl
     if (cum > peak) peak = cum
     const dd = peak - cum
     if (dd > maxDD) maxDD = dd
+    if (dd > 0.0049) { uw++; if (uw > maxUW) maxUW = uw } else uw = 0
   })
   // Current (open) drawdown = how far final equity sits below its running peak
   const curDD    = +(peak - cum).toFixed(2)
@@ -983,7 +986,7 @@ function stats(list) {
     total, avgW, avgL, pf, mw, ml,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
-    maxDD, curDD, curDDPct, peak, atHigh }
+    maxDD, curDD, curDDPct, peak, atHigh, maxUW }
 }
 
 // ════════════════════════════════════════════════════
@@ -1031,6 +1034,16 @@ function renderDash() {
     'How far your current equity sits below its all-time peak (the running high-water mark on the P&L chart). "At new high" means you are at peak equity right now'
   ]
 
+  // Longest underwater stretch — the most consecutive trades spent below a prior
+  // equity peak. Complements Current/Max DD: shows how *long* a slump lasted, not
+  // just how deep, before a new high was made.
+  const uwCard = s.maxUW > 0 ? [[
+    'Longest Underwater',
+    `<span class="col-r">${s.maxUW}</span>`,
+    `trade${s.maxUW !== 1 ? 's' : ''} below peak`,
+    'The longest run of consecutive trades spent below a prior equity high-water mark — how long your worst slump kept you underwater before a new peak. Depth is shown by Max/Current Drawdown; this is duration'
+  ]] : []
+
   // Average realised R-multiple across trades that have a stop set — the
   // risk-adjusted twin of $ Expectancy (positive = an edge in R terms).
   const rList = trades.map(t => {
@@ -1077,6 +1090,7 @@ function renderDash() {
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
     ddCard,
+    ...uwCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
@@ -1391,6 +1405,47 @@ function exportTradesCSV() {
   const a    = document.createElement('a')
   a.href = url
   a.download = `tradelog-export-${new Date().toISOString().slice(0,10)}.csv`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
+}
+
+// ── Export all journal entries to Markdown ─
+// A human-readable backup of the app's most precious data — journal notes.
+// Deliberately exports EVERY noted trade (not the filtered Journal view) so a
+// backup is always complete; a filtered subset could be mistaken for the whole.
+function exportJournalMarkdown() {
+  const noted = trades
+    .filter(t => hasNote(notes[t.id]))
+    .sort((a, b) => new Date(b.entryTime) - new Date(a.entryTime))
+  if (!noted.length) { alert('No journal entries to export yet. Click a trade row to add notes first.'); return }
+  const today = new Date().toISOString().slice(0, 10)
+  const lines = [`# TradeLog Journal Export`, ``, `_${noted.length} entr${noted.length !== 1 ? 'ies' : 'y'} · exported ${today}_`, ``]
+  noted.forEach(t => {
+    lines.push(`## ${t.symbol} · ${t.side.toUpperCase()} · ${fdt(t.entryTime)}`, ``)
+    const meta = [`**P&L:** ${fmtMoney(t.pnl)}`]
+    if (t.qty)        meta.push(`**Qty:** ${t.qty}`)
+    if (t.entryPrice) meta.push(`**Entry:** ${t.entryPrice}`)
+    if (t.exitPrice)  meta.push(`**Exit:** ${t.exitPrice}`)
+    if (t.slPrice)    meta.push(`**SL:** ${t.slPrice}`)
+    lines.push(meta.join('  ·  '), ``)
+    const n = notes[t.id] || {}
+    if (typeof n === 'string') {
+      lines.push(n.trim(), ``)
+    } else {
+      J_FIELDS.forEach(f => {
+        const v = n[f]
+        if (!v || (typeof v === 'string' && !v.trim())) return
+        if (f === 'structure') lines.push(`**${J_LABELS[f]}:** ${v === 'yes' ? '是 ✓' : '否 ✗'}`, ``)
+        else lines.push(`**${J_LABELS[f]}**`, ``, v.trim(), ``)
+      })
+    }
+    lines.push(`---`, ``)
+  })
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `tradelog-journal-${today}.md`
   document.body.appendChild(a); a.click(); a.remove()
   URL.revokeObjectURL(url)
 }
@@ -2301,6 +2356,9 @@ function wire() {
   // Export filtered trades
   document.getElementById('tr-export').addEventListener('click', exportTradesCSV)
 
+  // Export all journal entries to Markdown (backup of precious notes)
+  document.getElementById('jn-export')?.addEventListener('click', exportJournalMarkdown)
+
   // Clear data
   document.getElementById('tr-clear-data').addEventListener('click', async () => {
     if (!confirm('Clear all trade data? This cannot be undone.')) return
@@ -2372,6 +2430,11 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight into the search box of whichever list view is active
+        const box = document.querySelector('#v-trades.on #f-q, #v-journal.on #jf-q')
+        if (box) { e.preventDefault(); box.focus() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
