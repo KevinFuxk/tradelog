@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-20 — Shipped
+- **Shared `tradeR()` helper** — factored the realised R-multiple formula (`P&L ÷ dollars risked at the stop`) into one function. It was duplicated inline in **four** places (Dashboard Avg R card, Trades-table sub-line, Journal card header, CSV export); they can no longer silently diverge. Pure refactor — output is byte-for-byte identical (verified the formula in isolation).
+- **Avg R column on the By-Symbol and By-Day-of-Week dashboard tables** — each breakdown row now shows its average realised R alongside `Avg/Trade` ($), so a trader sees the *risk-adjusted* edge per instrument / per weekday, not just raw dollars (a symbol can be net-green on one fat trade yet a negative-R habit). Shows `—` for groups with no stop-loss data. Built on the new `tradeR()` helper.
+- **Longest Underwater stat card** (`Underwater`) — the longest run of consecutive trades spent below a prior equity peak, i.e. drawdown *duration*. Complements the existing Current DD (depth now) and Max Drawdown (worst single trade, depth) cards — answers "how long did my worst slump drag on?". Computed in the same `stats()` peak/cum walk that already drives Max DD; green `0 trades` when the curve never went underwater.
+- **`/` keyboard shortcut** focuses the search box of whichever view is open (Trades or Journal), like search boxes across the web — faster keyboard-only filtering for power users. Only fires when not already typing and no modal is open; `preventDefault` stops the `/` character being inserted.
+
+### Deferred / next-up ideas (2026-07-20)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Underwater *duration* in days** — the trade-count stat shipped today could be complemented by calendar-days underwater for swing traders
+- **Avg R on the strategy breakdown mini-tables** — the Cup & Handle buckets show Avg R already; consider surfacing per-bucket expectancy in $ once a per-setup risk figure exists
+- **Expectancy in R vs $ toggle** — let the Dashboard flip its stat cards between dollar and R units in one click for R-first traders
