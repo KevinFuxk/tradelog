@@ -76,6 +76,19 @@
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
 - **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
 
+## 2026-07-21 — Shipped
+- **"Journaled" completeness card on the Dashboard** — shows how many trades carry a saved journal note (`N/total`, plus `% of trades`), green once you're past 50%. Directly nudges the app's core habit: a log only becomes an edge when every trade has a thesis/management/review note. Reuses the same `hasNote()` the Journal view filters on; pure derivation, no persistence change.
+- **"Avg MFE" + "Avg MAE" stat cards on the Strategy (Cup & Handle) view** — `eventStats` already computed `avgMfe` but never displayed it; now surfaced alongside a new `avgMae` (mean absolute adverse excursion). Tells a backtester how far setups ran in favour vs. dipped against before resolving — high MFE + low Total R = leaving profit on the table; winners dipping near -1R = stop too tight. Cards only appear when the imported events carry MFE/MAE fields.
+- **Right-aligned numeric table columns** — Trades table (Entry→P&L) and Strategy table (Entry→MAE) now right-align their numeric cells via a scoped CSS `nth-child` rule, so decimals and magnitudes line up and are far easier to scan. CSS-only; no template/JS change.
+
+### Note for future runs
+- **Large backlog of unmerged daily PRs (#22–#51, 30 open as of 2026-07-21).** None merged since PR #8 (2026-06-07). Many re-propose the same ideas (`/` search focus, shared `tradeR()` helper + Avg R breakdown columns, longest-underwater stat, journal Markdown export, click-outside-to-close modal, scroll-to-top on nav, filtered-P&L header, UTF-8 BOM CSV). Future runs should assume these are still *not* in `main` and avoid piling on identical duplicates — prefer genuinely distinct value until the queue is triaged.
+
+### Deferred / next-up ideas (2026-07-21)
+- **Avg MFE/MAE columns in the Strategy breakdown mini-tables** — now that both are computed, add them per bucket (size / TF / return) to see which buckets give back the most open profit.
+- **Journaled-% could gate a subtle "unjournaled" badge on Trades rows** — mark rows with no note so the habit is visible where trades are reviewed.
+- **MFE-capture efficiency stat** — Total R ÷ Total MFE, i.e. what fraction of the available favourable move the strategy actually banked.
+
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak

@@ -147,6 +147,11 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tx)
 .tw tbody tr:last-child{border-bottom:none;}
 .tw tbody tr:hover{background:var(--s2);}
 .tw tbody td{padding:12px 16px;color:var(--tx);}
+/* Right-align numeric columns so prices / P&L line up for scanning */
+#tr-wrap thead th:nth-child(n+5):nth-child(-n+11),
+#tr-wrap tbody td:nth-child(n+5):nth-child(-n+11){text-align:right;}
+#v-strategy .tw thead th:nth-child(n+4):nth-child(-n+9),
+#v-strategy .tw tbody td:nth-child(n+4):nth-child(-n+9){text-align:right;}
 .badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;}
 .bb{background:var(--green-bg);color:var(--green);}
 .bs{background:var(--red-bg);color:var(--red);}
@@ -1065,6 +1070,11 @@ function renderDash() {
     ]
   }
 
+  // How many trades carry a saved journal note — the habit that turns a log
+  // into an edge. Uses the same hasNote() the Journal view filters on.
+  const journaled = trades.filter(t => hasNote(notes[t.id])).length
+  const jPct      = trades.length ? (journaled / trades.length) * 100 : 0
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
@@ -1079,6 +1089,7 @@ function renderDash() {
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
+    ['Journaled', `<span class="${jPct>=50?'col-g':'col-b'}">${journaled}/${trades.length}</span>`, `${jPct.toFixed(0)}% of trades`, 'How many trades have a saved journal note. Journaling every trade — thesis, management, and review — is the habit that turns a trade log into an edge'],
     ...holdCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
@@ -1855,6 +1866,9 @@ function eventStats(list) {
     bestR:  Math.max(...list.map(e=>e.pnlR)),
     worstR: Math.min(...list.map(e=>e.pnlR)),
     avgMfe: list.filter(e=>e.mfeR!=null).length ? list.reduce((a,e)=>a+(e.mfeR||0),0)/list.filter(e=>e.mfeR!=null).length : 0,
+    avgMae: list.filter(e=>e.maeR!=null).length ? list.reduce((a,e)=>a+Math.abs(e.maeR||0),0)/list.filter(e=>e.maeR!=null).length : 0,
+    hasMfe: list.some(e=>e.mfeR!=null),
+    hasMae: list.some(e=>e.maeR!=null),
     tgt, stopped, timeout, mw, ml
   }
 }
@@ -2053,6 +2067,8 @@ function renderStrategy() {
       ['Avg Win', `<span class="col-g">${rNum(s.avgW)}R</span>`, 'per winner', 'Average R-multiple on winning setups'],
       ['Avg Loss', `<span class="col-r">${rNum(s.avgL)}R</span>`, 'per loser', 'Average R-multiple on losing setups'],
       ['Best R', `<span class="col-g">${rNum(s.bestR)}R</span>`, `worst ${rNum(s.worstR)}R`, 'Best single-setup R-multiple (worst shown below)'],
+      ...(s.hasMfe ? [['Avg MFE', `<span class="col-g">+${s.avgMfe.toFixed(2)}R</span>`, 'peak in favour', 'Average Maximum Favourable Excursion — how far (in R) setups ran in your favour before resolving. A high MFE alongside a low Total R means you are leaving open profit on the table']] : []),
+      ...(s.hasMae ? [['Avg MAE', `<span class="col-r">-${s.avgMae.toFixed(2)}R</span>`, 'worst against', 'Average Maximum Adverse Excursion — how far (in R) setups dipped against you before resolving. If winners routinely dip near -1R, your stop may sit too tight']] : []),
       ['Max Consec', `<span class="col-g">${s.mw}W</span> / <span class="col-r">${s.ml}L</span>`, 'win / loss streak', 'Longest streak of consecutive winning / losing setups'],
     ].map(([l,v,ss,ti]) =>
       `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
