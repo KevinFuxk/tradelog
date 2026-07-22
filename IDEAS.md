@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-22 — Shipped
+- **Shared `tradeR()` helper** — the realised R-multiple formula (P&L ÷ dollars risked at the stop) was duplicated inline in four places (Dashboard Avg R card, Trades table sub-line, Journal card header, CSV export). Consolidated into one `tradeR(t)` function that returns `null` when there's no usable stop, and pointed all call sites at it. Pure refactor — identical output, no data-shape change — but removes the drift risk of five copies of the same math.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show the average realised R-multiple per group (over trades that have a stop set), alongside the existing Avg/Trade ($). Lets R-based traders see per-symbol / per-weekday edge in risk units, not just dollars; renders a muted `—` for groups with no stopped trades. New `fmtR()` display helper. Reuses `tradeR()` above.
+- **`/` keyboard shortcut → jump to Trades + focus search** — pressing `/` anywhere (outside a text field / modal) switches to the Trades view and focuses+selects the symbol search box, for fast keyboard-driven filtering. Mirrors the ubiquitous "/" search convention. Folded into the existing keydown handler next to the `1`–`4` nav keys.
+- **Filtered Net P&L + win% in the Trades sub-header** — the Trades page sub-line now reads e.g. `42 trades · +1,234.50 · 57% win`, computed from the *currently filtered* set. Slicing by symbol/side/date instantly reveals that subset's performance instead of only the row count. Display-only; no persistence change.
+
+### Deferred / next-up ideas (2026-07-22)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour (a Dashboard `renderHourBreakdown()` reusing `.bdt`)
+- **Longest underwater stretch** — complement the Current DD card with the longest run (in trades or days) spent below a prior equity peak
+- **Avg R column on the Trades sub-header / an R filter** — let traders filter to only trades below a target R, or show Avg R of the filtered set next to Net P&L
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Sidebar tip for `/`** — surface the new `/` search shortcut in the Trades nav tooltip (e.g. `Trades [2] · /`) for discoverability
