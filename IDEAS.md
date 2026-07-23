@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-23 — Shipped
+- **Persist Journal filters across restarts** — the Journal view now remembers its search / symbol / side / date-from / date-to filters between launches via `localStorage` (`tradelog.journalFilters`), mirroring the Trades- and Strategy-view persistence already shipped. The Journal is the app's most valuable surface, and having its filters reset on every launch forced traders to re-narrow their notes each session. Dynamic symbol select is re-applied via a pending-restore once its option list is rebuilt from noted trades. Separate from the JSON notes store — no data-shape change.
+- **Filtered Net P&L + W/L in the Trades sub-header** — the Trade History header now reads e.g. `6 trades · 0W / 6L · -420.00 net` (green/red) reflecting *exactly* the filtered/searched rows on screen, not the whole-account total. Filtering to "losers on GBPUSD" instantly shows that slice's own damage. Pure derivation from the already-computed `filtered` list; no persistence change.
+- **`/` focuses the active view's search box** — pressing `/` on the Trades or Journal view jumps the cursor into that view's search field (and selects any existing text), so power users can filter without reaching for the mouse. Ignored while typing or with the modal open; `preventDefault` keeps the slash out of the field. Complements the existing `1`–`4` nav shortcuts.
+
+### Deferred / next-up ideas (2026-07-23)
+- **Robust day-key grouping** — Dashboard Best/Worst Day and the Daily P&L chart group by `entryTime.split('T')[0]`, which silently mis-groups space-separated (non-ISO) timestamps into per-timestamp "days"; add a `dayKey()` helper that formats local Y-M-D via `Date` and reuse it in both spots.
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Avg R per symbol / per weekday** — extend the By-Symbol / By-Day-of-Week tables with an Avg R column (factor out a shared `tradeR()` helper first)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour

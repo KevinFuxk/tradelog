@@ -640,6 +640,7 @@ async function boot() {
   } catch {}
   restoreTradeFilters()
   restoreCnhFilters()
+  restoreJournalFilters()
   renderAll()
   applyTradeSortIndicator()
   wire()
@@ -1301,7 +1302,19 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-header reflects exactly the filtered/searched set on screen: count,
+  // W/L, and the net P&L of those rows — so "only losers on GBPUSD" instantly
+  // shows its own damage, not the whole-account total.
+  const sub = document.getElementById('tr-sub')
+  if (filtered.length) {
+    const net = filtered.reduce((a, t) => a + t.pnl, 0)
+    const w   = filtered.filter(t => t.pnl > 0).length
+    const l   = filtered.filter(t => t.pnl < 0).length
+    sub.innerHTML = `${filtered.length} trade${filtered.length!==1?'s':''} · ${w}W / ${l}L · ` +
+      `<span class="${net>=0?'col-g':'col-r'}">${fmtMoney(net)} net</span>`
+  } else {
+    sub.textContent = '0 trades'
+  }
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -1469,6 +1482,37 @@ function populateJournalSymbols() {
   const symbols = [...new Set(trades.filter(t => hasNote(notes[t.id])).map(t => t.symbol))].sort()
   sel.innerHTML = '<option value="">All products</option>' +
     symbols.map(s => `<option value="${s}"${s===current?' selected':''}>${s}</option>`).join('')
+  // Apply a restored symbol filter once its option actually exists (the list is
+  // built from trades that carry notes, so it isn't known until first render).
+  if (jnPendingSymbol && [...sel.options].some(o => o.value === jnPendingSymbol)) {
+    sel.value = jnPendingSymbol
+    jnPendingSymbol = null
+  }
+}
+
+// ── Journal filter persistence (mirrors the Trades / Strategy views) ──
+// Remembered locally so the Journal keeps your last search / symbol / side /
+// date filters across restarts. localStorage only — no JSON-store change.
+const JN_FILTERS_KEY = 'tradelog.journalFilters'
+let jnPendingSymbol = null
+function saveJournalFilters() {
+  try {
+    const v = id => document.getElementById(id)?.value || ''
+    localStorage.setItem(JN_FILTERS_KEY, JSON.stringify({
+      q: v('jf-q'), symbol: v('jf-symbol'), side: v('jf-side'),
+      from: v('jf-date-from'), to: v('jf-date-to')
+    }))
+  } catch {}
+}
+function restoreJournalFilters() {
+  try {
+    const s = JSON.parse(localStorage.getItem(JN_FILTERS_KEY) || 'null')
+    if (!s) return
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
+    set('jf-q', s.q); set('jf-side', s.side)
+    set('jf-date-from', s.from); set('jf-date-to', s.to)
+    jnPendingSymbol = s.symbol || null   // dynamic select — applied in populateJournalSymbols
+  } catch {}
 }
 
 function clearJournalFilters() {
@@ -1477,6 +1521,8 @@ function clearJournalFilters() {
   document.getElementById('jf-side').value = ''
   document.getElementById('jf-date-from').value = ''
   document.getElementById('jf-date-to').value = ''
+  jnPendingSymbol = null
+  saveJournalFilters()
   renderJournal()
 }
 
@@ -2359,6 +2405,12 @@ function wire() {
     })
   })
 
+  // Journal filters — persist across restarts (inline handlers still re-render)
+  ;['jf-symbol','jf-side','jf-date-from','jf-date-to'].forEach(id =>
+    document.getElementById(id)?.addEventListener('change', saveJournalFilters)
+  )
+  document.getElementById('jf-q')?.addEventListener('input', saveJournalFilters)
+
   // Modal
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
@@ -2372,6 +2424,14 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Focus the current view's search box for fast keyboard filtering
+        const active = document.querySelector('.view.on')?.id
+        const box = active === 'v-journal' ? document.getElementById('jf-q')
+                  : active === 'v-trades'  ? document.getElementById('f-q')
+                  : null
+        if (box) { e.preventDefault(); box.focus(); box.select?.() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
