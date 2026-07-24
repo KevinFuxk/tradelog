@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-24 — Shipped
+- **By-Direction (Long vs Short) breakdown on Dashboard** — a new mini-table (Direction · Trades · Win% · Avg/Trade · Net P&L, with a magnitude bar) splitting every trade into Long (buy) vs Short (sell). Many traders have a strong directional bias/edge and are far better one way than the other — none of the existing breakdowns (by-symbol, by-day-of-week) surfaced it. Reuses the `.bdt`/`.bd-bar` styling and the same group→summarise pattern; hides with the rest of the Dashboard when there's no data. Pure derivation from `trades`, no persistence change.
+- **Current Streak stat card on Dashboard** — shows your *live* trailing run of same-result trades ending with the most recent one (e.g. `3W` green / `2L` red), with a "wins/losses in a row" sub-line. Distinct from the existing Max Consec (all-time longest) — a long *current* losing run is a real-time cue to check for tilt or a changed regime. Computed in `stats()` from the same chronological sort as `maxDD`; only rendered when a streak exists.
+- **Note-preview tooltip on the ✎ pencil icon (Trades table)** — hovering the note icon now shows a one-line preview of the note's first filled section (HTML-escaped, truncated to 160 chars) via a `title` attribute, or "Click the row to add a note" when empty. Lets a trader scan the table and peek at notes without opening each modal. Reuses the existing `notePreview()` helper; no data-shape change.
+
+### Deferred / next-up ideas (2026-07-24)
+- **Avg R column on the By-Direction / By-Symbol / By-Weekday tables** — once a shared `tradeR()` helper lands, add risk-adjusted columns to all breakdown mini-tables
+- **Longest underwater stretch** — still open; complement Current DD with the longest run below a prior equity peak
+- **Note-preview tooltip in the Journal cards too** — mirror the Trades-table pencil tooltip, or a hover-expand on truncated sections
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Current-streak context in the P&L chart** — highlight the trailing run of same-result trades on the cumulative curve
+- **NOTE for future runs:** PRs #25–#54 are all still OPEN/unmerged on the base (#8). Heavily-repeated proposals to AVOID duplicating: shared `tradeR()` helper, `/` search-focus, filtered P&L header, click-outside modal, scroll-to-top on nav, underwater/longest-UW stat, journal Markdown/clipboard export, median cards, by-hour breakdown, right-aligned numeric columns, Kelly %, payoff ratio, total fees.

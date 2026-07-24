@@ -322,6 +322,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div id="ds-dow-bd"></div>
     </div>
 
+    <div class="card" id="dir-card" style="margin-bottom:14px">
+      <div class="ct" title="Long (buy) vs Short (sell) performance — surfaces a directional bias or edge">BY DIRECTION</div>
+      <div id="ds-dir-bd"></div>
+    </div>
+
     <div class="card" id="symbol-card" style="margin-bottom:0">
       <div class="ct">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
@@ -978,9 +983,20 @@ function stats(list) {
   const curDDPct = peak > 0 ? (curDD / peak) * 100 : 0
   const atHigh   = curDD <= 0.0049   // within rounding of a fresh high
 
+  // Current (trailing) streak — the active run of same-result trades ending
+  // with the most recent one. Positive = wins, negative = losses. Distinct from
+  // mw/ml (the all-time longest streaks); this is a live tilt / regime cue.
+  let curStreak = 0
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i].pnl
+    if (p > 0) { if (curStreak < 0) break; curStreak++ }
+    else if (p < 0) { if (curStreak > 0) break; curStreak-- }
+    else break   // a breakeven trade ends the current streak
+  }
+
   return { n:list.length, wins:wins.length, losses:losses.length,
     wr: list.length ? (wins.length/list.length)*100 : 0,
-    total, avgW, avgL, pf, mw, ml,
+    total, avgW, avgL, pf, mw, ml, curStreak,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
     maxDD, curDD, curDDPct, peak, atHigh }
@@ -999,14 +1015,15 @@ function renderDash() {
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
+  const dic = document.getElementById('dir-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = dic.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = dic.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1046,6 +1063,15 @@ function renderDash() {
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
+  // Current streak — the active run of same-result trades ending with your most
+  // recent trade. A long losing run is a live cue to check for tilt / a regime shift.
+  const streakCard = s.curStreak !== 0 ? [[
+    'Current Streak',
+    `<span class="${s.curStreak > 0 ? 'col-g' : 'col-r'}">${Math.abs(s.curStreak)}${s.curStreak > 0 ? 'W' : 'L'}</span>`,
+    s.curStreak > 0 ? 'wins in a row' : 'losses in a row',
+    'Your live win/loss streak — consecutive trades of the same result ending with your most recent trade. Distinct from Max Consec (all-time longest); a long losing run is a cue to check for tilt or a changed market regime'
+  ]] : []
+
   // Best / worst single trading day by net P&L — surfaces outlier days that
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
@@ -1079,6 +1105,7 @@ function renderDash() {
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
+    ...streakCard,
     ...holdCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
@@ -1086,7 +1113,38 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderDirBreakdown()
   buildCharts(s)
+}
+
+// Long vs Short performance — surfaces a directional bias/edge (many traders
+// are far better one way than the other). Reuses the .bdt / .bd-bar styling.
+function renderDirBreakdown() {
+  const el = document.getElementById('ds-dir-bd'); if (!el) return
+  const groups = { Long: [], Short: [] }
+  trades.forEach(t => { (t.side === 'sell' ? groups.Short : groups.Long).push(t) })
+  const rows = ['Long','Short'].filter(k => groups[k].length).map(k => {
+    const ts = groups[k]
+    const n = ts.length
+    const wins = ts.filter(t => t.pnl > 0).length
+    const total = ts.reduce((a, t) => a + t.pnl, 0)
+    return { name: k, n, wr: (wins / n) * 100, total, avg: total / n }
+  })
+  if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No trades</div>'; return }
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  el.innerHTML = `<table class="bdt">
+    <thead><tr><th>Direction</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      return `<tr>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
 }
 
 // Day-of-week performance — answers "am I better on certain weekdays?".
@@ -1333,6 +1391,11 @@ function renderTrades() {
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
+    // Hover the pencil to peek at the note without opening the modal.
+    const np = (notePreview(notes[t.id]) || '').replace(/\s+/g, ' ').trim()
+    const noteTip = np
+      ? np.slice(0, 160).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;') + (np.length > 160 ? '…' : '')
+      : 'Click the row to add a note'
     return `<tr data-id="${t.id}">
       <td style="color:var(--tx3)">${idx}</td>
       <td style="color:var(--tx2);white-space:nowrap">${fdt(t.entryTime)}</td>
@@ -1346,7 +1409,7 @@ function renderTrades() {
       <td>${riskStr}</td>
 
       <td class="${pc}">${ps}${rLine}</td>
-      <td><span class="ni ${hasNote(notes[t.id])?'has':''}">✎</span></td>
+      <td><span class="ni ${hasNote(notes[t.id])?'has':''}" title="${noteTip}">✎</span></td>
     </tr>`
   }).join('')
 
