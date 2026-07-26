@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-26 — Shipped
+- **By-Hour-of-Day breakdown on Dashboard** — a new mini-table (Hour · Trades · Win% · Avg/Trade · Net P&L, with a magnitude bar) grouping every trade by the local hour of its entry, in 00→23 order (only hours that actually traded are shown). Answers "am I better at certain times of day?" — the intraday twin of the By-Day-of-Week table. Reuses the `.bdt`/`.bd-bar` styling and `fmtMoney`; hides with the rest of the Dashboard when there is no data. Pure derivation from `trades`; no persistence change.
+- **Avg MFE / Avg MAE stat cards on the Strategy view** — surface the average Maximum Favorable and Maximum Adverse Excursion (in R) that were already parsed from the events file but never displayed. Avg MFE shows how far setups ran in your favor before closing (high MFE + low Total R ⇒ exiting winners early); Avg MAE shows how much heat setups took before resolving (informs stop placement). Cards appear only when the imported data carries `mfe_r` / `mae_r`. Added `avgMae`/`hasMfe`/`hasMae` to `eventStats`; no data-shape change.
+- **Hold Time column in the Trades CSV export** — the "Export CSV" file now includes a human-readable hold duration (e.g. `2h 10m`, `3d 4h`) per trade via the existing `fdur` helper, so scalp-vs-swing analysis works in Excel/Sheets without recomputing from the timestamps. Display-only column; no change to the persisted trade shape.
+
+### Deferred / next-up ideas (2026-07-26)
+- **NOTE for future runs:** a large backlog of *open, unmerged* PRs (#28–#56) already proposes the shared `tradeR()` helper, Avg R breakdown columns, `/` search shortcut, filtered-P&L header, underwater-run stat, journal Markdown export, monthly P&L calendar, click-outside modal close, etc. Prefer helping merge/rebase those over re-implementing them.
+- **Capture efficiency stat (Strategy)** — now that Avg MFE is shown, add median `pnlR ÷ mfeR` for target/win setups to quantify how much of the available move you captured
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Hour-of-day for the Strategy view** — mirror the new Dashboard hour breakdown for cup-and-handle setups (by breakout hour) if intraday timeframes are present
+- **Session buckets (Asia / London / NY)** — coarser than raw hours; map entry hour to trading session for FX/index traders
