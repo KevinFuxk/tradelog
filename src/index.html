@@ -1046,6 +1046,26 @@ function renderDash() {
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
+  // System Quality Number (Van Tharp): mean(R) ÷ stdev(R) × √N over trades with a
+  // stop. Rewards a high AND consistent per-trade edge across many trades — a single
+  // number that separates a smooth equity curve from a lucky-but-erratic one.
+  let sqnCard = []
+  if (rList.length >= 2 && avgR != null) {
+    const variance = rList.reduce((a, r) => a + (r - avgR) ** 2, 0) / (rList.length - 1)
+    const sd = Math.sqrt(variance)
+    if (sd > 0) {
+      const sqn   = (avgR / sd) * Math.sqrt(rList.length)
+      const grade = sqn >= 5 ? 'excellent' : sqn >= 3 ? 'very good' : sqn >= 2.5 ? 'good' : sqn >= 1.6 ? 'average' : 'below average'
+      const col   = sqn >= 2.5 ? 'col-g' : sqn >= 1.6 ? 'col-gold' : 'col-r'
+      sqnCard = [[
+        'System Quality',
+        `<span class="${col}">${sqn.toFixed(2)}</span>`,
+        `${grade} · σ ${sd.toFixed(2)}R`,
+        'System Quality Number (Van Tharp): average R ÷ standard deviation of R × √(trades w/ stop). Rewards a high, consistent edge over many trades — a smooth curve scores higher than a lucky, erratic one. Rough guide: below 1.6 = below average · 2.5–3 = good · 5+ = excellent'
+      ]]
+    }
+  }
+
   // Best / worst single trading day by net P&L — surfaces outlier days that
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
@@ -1069,6 +1089,7 @@ function renderDash() {
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
     ['Net P&L', `<span class="${s.total>=0?'col-g':'col-r'}">${fmtMoney(s.total)}</span>`, 'all trades', 'Sum of profit/loss across every trade, net of commission'],
+    ['Return %', settings.accountBalance ? `<span class="${s.total>=0?'col-g':'col-r'}">${s.total>=0?'+':''}${(s.total/settings.accountBalance*100).toFixed(1)}%</span>` : '<span style="color:var(--tx3)">—</span>', 'vs account balance', 'Net P&L as a percentage of your configured account balance (set under Import → Account Settings). A quick read on account growth in percentage terms, not just dollars'],
     ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross profit ÷ gross loss. Above 1.0 is profitable; 2.0+ is strong'],
     ['Avg Win', `<span class="col-g">${fmtMoney(s.avgW)}</span>`, 'per winner', 'Average profit on your winning trades'],
     ['Avg Loss', `<span class="col-r">${fmtMoney(s.avgL)}</span>`, 'per loser', 'Average loss on your losing trades'],
@@ -1076,6 +1097,7 @@ function renderDash() {
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
+    ...sqnCard,
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
@@ -1606,8 +1628,13 @@ function openModal(id) {
   // Yes/No toggle for structure
   setStructure(typeof n === 'object' ? (n.structure || null) : null)
   const risk = calcRisk(t)
+  // Realised R-multiple — mirrors the Trades table sub-line and Journal card so a
+  // trader reviewing one trade sees its risk-adjusted result, not just dollars.
+  const rMultModal = (risk && !risk.breakeven && risk.actualRiskPct > 0)
+    ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance) : null
   const riskItems = risk ? [
     ['Actual %Risk',  risk.breakeven ? `<span style="color:var(--blue)">Breakeven Stop</span>` : `<span style="color:${risk.actualRiskPct > settings.targetRisk ? 'var(--red)' : 'var(--green)'}">${risk.actualRiskPct.toFixed(2)}% <span style="font-size:10px;color:var(--tx3)">(target ${settings.targetRisk}%)</span></span>`],
+    ...(rMultModal != null ? [['Realized R', `<span style="color:${rMultModal >= 0 ? 'var(--green)' : 'var(--red)'}">${rMultModal >= 0 ? '+' : ''}${rMultModal.toFixed(2)}R</span>`]] : []),
   ] : []
   const dur = fdur(t.entryTime, t.exitTime)
   document.getElementById('m-meta').innerHTML = [
