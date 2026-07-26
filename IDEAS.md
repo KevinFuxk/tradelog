@@ -82,3 +82,19 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-26 — Shipped
+- **System Quality Number (SQN) stat card** on the Dashboard — Van Tharp's `mean(R) ÷ stdev(R) × √N` computed over trades that have a stop-loss. A single number that rewards a *high AND consistent* per-trade edge across many trades (a smooth equity curve outscores a lucky, erratic one), with a plain-English grade (below average / good / excellent) and the R standard deviation (σ) in the sub-line. Reuses the existing `rList` already built for the Avg R card — pure derivation, appears only with ≥2 stop-set trades. No persistence change.
+- **Return % stat card** on the Dashboard — Net P&L as a percentage of the configured account balance, so account growth is legible in % terms, not only dollars. Derives from existing `settings.accountBalance`; shows `—` if no balance is set. No persistence change.
+- **Realized R in the trade-detail modal** — the modal's meta grid now shows the trade's realised R-multiple next to Actual %Risk (when a stop is set), matching the Trades table sub-line and Journal card headers so single-trade review reads in risk units too.
+- **NOTE FOR FUTURE RUNS:** deliberately avoided the ideas that already sit in ~30 stacked open PRs (#26–#55) — `tradeR()` helper, `/` search shortcut, Avg R breakdown columns, longest-underwater stat, filtered-P&L header, click-outside modal, scroll-to-top, journal Markdown export, UTF-8 BOM CSV. These are proposed repeatedly but unmerged; picking genuinely novel work avoids piling on more duplicates.
+
+### Process observation (2026-07-26)
+- **`main` has not advanced since PR #8 (2026-06-07); PRs #26–#55 are all OPEN and unmerged.** Each daily branch forks from the same stale `main`, so the batches overlap heavily and re-propose the same features. Until the backlog is triaged/merged, future runs should keep choosing *novel* ideas (check the open-PR titles first) rather than re-shipping the popular ones.
+
+### Deferred / next-up ideas (2026-07-26) — checked against open PRs to stay novel
+- **Sortino / downside-deviation or a std-dev-of-$-P&L card** — complements SQN with a dollar-based dispersion read
+- **Best/worst losing-streak $ impact** — the streak *lengths* (mw/ml) are shown; surface what the worst streak actually cost
+- **Session breakdown (Asia / London / NY) by entry hour** — more actionable than raw hour-of-day for FX/Tickmill data
+- **Copy Dashboard summary stats to clipboard** — quick share of the headline numbers (journal copy already proposed elsewhere)
+- **Return % relative to a running/starting balance** rather than current balance, once a balance-history is tracked
