@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-27 — Shipped
+- **`/` focuses the Trades search** — pressing `/` anywhere (outside an input/modal) jumps to the Trades view and focuses+selects the symbol search box, so power users can filter without reaching for the mouse. Long-deferred in this log; implemented in the existing keydown handler alongside the `1`–`4` nav keys.
+- **Filtered Net P&L in the Trades header** — the sub-line now shows the net P&L of the *currently filtered* set (green/red, labelled "filtered" when a filter narrows the full log, else "net"). Filtering by symbol / date / result instantly reveals that subset's dollar result instead of just a trade count.
+- **Click modal backdrop to close** — clicking the dark area outside the journal dialog now closes it, honouring the same unsaved-changes guard as Cancel / × / Escape, so notes are never lost to a stray click.
+- **Right-aligned numeric columns in the Trades table** — Entry/Exit/SL/TP/Qty/%Risk/P&L are right-aligned with tabular numerals, so prices and dollar figures line up on the decimal for far easier column scanning (financial-table convention).
+
+### Deferred / next-up ideas (2026-07-27)
+- **Longest underwater stretch** — complement the Current DD card with the longest run (in trades or days) spent below a prior equity peak.
+- **By-Hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour to spot session edges/leaks.
+- **Shared `tradeR()` helper** — the realised-R formula (`pnl ÷ risked $`) is now duplicated in the Trades table, Journal header, Avg R card and CSV export; factor it out once, then add an Avg R column to the By-Symbol / By-Day breakdowns.
+- **Scroll-to-top on nav switch** — long views (Dashboard) keep their scroll position when you switch away and back; reset to top on `go()`.
+- **UTF-8 BOM on CSV exports** — prepend `﻿` so Excel opens exported non-ASCII symbol names / headers cleanly.
