@@ -147,6 +147,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tx)
 .tw tbody tr:last-child{border-bottom:none;}
 .tw tbody tr:hover{background:var(--s2);}
 .tw tbody td{padding:12px 16px;color:var(--tx);}
+.tw th.num,.tw td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;}
 .bb{background:var(--green-bg);color:var(--green);}
 .bs{background:var(--red-bg);color:var(--red);}
@@ -372,13 +373,13 @@ textarea.nt::placeholder{color:var(--tx3);}
             <th data-col="entryTime">Date / Time ↕</th>
             <th data-col="symbol">Symbol ↕</th>
             <th data-col="side">Side</th>
-            <th data-col="entryPrice">Entry</th>
-            <th data-col="exitPrice">Exit</th>
-            <th data-col="slPrice">SL Price</th>
-            <th data-col="tpPrice">TP Price</th>
-            <th data-col="qty">Qty</th>
-            <th data-col="riskPct">%Risk</th>
-            <th data-col="pnl">P&amp;L ↕</th>
+            <th data-col="entryPrice" class="num">Entry</th>
+            <th data-col="exitPrice" class="num">Exit</th>
+            <th data-col="slPrice" class="num">SL Price</th>
+            <th data-col="tpPrice" class="num">TP Price</th>
+            <th data-col="qty" class="num">Qty</th>
+            <th data-col="riskPct" class="num">%Risk</th>
+            <th data-col="pnl" class="num">P&amp;L ↕</th>
             <th>Note</th>
           </tr>
         </thead>
@@ -1301,7 +1302,14 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-header shows the count plus the net P&L of the *currently filtered* set,
+  // so slicing by symbol / date / result immediately reveals that subset's P&L
+  // (labelled "filtered" when a filter is narrowing the full log, else "net").
+  const netP = filtered.reduce((a, t) => a + t.pnl, 0)
+  const isFilt = filtered.length !== trades.length
+  document.getElementById('tr-sub').innerHTML =
+    `${filtered.length} trade${filtered.length!==1?'s':''}` +
+    (filtered.length ? ` · <span class="${netP>=0?'col-g':'col-r'}">${fmtMoney(netP)}</span> <span style="color:var(--tx3)">${isFilt?'filtered':'net'}</span>` : '')
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -1338,14 +1346,14 @@ function renderTrades() {
       <td style="color:var(--tx2);white-space:nowrap">${fdt(t.entryTime)}</td>
       <td style="font-weight:600">${t.symbol}</td>
       <td><span class="badge ${t.side==='buy'?'bb':'bs'}">${t.side==='buy'?'Buy':'Sell'}</span></td>
-      <td style="color:var(--tx2)">${fp(t.entryPrice)}</td>
-      <td style="color:var(--tx2)">${fp(t.exitPrice)}</td>
-      <td>${slStr}</td>
-      <td>${t.tpPrice ? fp(t.tpPrice) : '<span style="color:var(--tx3)">—</span>'}</td>
-      <td style="color:var(--tx2)">${t.qty}</td>
-      <td>${riskStr}</td>
+      <td class="num" style="color:var(--tx2)">${fp(t.entryPrice)}</td>
+      <td class="num" style="color:var(--tx2)">${fp(t.exitPrice)}</td>
+      <td class="num">${slStr}</td>
+      <td class="num">${t.tpPrice ? fp(t.tpPrice) : '<span style="color:var(--tx3)">—</span>'}</td>
+      <td class="num" style="color:var(--tx2)">${t.qty}</td>
+      <td class="num">${riskStr}</td>
 
-      <td class="${pc}">${ps}${rLine}</td>
+      <td class="num ${pc}">${ps}${rLine}</td>
       <td><span class="ni ${hasNote(notes[t.id])?'has':''}">✎</span></td>
     </tr>`
   }).join('')
@@ -2363,6 +2371,11 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  // Click the dark backdrop (outside the dialog) to close — honours the same
+  // unsaved-journal-changes guard as Cancel / × / Escape, so notes are never lost.
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target.id === 'modal') closeModal()
+  })
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
@@ -2372,6 +2385,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps to the Trades view and focuses the symbol search box — fast,
+      // keyboard-driven filtering for power users (Escape/blur returns to nav keys).
+      else if (e.key === '/') {
+        e.preventDefault(); go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
