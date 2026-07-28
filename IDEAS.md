@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-28 — Shipped
+- **Shared `tradeR()` helper** — the realised R-multiple formula (P&L ÷ dollars risked at the stop) was duplicated inline in four places (Dashboard Avg R card, Trades table, Journal headers, CSV export). Factored into one `tradeR(t)` function right after `calcRisk` — single source of truth, so the R number can never drift between views. Pure refactor, behaviour-preserving.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show average realised R per group (across trades that have a stop set), between Win% and Avg/Trade. Lets R-based traders see which symbols / weekdays carry a risk-adjusted edge, not just a dollar total that one fat trade can flatter. Uses the new `tradeR()` helper; shows `—` when a group has no stopped trades.
+- **Filtered Net P&L in the Trades sub-header** — the "N trades" line now appends the net P&L of the *currently filtered* set (green/red), so slicing to one symbol or just the losers instantly shows the $ damage/edge rather than a bare count.
+- **`/` keyboard shortcut to focus search** — pressing `/` (outside inputs/modal) focuses the Journal search box when on the Journal view, otherwise jumps to the Trades view and focuses its search. Fast keyboard-driven filtering for power users.
+
+### Deferred / next-up ideas (2026-07-28)
+- **Avg R column on the Strategy breakdown tables** already exist (R-native) — but consider adding Avg R to the Journal list header summary row.
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column.
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak.
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour.
+- **Filtered Net P&L / R summary on the Journal and Strategy sub-headers too** — mirror the new Trades header across the other filtered views.
