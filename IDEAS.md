@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-29 — Shipped
+- **`/` to focus the search box** — pressing `/` (outside inputs/modal) jumps straight to the active view's search: the Journal search when the Journal is open, otherwise switching to Trades and focusing its symbol search (with the text selected). Long-standing deferred idea; pure keyboard-efficiency win for power users. No data-shape change.
+- **Filtered Net P&L + win-rate in the Trades sub-header** — the "N trades" line now also shows the net P&L (green/red) and win-rate of the *currently filtered* set, so filtering to one symbol / side / date range instantly answers "what did this subset make?" without exporting. Derived from `getFiltered()`; no persistence change.
+- **UTF-8 BOM on both CSV exports** — the Trades and Strategy CSV downloads now begin with a UTF-8 BOM so Excel opens them as UTF-8 by default (symbols and any non-ASCII text render correctly instead of as mojibake). One-character prepend; no column/shape change.
+- **Click the modal backdrop to close** — clicking the dark area outside the trade/journal card now closes the modal, going through the same unsaved-notes discard guard as ×/Cancel/Escape. Small, expected UX affordance; journal safety preserved.
+
+### Deferred / next-up ideas (2026-07-29)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column (factor out a shared `tradeR()` helper to avoid duplicating the formula)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Scroll-to-top on nav change** — long dashboard leaves you scrolled down when you switch views; reset `.main` scroll on `go()`
