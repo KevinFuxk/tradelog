@@ -1301,7 +1301,14 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-header shows the net P&L + win-rate of the CURRENT filtered set, so
+  // filtering to one symbol/side/date range instantly shows that subset's result.
+  const fNet = filtered.reduce((a, t) => a + t.pnl, 0)
+  const fWins = filtered.filter(t => t.pnl > 0).length
+  const fWr = filtered.length ? (fWins / filtered.length) * 100 : 0
+  document.getElementById('tr-sub').innerHTML = filtered.length
+    ? `${filtered.length} trade${filtered.length!==1?'s':''} · <span class="${fNet>=0?'col-g':'col-r'}">${fmtMoney(fNet)}</span> net · ${fWr.toFixed(0)}% win`
+    : '0 trades'
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -1386,7 +1393,8 @@ function exportTradesCSV() {
       .map(esc).join(',')
   })
   const csv  = [header.join(','), ...rows].join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  // Prepend a UTF-8 BOM so Excel opens the file in UTF-8 (symbols/notes render correctly).
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href = url
@@ -2011,7 +2019,8 @@ function exportEventsCSV() {
     ocName(e.outcome), e.sizeTier, e.returnBucket, e.reason || 'na', e.earningsBucket, e.handleNum
   ].map(esc).join(','))
   const csv  = [header.join(','), ...rows].join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  // Prepend a UTF-8 BOM so Excel opens the file in UTF-8 (symbols render correctly).
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href = url
@@ -2362,6 +2371,8 @@ function wire() {
   // Modal
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
+  // Click the dark backdrop (outside the card) to close — same unsaved-notes guard applies
+  document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal() })
   document.getElementById('m-save').addEventListener('click', saveNote)
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
@@ -2372,6 +2383,14 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps straight to a search box (Journal's if that view is open, else Trades')
+      else if (e.key === '/') {
+        const active = document.querySelector('.view.on')?.id
+        let box
+        if (active === 'v-journal') box = document.getElementById('jf-q')
+        else { go('trades'); box = document.getElementById('f-q') }
+        if (box) { e.preventDefault(); box.focus(); box.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
