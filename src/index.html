@@ -1845,11 +1845,26 @@ function eventStats(list) {
     else {cw=0;cl=0}
   })
 
+  // R-drawdown: walk the cumulative-R curve (chronological) and track the
+  // largest peak-to-trough drop (maxDDr) plus how far it currently sits below
+  // its running peak (curDDr). Mirrors the dashboard's $-drawdown treatment,
+  // but in risk units — the number that tells you a system's worst stretch.
+  let peakR = 0, cumR = 0, maxDDr = 0
+  ordered.forEach(e => {
+    cumR += e.pnlR
+    if (cumR > peakR) peakR = cumR
+    const dd = peakR - cumR
+    if (dd > maxDDr) maxDDr = dd
+  })
+  const curDDr  = +(peakR - cumR).toFixed(2)
+  const atHighR = curDDr <= 0.0049   // within rounding of a fresh high
+
   return {
     n: list.length, wins: wins.length, losses: losses.length,
     flat: list.filter(e => e.pnlR === 0).length,
     wr: (wins.length/list.length)*100,
     totalR, expectancy, pf,
+    maxDDr: +maxDDr.toFixed(2), curDDr, peakR: +peakR.toFixed(2), atHighR,
     avgW: wins.length ? gw/wins.length : 0,
     avgL: losses.length ? -gl/losses.length : 0,
     bestR:  Math.max(...list.map(e=>e.pnlR)),
@@ -2053,6 +2068,8 @@ function renderStrategy() {
       ['Avg Win', `<span class="col-g">${rNum(s.avgW)}R</span>`, 'per winner', 'Average R-multiple on winning setups'],
       ['Avg Loss', `<span class="col-r">${rNum(s.avgL)}R</span>`, 'per loser', 'Average R-multiple on losing setups'],
       ['Best R', `<span class="col-g">${rNum(s.bestR)}R</span>`, `worst ${rNum(s.worstR)}R`, 'Best single-setup R-multiple (worst shown below)'],
+      ['Max DD (R)', `<span class="${s.maxDDr>0?'col-r':'col-g'}">${s.maxDDr>0?'-'+s.maxDDr.toFixed(1):'0.0'}R</span>`, 'deepest R drop', 'Largest peak-to-trough drop in the cumulative-R curve — the deepest the equity ever fell from a prior high. A system\'s worst drawdown matters as much as its total R'],
+      ['Current DD (R)', s.atHighR ? `<span class="col-g">At new high</span>` : `<span class="col-r">-${s.curDDr.toFixed(1)}R</span>`, s.atHighR ? 'at peak equity' : 'below peak R', 'How far cumulative R currently sits below its running high-water mark. "At new high" means the R-curve just made a fresh peak'],
       ['Max Consec', `<span class="col-g">${s.mw}W</span> / <span class="col-r">${s.ml}L</span>`, 'win / loss streak', 'Longest streak of consecutive winning / losing setups'],
     ].map(([l,v,ss,ti]) =>
       `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
@@ -2157,6 +2174,10 @@ function buildCnhCharts(list, s) {
   const ordered = [...list].sort((a,b)=> (a.day<b.day?-1:a.day>b.day?1:0))
   let cum = 0
   const cumData = ordered.map(e => { cum += e.pnlR; return +cum.toFixed(2) })
+  // Running peak-R high-water mark — a dashed line makes every R-drawdown
+  // (peak-to-trough dip in the backtest equity curve) visible at a glance.
+  let peakR = -Infinity
+  const peakData = cumData.map(v => { peakR = Math.max(peakR, v); return +peakR.toFixed(2) })
   const finalColor = (cumData[cumData.length-1]||0) >= 0 ? '#00e599' : '#ff3d6b'
 
   if (charts.cnhR) charts.cnhR.destroy()
@@ -2165,12 +2186,19 @@ function buildCnhCharts(list, s) {
   grad.addColorStop(0, finalColor+'40'); grad.addColorStop(1, finalColor+'00')
   charts.cnhR = new Chart(ctx, {
     type:'line',
-    data:{ labels:ordered.map(e=>e.symbol+' '+e.day), datasets:[{data:cumData,borderColor:finalColor,backgroundColor:grad,fill:true,borderWidth:2,pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:finalColor,tension:.25}] },
+    data:{ labels:ordered.map(e=>e.symbol+' '+e.day), datasets:[
+      {label:'Cumulative R',data:cumData,borderColor:finalColor,backgroundColor:grad,fill:true,borderWidth:2,pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:finalColor,tension:.25,order:2},
+      {label:'Peak R',data:peakData,borderColor:'#7889a8',backgroundColor:'transparent',fill:false,borderWidth:1,borderDash:[4,4],pointRadius:0,pointHoverRadius:0,tension:0,order:1}
+    ] },
     options:{ responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      plugins:{ legend:{display:false}, tooltip:{...tipBase, callbacks:{
+      plugins:{ legend:{display:true,position:'top',align:'end',labels:{color:'#7889a8',font:{family:'JetBrains Mono',size:9},boxWidth:14,padding:8,usePointStyle:true}}, tooltip:{...tipBase, callbacks:{
         title: items => items[0].label,
         label: item => {
+          if (item.datasetIndex === 1) {
+            const dd = peakData[item.dataIndex] - cumData[item.dataIndex]
+            return `Peak: ${rNum(item.raw,1)}R` + (dd>0 ? `  ·  drawdown -${dd.toFixed(1)}R` : '')
+          }
           const e = ordered[item.dataIndex]
           return [`Cumulative: ${rNum(item.raw,1)}R`, `This setup: ${rNum(e.pnlR)}R`]
         }
