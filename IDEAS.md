@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-30 — Shipped
+- **Peak-R high-water-mark line on the Strategy "Cumulative R" chart** — a dashed grey "Peak R" line now tracks the running maximum of the backtest equity curve, so every peak-to-trough R-drawdown is visible directly on the curve (the hover tooltip also reports the live drawdown below the peak, and a compact top legend labels the two lines). Mirrors the dashboard's $-equity high-water mark shipped 2026-06-04, but for the Cup & Handle system's R-curve.
+- **"Max DD (R)" stat card on the Strategy view** — the largest peak-to-trough drop in cumulative R. A backtested system is judged as much by its worst drawdown as by its total R; this surfaces it as a first-class number instead of leaving it to be eyeballed off the chart. Computed in `eventStats` from the same chronological cumulative-R walk used for consecutive streaks.
+- **"Current DD (R)" stat card on the Strategy view** — how far cumulative R currently sits below its running high-water mark; reads "At new high" when the R-curve just peaked. Pairs with Max DD (R) and the new peak line so a trader sees both the historical worst and the live state, in risk units. (All three share one peak walk — no new persistence, no data-shape change.)
+
+### Deferred / next-up ideas (2026-07-30)
+- **Ulcer Index / avg-drawdown for the Strategy view** — depth is now shown; consider drawdown *duration* (longest stretch of setups spent below a prior R-peak) as a companion stat.
+- **Draw the $-equity peak/drawdown shading between the two dashboard lines** — a faint red fill in the gap would make deep drawdowns pop even more than the dashed line alone.
+- **Sortable Hold Time column in the Trades table** — still pending a responsive width pass before adding another column.
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour.
+- **Expectancy in R on the main Dashboard** — a shared R helper across trades + strategy would let both views speak the same risk-unit language.
