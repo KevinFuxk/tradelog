@@ -82,3 +82,18 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-07-31 — Shipped
+> ⚠️ Note for future runs: `main` is still at 2026-06-07 (PR #8). PRs #32–#61 (≈30 daily PRs) are **open but unmerged**, so none of their features are actually in `main` yet. This batch picks the highest-value gaps that repeatedly appear across those open PRs — they are genuinely absent from the shipped app.
+- **`/` focuses the active view's search box** — pressing `/` on the Trades or Journal view jumps the cursor straight into its search field (skipped while typing or when the modal is open). The top-requested keyboard-efficiency idea; power users can filter without reaching for the mouse. `e.preventDefault()` stops the `/` from being typed into the field.
+- **Filtered Net P&L in the Trades header** — the sub-line now reads e.g. `18 trades · +2,340.00 net`, summing P&L over the *currently filtered* set (green/red). Filter to a symbol or date range and you instantly see what that slice actually made — no need to export or eyeball the rows. Reuses `fmtMoney`.
+- **UTF-8 BOM on both CSV exports** — trades and strategy exports now lead with a BOM byte so Excel opens non-ASCII content (the 宏观/技术 journal fields, €/£ symbols) with correct encoding instead of mojibake. Numbers/columns unchanged.
+- **Scroll-to-top on view switch** — navigating between views resets `.main` scroll to the top, so leaving a long Dashboard no longer strands you mid-page on the next view.
+
+### Deferred / next-up ideas (2026-07-31)
+- **Merge the backlog** — 30 open daily PRs never landed; the routine should ideally consolidate/close duplicates rather than keep stacking new ones off a frozen `main`.
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week tables with an Avg R column (factor out a shared `tradeR()` helper to avoid duplicating the formula)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Click-backdrop to close the modal** — clicking the dimmed overlay closes the journal modal (still routed through the unsaved-changes guard)

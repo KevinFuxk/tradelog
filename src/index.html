@@ -658,6 +658,9 @@ const MAIN_VIEWS = ['dashboard','trades','journal','strategy']
 function go(v) {
   document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v))
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.id === 'v-' + v))
+  // Start each view at the top — switching from a long Dashboard no longer
+  // strands you mid-page on the next view.
+  const main = document.querySelector('.main'); if (main) main.scrollTop = 0
   // Rebuild charts that were sized while their view was hidden
   if (v === 'strategy') renderStrategy()
   // Remember the last main view so it reopens on next launch (skip Import flow)
@@ -1301,7 +1304,11 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Header shows count + net P&L of the *filtered* set, so filtering to a symbol
+  // or date range instantly answers "how much did this slice actually make?".
+  const netFiltered = filtered.reduce((a, t) => a + t.pnl, 0)
+  document.getElementById('tr-sub').innerHTML = `${filtered.length} trade${filtered.length!==1?'s':''}` +
+    (filtered.length ? ` · <span style="color:${netFiltered>=0?'var(--green)':'var(--red)'}">${fmtMoney(netFiltered)} net</span>` : '')
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -1386,7 +1393,9 @@ function exportTradesCSV() {
       .map(esc).join(',')
   })
   const csv  = [header.join(','), ...rows].join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  // Prepend a UTF-8 BOM so Excel opens non-ASCII symbols (e.g. 宏观 notes, €/£)
+  // with the correct encoding instead of mojibake.
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href = url
@@ -2011,7 +2020,8 @@ function exportEventsCSV() {
     ocName(e.outcome), e.sizeTier, e.returnBucket, e.reason || 'na', e.earningsBucket, e.handleNum
   ].map(esc).join(','))
   const csv  = [header.join(','), ...rows].join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  // UTF-8 BOM so Excel reads symbols/encoding correctly (matches the trades export).
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href = url
@@ -2372,6 +2382,12 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight to the current view's search box (Trades or Journal)
+        const active = document.querySelector('.view.on')?.id
+        const target = active === 'v-journal' ? 'jf-q' : active === 'v-trades' ? 'f-q' : null
+        if (target) { e.preventDefault(); document.getElementById(target)?.focus() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
