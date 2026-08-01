@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-01 — Shipped
+- **Right-aligned numeric columns in the Trades table** — the #, Entry, Exit, SL, TP, Qty, %Risk, P&L and new Hold columns are now right-aligned (via a small `.num` class), so decimal places line up and traders can scan/compare prices and P&L down a column at a glance instead of reading ragged left-aligned figures. Text columns (Date, Symbol, Side, Note) stay left-aligned. Pure CSS/markup, no logic change.
+- **Sortable "Hold" column in the Trades table** — the long-deferred idea finally lands: each row shows its entry→exit duration (`45m`, `2h 10m`, `3d 4h` via the existing `fdur`/`holdMs` helpers), and the column header sorts by true hold-time in ms (missing timestamps sink to the bottom). Lets a trader instantly separate scalps from swings and check "am I holding losers longer than winners?" right in the table, not just the modal. Reuses existing helpers; the table already scrolls horizontally so no layout regression.
+- **"Total Fees" stat card on the Dashboard** — sums commission/fees across every trade and shows it in red (only when the import actually carried commission data). Net P&L already nets fees out, but the *raw cost of doing business* was invisible; surfacing it helps traders see how much of their edge broker costs eat. Pure derivation from existing `trade.commission`; no persistence change.
+
+### Deferred / next-up ideas (2026-08-01)
+- **Add Hold time to the Trades CSV export** — the Hold column is now in the table; mirror it in `exportTradesCSV` so the export matches what's on screen
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Fees as % of gross P&L** — a sub-line on the Total Fees card (fees ÷ gross winnings) to quantify cost drag on the edge
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week tables with an Avg R column (factor out a shared `tradeR()` helper first)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour

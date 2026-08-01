@@ -147,6 +147,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tx)
 .tw tbody tr:last-child{border-bottom:none;}
 .tw tbody tr:hover{background:var(--s2);}
 .tw tbody td{padding:12px 16px;color:var(--tx);}
+.tw th.num,.tw td.num{text-align:right;}
 .badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;}
 .bb{background:var(--green-bg);color:var(--green);}
 .bs{background:var(--red-bg);color:var(--red);}
@@ -368,17 +369,18 @@ textarea.nt::placeholder{color:var(--tx3);}
       <table>
         <thead>
           <tr>
-            <th data-col="#">#</th>
+            <th class="num" data-col="#">#</th>
             <th data-col="entryTime">Date / Time ↕</th>
             <th data-col="symbol">Symbol ↕</th>
             <th data-col="side">Side</th>
-            <th data-col="entryPrice">Entry</th>
-            <th data-col="exitPrice">Exit</th>
-            <th data-col="slPrice">SL Price</th>
-            <th data-col="tpPrice">TP Price</th>
-            <th data-col="qty">Qty</th>
-            <th data-col="riskPct">%Risk</th>
-            <th data-col="pnl">P&amp;L ↕</th>
+            <th class="num" data-col="entryPrice">Entry</th>
+            <th class="num" data-col="exitPrice">Exit</th>
+            <th class="num" data-col="slPrice">SL Price</th>
+            <th class="num" data-col="tpPrice">TP Price</th>
+            <th class="num" data-col="qty">Qty</th>
+            <th class="num" data-col="riskPct">%Risk</th>
+            <th class="num" data-col="pnl">P&amp;L ↕</th>
+            <th class="num" data-col="hold" title="Hold time from entry to exit — sort to separate scalps from swings">Hold ↕</th>
             <th>Note</th>
           </tr>
         </thead>
@@ -1065,6 +1067,17 @@ function renderDash() {
     ]
   }
 
+  // Total commission/fees paid across all trades. Net P&L already subtracts
+  // this, but the raw cost drag is otherwise invisible. Only shown when the
+  // import actually carried commission data.
+  const totalFees = trades.reduce((a, t) => a + (t.commission || 0), 0)
+  const feesCard = totalFees ? [[
+    'Total Fees',
+    `<span class="col-r">${fmtMoney(-Math.abs(totalFees), false)}</span>`,
+    `across ${s.n} trade${s.n !== 1 ? 's' : ''}`,
+    'Total commission/fees paid across every trade. Net P&L already subtracts this — shown here so the raw cost of doing business is visible'
+  ]] : []
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
@@ -1075,6 +1088,7 @@ function renderDash() {
     ['Max Profit',   `<span class="col-g">${fmtMoney(s.best)}</span>`, 'single trade', 'Your single largest winning trade'],
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ...feesCard,
     ...avgRCard,
     ddCard,
     ...dayCards,
@@ -1282,6 +1296,7 @@ function getFiltered() {
   list.sort((a,b) => {
     let va = a[sortCol], vb = b[sortCol]
     if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    else if (sortCol === 'hold') { va = holdMs(a) ?? -Infinity; vb = holdMs(b) ?? -Infinity }
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -1333,19 +1348,20 @@ function renderTrades() {
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
+    const hold = fdur(t.entryTime, t.exitTime)
     return `<tr data-id="${t.id}">
-      <td style="color:var(--tx3)">${idx}</td>
+      <td class="num" style="color:var(--tx3)">${idx}</td>
       <td style="color:var(--tx2);white-space:nowrap">${fdt(t.entryTime)}</td>
       <td style="font-weight:600">${t.symbol}</td>
       <td><span class="badge ${t.side==='buy'?'bb':'bs'}">${t.side==='buy'?'Buy':'Sell'}</span></td>
-      <td style="color:var(--tx2)">${fp(t.entryPrice)}</td>
-      <td style="color:var(--tx2)">${fp(t.exitPrice)}</td>
-      <td>${slStr}</td>
-      <td>${t.tpPrice ? fp(t.tpPrice) : '<span style="color:var(--tx3)">—</span>'}</td>
-      <td style="color:var(--tx2)">${t.qty}</td>
-      <td>${riskStr}</td>
-
-      <td class="${pc}">${ps}${rLine}</td>
+      <td class="num" style="color:var(--tx2)">${fp(t.entryPrice)}</td>
+      <td class="num" style="color:var(--tx2)">${fp(t.exitPrice)}</td>
+      <td class="num">${slStr}</td>
+      <td class="num">${t.tpPrice ? fp(t.tpPrice) : '<span style="color:var(--tx3)">—</span>'}</td>
+      <td class="num" style="color:var(--tx2)">${t.qty}</td>
+      <td class="num">${riskStr}</td>
+      <td class="num ${pc}">${ps}${rLine}</td>
+      <td class="num" style="color:var(--tx2);white-space:nowrap">${hold || '<span style="color:var(--tx3)">—</span>'}</td>
       <td><span class="ni ${hasNote(notes[t.id])?'has':''}">✎</span></td>
     </tr>`
   }).join('')
