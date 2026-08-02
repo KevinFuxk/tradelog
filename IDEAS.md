@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-02 — Shipped
+- **Prev / Next trade navigation in the modal** — `‹`/`›` buttons in the modal header (and ←/→ arrow keys when not typing in a note field) step to the adjacent trade without closing the modal, so a trader can review and journal a whole session's trades in one flow. Navigates within the current Trades filter+sort (falls back to all trades when opened from the Journal); honours the existing unsaved-note guard before moving. Edge buttons dim at the first/last trade. No data-shape change.
+- **"Journaled" filter on the Trades view** — a new `All notes / ✎ Journaled / Un-journaled` select in the Trades filter bar, so a trader can instantly surface trades that still need review notes (or focus only on ones already written up). Wired into `getFiltered`, the Clear button, and the existing `tradelog.tradeFilters` persistence (so the choice survives restart). Reuses `hasNote()`; separate from the JSON store.
+- **Bug fix: day-grouping split on space OR 'T'** — added a `dayKey()` helper and used it for the Best/Worst Day cards and the Daily P&L chart. The old code did `split('T')[0] || split(' ')[0]`, which never reached the space fallback (the first split always returns a truthy whole string), so timestamps formatted `YYYY-MM-DD HH:MM:SS` were grouped by full datetime — every trade its own "day". Now both separators collapse to the calendar date. No behaviour change for ISO `T` stamps.
+
+### Deferred / next-up ideas (2026-08-02)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Jump from a journal card back to the same trade's Trades-table row** — quick cross-navigation between the two views
+- **"Un-journaled" count badge on the Journal/Trades nav** — surface how many trades still lack notes, pairing with the new Journaled filter
+- **Prev/Next could also cycle the Journal cards** — extend the modal stepper to walk the current Journal filter when opened from that view
