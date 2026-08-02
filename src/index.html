@@ -353,6 +353,7 @@ textarea.nt::placeholder{color:var(--tx3);}
       <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
+      <select class="fs" id="f-note" title="Show only trades you have (or have not) journaled"><option value="">All notes</option><option value="has">✎ Journaled</option><option value="none">Un-journaled</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
       <input class="fi" type="date" id="f-to" title="To date">
       <button class="btn btn-g" id="f-clr">Clear</button>
@@ -560,7 +561,11 @@ textarea.nt::placeholder{color:var(--tx3);}
   <div class="md">
     <div class="mh">
       <div class="mtitle" id="m-title">Trade Journal</div>
-      <button class="mx" id="m-close">×</button>
+      <div style="display:flex;align-items:center;gap:2px">
+        <button class="mx" id="m-prev" title="Previous trade (←)">‹</button>
+        <button class="mx" id="m-next" title="Next trade (→)">›</button>
+        <button class="mx" id="m-close" style="margin-left:6px">×</button>
+      </div>
     </div>
     <div class="mmeta" id="m-meta"></div>
 
@@ -1050,7 +1055,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1242,7 +1247,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -1273,6 +1278,7 @@ function getFiltered() {
   const q    = (document.getElementById('f-q')?.value||'').toLowerCase()
   const side = document.getElementById('f-side')?.value||''
   const res  = document.getElementById('f-res')?.value||''
+  const note = document.getElementById('f-note')?.value||''
   const frm  = document.getElementById('f-from')?.value||''
   const to   = document.getElementById('f-to')?.value||''
 
@@ -1293,6 +1299,8 @@ function getFiltered() {
     if (side === 'sell' && t.side !== 'sell') return false
     if (res  === 'win'  && t.pnl <= 0) return false
     if (res  === 'loss' && t.pnl >= 0) return false
+    if (note === 'has'  && !hasNote(notes[t.id])) return false
+    if (note === 'none' &&  hasNote(notes[t.id])) return false
     if (frm  && (t.entryTime||'') < frm) return false
     if (to   && (t.entryTime||'') > to + 'z') return false
     return true
@@ -1403,7 +1411,7 @@ function saveTradeFilters() {
   try {
     const v = id => document.getElementById(id)?.value || ''
     localStorage.setItem(TR_FILTERS_KEY, JSON.stringify({
-      q: v('f-q'), side: v('f-side'), res: v('f-res'),
+      q: v('f-q'), side: v('f-side'), res: v('f-res'), note: v('f-note'),
       from: v('f-from'), to: v('f-to'), sortCol, sortDir
     }))
   } catch {}
@@ -1413,7 +1421,7 @@ function restoreTradeFilters() {
     const s = JSON.parse(localStorage.getItem(TR_FILTERS_KEY) || 'null')
     if (!s) return
     const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
-    set('f-q', s.q); set('f-side', s.side); set('f-res', s.res)
+    set('f-q', s.q); set('f-side', s.side); set('f-res', s.res); set('f-note', s.note)
     set('f-from', s.from); set('f-to', s.to)
     if (s.sortCol) sortCol = s.sortCol
     if (s.sortDir) sortDir = s.sortDir
@@ -1625,7 +1633,18 @@ function openModal(id) {
   ].map(([k,v]) => `<div class="mi"><div class="mk">${k}</div><div class="mv">${v}</div></div>`).join('')
   // Capture the just-populated field state as the clean baseline for dirty-checking
   modalBaseline = JSON.stringify(currentModalNote())
+  updateModalNav()
   document.getElementById('modal').classList.add('on')
+}
+
+// Dim the ‹ › buttons when the open trade is at the start/end of its list.
+function updateModalNav() {
+  if (!activeTrade) return
+  const list = (filtered && filtered.some(t => t.id === activeTrade.id)) ? filtered : trades
+  const i = list.findIndex(t => t.id === activeTrade.id)
+  const prev = document.getElementById('m-prev'), next = document.getElementById('m-next')
+  if (prev) prev.style.opacity = i > 0 ? '' : '.25'
+  if (next) next.style.opacity = (i >= 0 && i < list.length - 1) ? '' : '.25'
 }
 
 function setStructure(val) {
@@ -1652,6 +1671,21 @@ function closeModal(force) {
   if (!force && activeTrade && modalIsDirty() &&
       !confirm('You have unsaved journal changes. Discard them?')) return
   document.getElementById('modal').classList.remove('on'); activeTrade = null
+}
+
+// Step to the previous (-1) / next (+1) trade without leaving the modal, so a
+// trader can review & journal a session's trades in one flow. Navigates within
+// the current Trades filter/sort (falls back to all trades when the open trade
+// isn't in that list, e.g. opened from the Journal). Honours the dirty guard.
+function stepModal(dir) {
+  if (!activeTrade) return
+  const list = (filtered && filtered.some(t => t.id === activeTrade.id)) ? filtered : trades
+  const i = list.findIndex(t => t.id === activeTrade.id)
+  if (i < 0) return
+  const j = i + dir
+  if (j < 0 || j >= list.length) return   // already at an edge
+  if (modalIsDirty() && !confirm('You have unsaved journal changes. Discard them?')) return
+  openModal(list[j].id)   // openModal resets activeTrade + the clean baseline
 }
 
 // ════════════════════════════════════════════════════
@@ -2227,6 +2261,12 @@ function holdMs(t) {
   return (isFinite(ms) && ms >= 0) ? ms : null
 }
 
+// Extract the calendar date (YYYY-MM-DD) from a timestamp that may separate the
+// date and time with an ISO 'T' or a plain space. Grouping "by day" must split
+// on either, otherwise space-formatted stamps keep their time and every trade
+// lands in its own bucket. Returns '' for empty/invalid input.
+const dayKey = s => (s || '').split(/[T ]/)[0] || ''
+
 // Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.
 // Keeps larger-account P&L readable. `sign` adds a leading + for non-negatives.
 function fmtMoney(n, sign = true) {
@@ -2310,12 +2350,12 @@ function wire() {
   })
 
   // Filters
-  ;['f-q','f-side','f-res','f-from','f-to'].forEach(id =>
+  ;['f-q','f-side','f-res','f-note','f-from','f-to'].forEach(id =>
     document.getElementById(id)?.addEventListener('input', () => { page=1; renderTrades(); saveTradeFilters() })
   )
   document.getElementById('f-clr').addEventListener('click', () => {
     ;['f-q','f-from','f-to'].forEach(id => document.getElementById(id).value = '')
-    ;['f-side','f-res'].forEach(id => document.getElementById(id).value = '')
+    ;['f-side','f-res','f-note'].forEach(id => document.getElementById(id).value = '')
     page = 1; renderTrades(); saveTradeFilters()
   })
 
@@ -2363,6 +2403,8 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  document.getElementById('m-prev').addEventListener('click', () => stepModal(-1))
+  document.getElementById('m-next').addEventListener('click', () => stepModal(1))
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
@@ -2372,6 +2414,12 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+    }
+    // Arrow keys page through trades while the modal is open (but not while
+    // typing in a note field, where they should move the text cursor).
+    if (isModalOpen && !isTyping) {
+      if (e.key === 'ArrowLeft')  { stepModal(-1); return }
+      if (e.key === 'ArrowRight') { stepModal(1);  return }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
