@@ -317,6 +317,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div style="height:140px;position:relative"><canvas id="c-daily"></canvas></div>
     </div>
 
+    <div class="card" id="dist-card" style="margin-bottom:14px">
+      <div class="ct" title="How your individual trade P&amp;L results are distributed. A fat right tail means a few big winners carry the account; a fat left tail warns of outsized losses. Green bars are profitable buckets, red bars losing ones.">P&amp;L DISTRIBUTION</div>
+      <div style="height:150px;position:relative"><canvas id="c-dist"></canvas></div>
+    </div>
+
     <div class="card" id="dow-card" style="margin-bottom:14px">
       <div class="ct" title="P&amp;L grouped by the weekday of each trade's entry — spot which days carry (or leak) your edge">BY DAY OF WEEK</div>
       <div id="ds-dow-bd"></div>
@@ -377,7 +382,7 @@ textarea.nt::placeholder{color:var(--tx3);}
             <th data-col="slPrice">SL Price</th>
             <th data-col="tpPrice">TP Price</th>
             <th data-col="qty">Qty</th>
-            <th data-col="riskPct">%Risk</th>
+            <th data-col="riskPct">%Risk ↕</th>
             <th data-col="pnl">P&amp;L ↕</th>
             <th>Note</th>
           </tr>
@@ -997,16 +1002,17 @@ function renderDash() {
   const sg = document.getElementById('sg')
   const cr = document.getElementById('charts-row')
   const dc = document.getElementById('daily-card')
+  const dist = document.getElementById('dist-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = dist.style.display = syc.style.display = dwc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = dist.style.display = syc.style.display = dwc.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1227,6 +1233,45 @@ function buildCharts(s) {
   })
 
   buildDailyChart(tipBase, yAxis)
+  buildDistChart(tipBase, yAxis)
+}
+
+// P&L distribution histogram — reveals the *shape* of the edge that the
+// time-series charts hide: a tight cluster, a fat right tail (a few big
+// winners carry the account), or a fat left tail (outsized losses). Bins
+// span min→max trade P&L; green bars are profitable buckets, red losing ones.
+function buildDistChart(tipBase, yAxis) {
+  const el = document.getElementById('c-dist'); if (!el) return
+  if (charts.dist) charts.dist.destroy()
+  const pnls = trades.map(t => t.pnl).filter(v => isFinite(v))
+  if (!pnls.length) return
+  const min = Math.min(...pnls), max = Math.max(...pnls)
+  const BINS = 11
+  const size = (max - min) / BINS || 1
+  const counts = new Array(BINS).fill(0)
+  pnls.forEach(v => {
+    let i = Math.floor((v - min) / size)
+    if (i >= BINS) i = BINS - 1
+    if (i < 0) i = 0
+    counts[i]++
+  })
+  const centers = counts.map((_, i) => min + size * (i + 0.5))
+  const labels  = centers.map(c => Math.round(c).toLocaleString('en-US'))
+  const bg      = centers.map(c => c >= 0 ? '#00e59933' : '#ff3d6b33')
+  const bd      = centers.map(c => c >= 0 ? '#00e599'   : '#ff3d6b')
+  if (!tipBase) tipBase = { backgroundColor:'#131920',borderColor:'#1c2333',borderWidth:1,titleColor:'#7889a8',bodyColor:'#dde2f0',titleFont:{family:'JetBrains Mono',size:10},bodyFont:{family:'JetBrains Mono',size:12} }
+  if (!yAxis)   yAxis   = { grid:{color:'#1c2333'}, ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:10}} }
+  charts.dist = new Chart(el.getContext('2d'), {
+    type:'bar',
+    data:{ labels, datasets:[{ data:counts, backgroundColor:bg, borderColor:bd, borderWidth:1, borderRadius:3 }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ ...tipBase, callbacks:{
+        title: items => { const i = items[0].dataIndex; return `${fmtMoney(min + size*i)} … ${fmtMoney(min + size*(i+1))}` },
+        label: item => `${item.raw} trade${item.raw!==1?'s':''}`
+      }}},
+      scales:{ x:{ ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:9},maxRotation:45}, grid:{display:false} },
+               y:{ ...yAxis, ticks:{...yAxis.ticks, precision:0} } } }
+  })
 }
 
 function buildDailyChart(tipBase, yAxis) {
@@ -1278,10 +1323,16 @@ function getFiltered() {
 
   let list = [...trades]
 
-  // Sort
+  // Sort. %Risk is a computed column (no stored field), so derive the actual
+  // risk % on the fly — lets a trader surface their most over-leveraged trades.
+  const riskVal = t => { const r = calcRisk(t); return r && !r.breakeven ? r.actualRiskPct : -Infinity }
   list.sort((a,b) => {
-    let va = a[sortCol], vb = b[sortCol]
-    if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    let va, vb
+    if (sortCol === 'riskPct') { va = riskVal(a); vb = riskVal(b) }
+    else {
+      va = a[sortCol]; vb = b[sortCol]
+      if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    }
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -1342,7 +1393,7 @@ function renderTrades() {
       <td style="color:var(--tx2)">${fp(t.exitPrice)}</td>
       <td>${slStr}</td>
       <td>${t.tpPrice ? fp(t.tpPrice) : '<span style="color:var(--tx3)">—</span>'}</td>
-      <td style="color:var(--tx2)">${t.qty}</td>
+      <td style="color:var(--tx2)">${fmtQty(t.qty)}</td>
       <td>${riskStr}</td>
 
       <td class="${pc}">${ps}${rLine}</td>
@@ -1618,7 +1669,7 @@ function openModal(id) {
     ['Exit Price',  t.exitPrice  || '—'],
     ['SL Price',    t.slPrice ? t.slPrice : '—'],
     ['TP Price',    t.tpPrice ? t.tpPrice : '—'],
-    ['Quantity',    t.qty],
+    ['Quantity',    fmtQty(t.qty)],
     ['Net P&L',      `<span style="color:${pc}">${fmtMoney(t.pnl)}</span>`],
     ...(t.commission ? [['Commission', `<span style="color:var(--red)">${fmtMoney(t.commission, false)}</span>`]] : []),
     ...riskItems,
@@ -2233,6 +2284,13 @@ function fmtMoney(n, sign = true) {
   if (n == null || !isFinite(n)) return '—'
   const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (n < 0 ? '-' : sign ? '+' : '') + s
+}
+
+// Format a quantity with thousands separators (e.g. 100000 → 100,000) while
+// preserving fractional lot sizes. Keeps large unit/share sizes readable.
+function fmtQty(q) {
+  if (q == null || !isFinite(q)) return q
+  return (+q).toLocaleString('en-US', { maximumFractionDigits: 8 })
 }
 
 // ════════════════════════════════════════════════════

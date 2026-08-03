@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-03 — Shipped
+- **P&L Distribution histogram** on the Dashboard — a new chart card bins every trade's net P&L (min→max, 11 buckets; green = profitable buckets, red = losing ones) so a trader can see the *shape* of their edge that the cumulative/daily time-series charts hide: a tight cluster, a fat right tail (a few big winners carry the account), or a fat left tail (outsized losses lurking). Hover a bar for its dollar range and trade count. Reuses the existing `charts`/`tipBase`/`yAxis` plumbing; degenerate (single-value / no-data) cases are handled; no data-shape change.
+- **Sort the Trades table by %Risk** — the `%Risk` header was clickable but sorted by a non-existent stored field (silent no-op); it now derives each trade's actual risk % on the fly via `calcRisk`, so a trader can instantly surface their most over-leveraged trades (breakeven/no-stop rows sort to the bottom). Added the `↕` affordance to the header. Display-only, no persistence change.
+- **Thousands separators on Qty** — new `fmtQty()` helper renders large unit/share sizes as `100,000` in both the Trades table and the trade-detail modal, matching the money formatting already applied to P&L. Fractional lot sizes are preserved. Pure display; underlying `t.qty` is untouched so `calcRisk` math is unaffected.
+
+### Deferred / next-up ideas (2026-08-03)
+- **Toggle the P&L Distribution histogram between $ and R buckets** — R-based traders would read the shape in risk units; reuse the same `calcRisk`-derived R already computed for the Avg R card
+- **Outlier-robust histogram binning** — a single huge win/loss currently squashes most trades into one bin; consider clipping to a percentile range with an "outliers" end-bin, or a log option
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column (note: several open daily PRs already attempt this — reconcile before re-shipping)
+- **Standard-deviation / consistency stat** — surface the volatility of per-trade P&L (or R) so a steady edge is distinguishable from a lumpy one
+- **Reconcile the backlog of open daily PRs (#35–#64)** — many duplicate each other (`/`-to-search, filtered P&L header, scroll-to-top); a future run could focus on merging/closing rather than adding
