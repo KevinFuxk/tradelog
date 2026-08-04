@@ -76,6 +76,19 @@
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
 - **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
 
+## 2026-08-04 — Shipped
+- **`/` focuses the active view's search box** — pressing `/` on the Trades or Journal view jumps the cursor straight into the search field (and selects any existing text), so power users can filter without reaching for the mouse. Ignored while typing or with the modal open; no effect on Dashboard/Strategy. Folded into the existing `keydown` handler alongside the `1`–`4` nav shortcuts.
+- **Filtered Net P&L + win-rate in the Trades sub-header** — the "N trades" line now reads e.g. `42 trades · Net +1,234.50 · 57.1% win`, reflecting the *current* filtered/searched set. Filter by symbol or date and you instantly see the P&L of exactly what's on screen, not just the all-trades totals. Uses `fmtMoney` and colours the figure green/red.
+- **Click-backdrop to close the trade/journal modal** — clicking the dark area outside the dialog now closes it, routed through `closeModal()` so the unsaved-journal-changes guard still fires. Matches the muscle memory most desktop apps have; no risk to notes.
+- **Total Fees stat card on Dashboard** — new card sums commission/fees across trades that carry a fee, with an `across N trades` sub-line, so the cost drag already baked into Net P&L is visible on its own. Only appears when broker imports include commission (Tickmill). Pure derivation from existing `trades`; no persistence change.
+
+### Deferred / next-up ideas (2026-08-04)
+- **Scroll main content to top on view switch** — long Dashboard scroll position currently carries into other views; reset `.main` scrollTop in `go()`
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Right-align numeric columns in the Trades table** — Entry/Exit/SL/TP/Qty/%Risk/P&L read easier right-aligned; needs a small CSS pass
+- **Fees % of gross card / per-symbol fee drag** — extend Total Fees with fees as a % of gross profit, or break fees down by symbol
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
