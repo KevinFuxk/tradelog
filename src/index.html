@@ -1053,6 +1053,17 @@ function renderDash() {
     const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
+  // Total commissions/fees paid — the cost drag already deducted from Net P&L.
+  // Only shown when trades carry a fee (broker imports that include commission).
+  const feeTrades = trades.filter(t => t.commission)
+  const totalFees = feeTrades.reduce((a, t) => a + (t.commission || 0), 0)
+  const feeCard = feeTrades.length ? [[
+    'Total Fees',
+    `<span class="col-r">${fmtMoney(totalFees, false)}</span>`,
+    `across ${feeTrades.length} trade${feeTrades.length!==1?'s':''}`,
+    'Total commission/fees on trades that carry a fee — the cost drag already deducted from your Net P&L. Watch it against your edge: high fees can quietly eat a positive expectancy'
+  ]] : []
+
   const dayRows = Object.entries(dayMap)
   let dayCards = []
   if (dayRows.length) {
@@ -1077,6 +1088,7 @@ function renderDash() {
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
     ddCard,
+    ...feeCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
@@ -1301,7 +1313,19 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-header shows the count plus the Net P&L / win-rate of the CURRENT
+  // filtered set, so filtering by symbol or date instantly shows the P&L of
+  // exactly what you're looking at — not just the all-trades totals.
+  const sub = document.getElementById('tr-sub')
+  if (filtered.length) {
+    const net  = filtered.reduce((a, t) => a + t.pnl, 0)
+    const wins = filtered.filter(t => t.pnl > 0).length
+    const wr   = (wins / filtered.length) * 100
+    sub.innerHTML = `${filtered.length} trade${filtered.length!==1?'s':''} · Net ` +
+      `<span class="${net>=0?'col-g':'col-r'}">${fmtMoney(net)}</span> · ${wr.toFixed(1)}% win`
+  } else {
+    sub.textContent = '0 trades'
+  }
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -2363,6 +2387,11 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  // Click the dark backdrop (outside the dialog) to close — routes through
+  // closeModal() so the unsaved-journal-changes guard still applies.
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target.id === 'modal') closeModal()
+  })
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
@@ -2372,6 +2401,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight to the search box of the active view (Trades / Journal)
+        const view = document.querySelector('.view.on')?.id
+        const box  = view === 'v-trades'  ? document.getElementById('f-q')
+                   : view === 'v-journal' ? document.getElementById('jf-q') : null
+        if (box) { e.preventDefault(); box.focus(); box.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
