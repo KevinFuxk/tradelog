@@ -967,11 +967,14 @@ function stats(list) {
   // max drawdown: largest peak-to-trough drop in cumulative P&L
   const sorted = [...list].sort((a,b)=>new Date(a.entryTime)-new Date(b.entryTime))
   let peak=0, cum=0, maxDD=0
+  // longest underwater stretch = most consecutive trades spent below a prior peak
+  let uw=0, maxUW=0
   sorted.forEach(t => {
     cum += t.pnl
     if (cum > peak) peak = cum
     const dd = peak - cum
     if (dd > maxDD) maxDD = dd
+    if (dd > 0.0049) { uw++; if (uw > maxUW) maxUW = uw } else uw = 0
   })
   // Current (open) drawdown = how far final equity sits below its running peak
   const curDD    = +(peak - cum).toFixed(2)
@@ -983,7 +986,7 @@ function stats(list) {
     total, avgW, avgL, pf, mw, ml,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
-    maxDD, curDD, curDDPct, peak, atHigh }
+    maxDD, curDD, curDDPct, peak, atHigh, maxUW }
 }
 
 // ════════════════════════════════════════════════════
@@ -1046,6 +1049,26 @@ function renderDash() {
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
+  // Total commission & swap paid — how much the broker took. Summed as
+  // absolute values so it reads as a positive "fees paid" figure regardless of
+  // whether the export stores commission as a negative cost or a positive fee.
+  const totalFees = trades.reduce((a, t) => a + Math.abs(t.commission || 0), 0)
+  const feesCard = totalFees > 0.0049 ? [[
+    'Total Fees',
+    `<span class="col-r">-${fmtMoney(totalFees, false)}</span>`,
+    'commission & swap',
+    'Total commission and swap paid across all trades. Your P&L figures are already net of these — this shows how much the broker took'
+  ]] : []
+
+  // Longest underwater stretch — most consecutive trades equity spent below a
+  // prior high-water mark. Pairs with Current DD; a long run = a slow recovery.
+  const uwCard = s.maxUW > 0 ? [[
+    'Longest UW',
+    `<span class="col-r">${s.maxUW}</span>`,
+    `trade${s.maxUW !== 1 ? 's' : ''} below peak`,
+    'The longest run of consecutive trades your equity stayed below a prior high-water mark (underwater). A long stretch signals a deep or slow recovery from drawdown'
+  ]] : []
+
   // Best / worst single trading day by net P&L — surfaces outlier days that
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
@@ -1077,9 +1100,11 @@ function renderDash() {
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
     ddCard,
+    ...uwCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
+    ...feesCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
   ).join('')
@@ -2372,6 +2397,14 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump to the active view's search box (Trades / Journal) for fast,
+        // keyboard-driven filtering. preventDefault so "/" isn't typed into it.
+        const box = document.getElementById('v-trades').classList.contains('on')  ? document.getElementById('f-q')
+                  : document.getElementById('v-journal').classList.contains('on') ? document.getElementById('jf-q')
+                  : null
+        if (box) { e.preventDefault(); box.focus(); box.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
