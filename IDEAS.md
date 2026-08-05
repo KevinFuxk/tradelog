@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-05 — Shipped
+- **`/` keyboard shortcut to focus the search box** — pressing `/` on the Trades or Journal view jumps into that view's search input (and selects its text), so power users can filter without reaching for the mouse. Wired into the existing global keydown handler; ignored while typing or with the modal open, and `preventDefault` keeps the `/` out of the field. No data-shape change.
+- **Total Fees stat card on Dashboard** — new card sums all commission & swap paid across trades (as absolute values, so it reads correctly whether the broker export stores fees as negative costs or positive charges) and shows it in red. Since the app's P&L is already net of fees, this surfaces exactly how much the broker skimmed — a cost many journals hide. Only appears when fee data exists. Pure derivation from existing `trades`; no persistence change.
+- **Longest Underwater (UW) stat card on Dashboard** — the longest run of consecutive trades equity spent below a prior high-water mark, computed in the same `stats()` peak/cum walk as Max/Current Drawdown. Pairs with the existing Current DD card: a long underwater stretch flags a deep or slow recovery even when the dollar drawdown looks modest. Only appears when there's been any drawdown.
+
+### Deferred / next-up ideas (2026-08-05)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column (factor out a shared `tradeR()` helper to avoid duplicating the formula)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Underwater in days, not just trades** — complement Longest UW with the longest calendar-time stretch below a prior peak
+- **NOTE for maintainers:** ~30 prior `daily/*` PRs (#37–#66) are open and unmerged, so `main` and this IDEAS.md are frozen at 2026-06-07. Every run rebases off the same stale base and re-proposes overlapping ideas. Merging (or closing) the backlog would let future runs build forward instead of repeating.
