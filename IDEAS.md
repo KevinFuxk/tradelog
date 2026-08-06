@@ -1,5 +1,17 @@
 # TradeLog — Ideas Log
 
+## 2026-08-06 — Shipped
+- **Bug fix — day grouping for space-separated timestamps (`dayKey()` helper).** Best/Worst Day cards and the Daily P&L chart grouped dates via `split('T')[0] || split(' ')[0]`. The first split always returns the whole string (truthy), so the space fallback was dead code: broker stamps formatted `YYYY-MM-DD HH:MM:SS` were grouped by full datetime — every trade its own "day", inflating Best/Worst Day and shredding the daily bars into one-per-trade. New `dayKey()` extracts the leading `YYYY-MM-DD` regardless of `T`/space separator; ISO stamps are unaffected. Applied at both grouping sites (`renderDash` day map + `buildDailyChart`).
+- **Bug fix — %Risk column sort.** The `%Risk` header was clickable but sorted on a non-existent stored field (`t.riskPct` is computed via `calcRisk`, never persisted), so it silently did nothing. `getFiltered()` now derives each row's actual risk % on the fly for the sort; breakeven / no-stop rows sink to the bottom. Also added the `↕` affordance to Entry/Exit/SL/TP/Qty/%Risk headers so every sortable column is discoverable (previously only Date/Symbol/P&L advertised it).
+- **Filtered Net P&L + W/L in the Trades sub-header.** The "N trades" line now reads e.g. `18 trades · 10W / 7L · +2,340.00 filtered`, summing P&L (green/red) over the *currently filtered/searched* set and labelled `filtered` when a filter narrows the log, else `net`. Filter to one symbol or date range and instantly see what that slice actually made, no export needed. Pure derivation from the already-computed `filtered` list; reuses `fmtMoney`.
+
+### Deferred / next-up ideas (2026-08-06)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (trades/days) below a prior peak
+- **`/` to focus search** + **click-backdrop to close modal** — recurring keyboard/UX asks across the backlog, still absent from `main`
+- **Shared `tradeR()` helper** — the realised-R formula is now duplicated in ~4 places (Avg R card, Trades sub-line, Journal header, CSV export); factor out before it drifts
+- **Note:** `main` is frozen at 2026-06-07 (PR #8); PRs #4, #9–#68 are open/unmerged, so every daily branch forks the same stale base. Triaging/merging that backlog (or the #68 SUPER consolidation) would let future runs build forward instead of sideways.
+
 ## 2026-06-01 — Shipped
 - **Keyboard shortcuts** (`1`–`4` navigate Dashboard/Trades/Journal/Strategy; `Ctrl+Enter` saves journal note in modal; `Escape` already worked)
 - **Sidebar tooltip hints** — tooltips now show `[1]`–`[4]` to surface the shortcuts to new users

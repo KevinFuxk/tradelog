@@ -372,12 +372,12 @@ textarea.nt::placeholder{color:var(--tx3);}
             <th data-col="entryTime">Date / Time ↕</th>
             <th data-col="symbol">Symbol ↕</th>
             <th data-col="side">Side</th>
-            <th data-col="entryPrice">Entry</th>
-            <th data-col="exitPrice">Exit</th>
-            <th data-col="slPrice">SL Price</th>
-            <th data-col="tpPrice">TP Price</th>
-            <th data-col="qty">Qty</th>
-            <th data-col="riskPct">%Risk</th>
+            <th data-col="entryPrice">Entry ↕</th>
+            <th data-col="exitPrice">Exit ↕</th>
+            <th data-col="slPrice">SL Price ↕</th>
+            <th data-col="tpPrice">TP Price ↕</th>
+            <th data-col="qty">Qty ↕</th>
+            <th data-col="riskPct">%Risk ↕</th>
             <th data-col="pnl">P&amp;L ↕</th>
             <th>Note</th>
           </tr>
@@ -1050,7 +1050,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1242,7 +1242,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -1278,10 +1278,20 @@ function getFiltered() {
 
   let list = [...trades]
 
+  // The %Risk column is computed on the fly (no stored field), so sorting on it
+  // used to silently no-op — a[sortCol] was undefined for every row. Derive the
+  // actual risk %; breakeven / no-stop rows sink to the bottom.
+  const riskPctOf = t => {
+    const r = calcRisk(t)
+    return (r && !r.breakeven && r.actualRiskPct > 0) ? r.actualRiskPct : -Infinity
+  }
+
   // Sort
   list.sort((a,b) => {
-    let va = a[sortCol], vb = b[sortCol]
-    if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    let va, vb
+    if (sortCol === 'riskPct') { va = riskPctOf(a); vb = riskPctOf(b) }
+    else if (sortCol === 'entryTime') { va = new Date(a.entryTime)||0; vb = new Date(b.entryTime)||0 }
+    else { va = a[sortCol]; vb = b[sortCol] }
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -1301,7 +1311,19 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-header summarises the *currently filtered* set (net P&L + W/L), so
+  // slicing to one symbol/date/result instantly shows what that slice made.
+  const sub = document.getElementById('tr-sub')
+  if (filtered.length) {
+    const fw   = filtered.filter(t => t.pnl > 0).length
+    const fl   = filtered.filter(t => t.pnl < 0).length
+    const fnet = filtered.reduce((a, t) => a + t.pnl, 0)
+    const scope = filtered.length !== trades.length ? 'filtered' : 'net'
+    sub.innerHTML = `${filtered.length} trade${filtered.length!==1?'s':''} · ${fw}W / ${fl}L · ` +
+      `<span class="${fnet>=0?'col-g':'col-r'}">${fmtMoney(fnet)}</span> ${scope}`
+  } else {
+    sub.textContent = '0 trades'
+  }
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -2225,6 +2247,17 @@ function holdMs(t) {
   if (!t.entryTime || !t.exitTime) return null
   const ms = new Date(t.exitTime) - new Date(t.entryTime)
   return (isFinite(ms) && ms >= 0) ? ms : null
+}
+
+// Calendar-day key (YYYY-MM-DD) from an entry timestamp, which may be ISO
+// ("2026-01-15T10:30:00") or space-separated ("2026-01-15 10:30:00"). Splitting
+// on 'T' alone left space-separated broker stamps ungrouped — the first split()
+// returns the whole string, so the ' ' fallback was dead code and every trade
+// landed in its own "day", breaking Best/Worst Day and the Daily P&L chart.
+function dayKey(ts) {
+  const s = String(ts || '')
+  const m = s.match(/(\d{4}-\d{2}-\d{2})/)
+  return m ? m[1] : s.split('T')[0].split(' ')[0]
 }
 
 // Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.
