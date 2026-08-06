@@ -1363,10 +1363,11 @@ function renderDash() {
   // absolute values so it reads as a positive "fees paid" figure regardless of
   // whether the export stores commission as a negative cost or a positive fee.
   const totalFees = trades.reduce((a, t) => a + Math.abs(t.commission || 0), 0)
+  const feeTradeCount = trades.filter(t => t.commission).length
   const feesCard = totalFees > 0.0049 ? [[
     'Total Fees',
     `<span class="col-r">-${fmtMoney(totalFees, false)}</span>`,
-    'commission & swap',
+    `commission & swap · ${feeTradeCount} trade${feeTradeCount !== 1 ? 's' : ''}`,
     'Total commission and swap paid across all trades. Your P&L figures are already net of these — this shows how much the broker took'
   ]] : []
 
@@ -1492,7 +1493,7 @@ function breakdownTable(rows, nameHeader, emptyMsg, rowAttrs) {
   if (!rows.length) return `<div style="font-size:12px;color:var(--tx3)">${emptyMsg || 'No data'}</div>`
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   return `<table class="bdt">
-    <thead><tr><th>${nameHeader}</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average realised R-multiple for this group (trades with a stop only)">Avg R</th><th class="r" title="Average $ result per trade — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>${nameHeader}</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade — the per-trade edge, not just the running total">Avg/Trade</th><th class="r" title="Average realised R-multiple for this group (trades with a stop only)">Avg R</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1500,8 +1501,8 @@ function breakdownTable(rows, nameHeader, emptyMsg, rowAttrs) {
         <td class="bd-name">${r.name}</td>
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
-        <td class="r">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
@@ -1544,7 +1545,9 @@ function renderMonthBreakdown() {
     (groups[k] = groups[k] || []).push(t)
   })
   const rows = Object.keys(groups).sort().map(k => {
-    const lbl = new Date(k + '-01').toLocaleDateString('en-US', { month:'short', year:'2-digit' })
+    // parse as LOCAL midnight — a bare 'YYYY-MM-01' parses as UTC and shifts
+    // the label back a month for users west of Greenwich
+    const lbl = new Date(k + '-01T00:00:00').toLocaleDateString('en-US', { month:'short', year:'2-digit' })
     return breakdownRow(lbl, groups[k])
   })
   el.innerHTML = breakdownTable(rows, 'Month', 'No dated trades')
@@ -1624,7 +1627,7 @@ function renderSymbolBreakdown() {
     return `<th class="${col === 'name' ? '' : 'r'}" style="cursor:pointer" onclick="sortSymbolBd('${col}')"${extra ? ` title="${extra}"` : ''}>${label}${arrow}</th>`
   }
   el.innerHTML = `<table class="bdt">
-    <thead><tr>${hh('name','Symbol')}${hh('n','Trades')}${hh('wr','Win%')}${hh('avgR','Avg R','Average realised R-multiple for this symbol (trades with a stop only)')}${hh('avg','Avg/Trade','Average $ result per trade — the per-trade edge, not just the running total')}${hh('total','Net P&L')}</tr></thead>
+    <thead><tr>${hh('name','Symbol')}${hh('n','Trades')}${hh('wr','Win%')}${hh('avg','Avg/Trade','Average $ result per trade — the per-trade edge, not just the running total')}${hh('avgR','Avg R','Average realised R-multiple for this symbol (trades with a stop only)')}${hh('total','Net P&L')}</tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1632,8 +1635,8 @@ function renderSymbolBreakdown() {
         <td class="bd-name">${r.name}</td>
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
-        <td class="r">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
@@ -1697,7 +1700,9 @@ function renderCalendar() {
   const [y, mo] = ym.split('-').map(Number)
   const first = new Date(y, mo - 1, 1)
   const daysInMonth = new Date(y, mo, 0).getDate()
-  const todayKey = dayKey(new Date().toISOString())
+  // local calendar day, not UTC — toISOString would mark the wrong cell off-UTC
+  const now = new Date()
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
   document.getElementById('cal-label').textContent =
     first.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
@@ -1937,11 +1942,13 @@ function getFiltered() {
   let list = [...trades]
 
   // Sort — computed columns (hold, riskPct) derive their value per trade;
-  // trades without the data sink to the bottom in either direction.
+  // trades without the data sink to the bottom in either direction (the
+  // missing-value sentinel flips with the sort direction).
+  const missing = sortDir === 'asc' ? Infinity : -Infinity
   const sortVal = t => {
     if (sortCol === 'entryTime') return new Date(t.entryTime) || 0
-    if (sortCol === 'hold')      { const v = holdMs(t); return v == null ? -Infinity : v }
-    if (sortCol === 'riskPct')   { const r = calcRisk(t); return (r && !r.breakeven && r.actualRiskPct > 0) ? r.actualRiskPct : -Infinity }
+    if (sortCol === 'hold')      { const v = holdMs(t); return v == null ? missing : v }
+    if (sortCol === 'riskPct')   { const r = calcRisk(t); return (r && !r.breakeven && r.actualRiskPct > 0) ? r.actualRiskPct : missing }
     return t[sortCol]
   }
   list.sort((a,b) => {
@@ -2203,13 +2210,15 @@ const J_LABELS = {
 function hasNote(n) {
   if (!n) return false
   if (typeof n === 'string') return n.trim().length > 0
-  return J_FIELDS.some(f => n[f] && n[f].trim().length > 0)
+  // structure is 'yes'/'no'; text fields must be non-empty strings (tolerate
+  // foreign shapes so one odd record can't crash a render pass)
+  return J_FIELDS.some(f => typeof n[f] === 'string' && n[f].trim().length > 0)
 }
 
 function notePreview(n) {
   if (!n) return ''
   if (typeof n === 'string') return n
-  return J_FIELDS.map(f => n[f]).find(v => v && v.trim()) || ''
+  return J_FIELDS.map(f => n[f]).find(v => typeof v === 'string' && v.trim()) || ''
 }
 
 // Full searchable text of a note (all sections joined) for journal keyword search
@@ -2222,7 +2231,7 @@ function noteText(n) {
 function filledCount(n) {
   if (!n) return 0
   if (typeof n === 'string') return n.trim() ? 1 : 0
-  return J_FIELDS.filter(f => n[f] && n[f].trim()).length
+  return J_FIELDS.filter(f => typeof n[f] === 'string' && n[f].trim()).length
 }
 
 function populateJournalSymbols() {
@@ -2381,7 +2390,7 @@ function renderJournal() {
     // Build per-section rows
     const sectionRows = typeof n === 'object' ? J_FIELDS.map((f, i) => {
       const val = n[f]
-      if (!val || (typeof val === 'string' && !val.trim())) return ''
+      if (!val || typeof val !== 'string' || !val.trim()) return ''
       const label = `<div class="jc-section-label">${J_LABELS[f]}</div>`
       let body
       if (f === 'structure') {
@@ -2675,34 +2684,53 @@ async function restoreBackup(text) {
   if (!data || data.app !== 'tradelog' || data.kind !== 'backup') {
     alert('That file does not look like a TradeLog backup.'); return
   }
-  const bTrades = Array.isArray(data.trades) ? data.trades : []
-  const bNotes  = (data.notes && typeof data.notes === 'object') ? data.notes : {}
-  const bEvents = Array.isArray(data.events) ? data.events : []
+  // Sanitize before merging: a record only enters a store if the renderers can
+  // digest it — a malformed backup must never be able to poison a saved store
+  // (a bad record would otherwise crash every subsequent boot).
+  const validTrade = t => t && typeof t === 'object' && t.id != null &&
+    Number.isFinite(+t.pnl) && typeof t.entryTime !== 'object'
+  const validEvent = ev => ev && typeof ev === 'object' && ev.id != null && Number.isFinite(+ev.pnlR)
+  const cleanNote = n => {
+    if (typeof n === 'string') return n.trim() ? n : null
+    if (!n || typeof n !== 'object') return null
+    const out = {}
+    J_FIELDS.forEach(f => {
+      const v = n[f]
+      if (f === 'structure') { if (v === 'yes' || v === 'no') out.structure = v }
+      else if (typeof v === 'string' && v.trim()) out[f] = v
+    })
+    return Object.keys(out).length ? out : null
+  }
+  const bTrades = (Array.isArray(data.trades) ? data.trades : []).filter(validTrade)
+  const bNotes  = (data.notes && typeof data.notes === 'object' && !Array.isArray(data.notes)) ? data.notes : {}
+  const bEvents = (Array.isArray(data.events) ? data.events : []).filter(validEvent)
   if (!confirm(`Restore backup from ${data.exportedAt ? fdt(data.exportedAt) : 'unknown date'}?\n\n` +
     `${bTrades.length} trades · ${Object.keys(bNotes).length} notes · ${bEvents.length} strategy setups\n\n` +
     `Existing data is merged, not replaced. Existing journal notes are never overwritten.`)) return
 
   // Merge trades/events by stable id (backup fills the gaps, current data wins)
   const tm = new Map()
-  bTrades.forEach(t => { if (t && t.id) tm.set(t.id, t) })
+  bTrades.forEach(t => tm.set(t.id, t))
   trades.forEach(t => tm.set(t.id, t))
   trades = [...tm.values()].sort((a, b) => new Date(b.entryTime) - new Date(a.entryTime))
 
   const em = new Map()
-  bEvents.forEach(ev => { if (ev && ev.id) em.set(ev.id, ev) })
+  bEvents.forEach(ev => em.set(ev.id, ev))
   events.forEach(ev => em.set(ev.id, ev))
   events = [...em.values()].sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
 
   // Notes: only fill ids that have no note yet — never clobber existing text
   let restoredNotes = 0
   for (const [id, n] of Object.entries(bNotes)) {
-    if (!hasNote(notes[id]) && hasNote(n)) { notes[id] = n; restoredNotes++ }
+    const clean = cleanNote(n)
+    if (clean && !hasNote(notes[id])) { notes[id] = clean; restoredNotes++ }
   }
 
-  // Settings: only accept a sane shape
-  if (data.settings && typeof data.settings.accountBalance === 'number' && data.settings.accountBalance > 0) {
+  // Settings: only accept a sane, finite shape (Infinity would JSON-serialize
+  // to null and persist a broken settings store)
+  if (data.settings && Number.isFinite(data.settings.accountBalance) && data.settings.accountBalance > 0) {
     settings = { accountBalance: data.settings.accountBalance,
-                 targetRisk: typeof data.settings.targetRisk === 'number' ? data.settings.targetRisk : settings.targetRisk }
+                 targetRisk: (Number.isFinite(data.settings.targetRisk) && data.settings.targetRisk > 0) ? data.settings.targetRisk : settings.targetRisk }
     document.getElementById('s-balance').value = settings.accountBalance
     document.getElementById('s-risk').value    = settings.targetRisk
   }
@@ -3386,6 +3414,11 @@ function wire() {
   document.getElementById('imp-cancel').addEventListener('click', () => {
     pending = null; document.getElementById('imp-preview').style.display = 'none'
   })
+
+  // Calendar month navigation
+  document.getElementById('cal-prev')?.addEventListener('click', () => calShift(-1))
+  document.getElementById('cal-next')?.addEventListener('click', () => calShift(1))
+  document.getElementById('cal-label')?.addEventListener('click', () => { calYM = null; renderCalendar() })
 
   // Daily range buttons
   document.querySelectorAll('.daily-range-btn').forEach(b =>
