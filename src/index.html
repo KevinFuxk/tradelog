@@ -86,7 +86,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tx)
 .btn-g:hover{border-color:var(--b2);color:var(--tx);}
 .btn-r{background:var(--red-bg);color:var(--red);border:1px solid transparent;}
 .btn-r:hover{border-color:var(--red);}
-.daily-range-btn.on{background:var(--blue-bg);color:var(--blue);border-color:var(--blue);}
+.daily-range-btn.on,.tr-range-btn.on{background:var(--blue-bg);color:var(--blue);border-color:var(--blue);}
 
 /* ── Stats ───────────────────────────────── */
 .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px;margin-bottom:24px;}
@@ -247,6 +247,36 @@ textarea.nt::placeholder{color:var(--tx3);}
 .empty-title{font-family:'Syne',sans-serif;font-size:16px;color:var(--tx2);margin-bottom:8px;}
 .empty-sub{font-size:11px;line-height:1.7;}
 
+/* ── Numeric column alignment ────────────── */
+.tw th.num,.tw td.num{text-align:right;font-variant-numeric:tabular-nums;}
+
+/* ── Keyboard help overlay ───────────────── */
+.help-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid var(--b1);font-size:12px;color:var(--tx2);}
+.help-row:last-child{border-bottom:none;}
+.kbd{display:inline-block;min-width:22px;text-align:center;padding:2px 7px;border:1px solid var(--b2);border-bottom-width:2px;border-radius:5px;background:var(--s2);color:var(--tx);font-size:11px;font-weight:600;}
+
+/* ── P&L calendar ────────────────────────── */
+.cal-wrap{overflow-x:auto;}
+.cal{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed;min-width:640px;}
+.cal th{color:var(--tx3);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.06em;padding:4px 6px;text-align:right;}
+.cal td{border:1px solid var(--b1);border-radius:4px;padding:6px 7px;height:52px;vertical-align:top;text-align:right;}
+.cal td.blank{border-color:transparent;}
+.cal td.day{cursor:pointer;transition:border-color .15s;}
+.cal td.day:hover{border-color:var(--b3);}
+.cal td.win{background:var(--green-bg);}
+.cal td.loss{background:var(--red-bg);}
+.cal td.today{outline:1px solid var(--blue);}
+.cal .cal-d{color:var(--tx3);font-size:10px;}
+.cal .cal-v{font-weight:600;margin-top:3px;}
+.cal .cal-n{color:var(--tx3);font-size:9px;}
+.cal td.wk{border-color:transparent;background:var(--s2);color:var(--tx2);font-weight:600;}
+
+/* ── Journal rule-adherence summary ──────── */
+.jn-sum{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.jn-sum-item{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);padding:12px 16px;min-width:150px;}
+.jn-sum-k{font-size:10px;color:var(--tx2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;}
+.jn-sum-v{font-size:18px;font-weight:600;}
+
 /* ── Misc ────────────────────────────────── */
 ::-webkit-scrollbar{width:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -280,9 +310,14 @@ textarea.nt::placeholder{color:var(--tx3);}
     <span class="tip">Strategy [4]</span>
   </div>
 
-  <div class="nav nav-bottom" data-v="import">
+  <div class="nav nav-bottom" id="nav-help">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span class="tip">Shortcuts [?]</span>
+  </div>
+
+  <div class="nav" data-v="import">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-    <span class="tip">Import CSV</span>
+    <span class="tip">Import CSV [i]</span>
   </div>
 </nav>
 
@@ -317,13 +352,49 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div style="height:140px;position:relative"><canvas id="c-daily"></canvas></div>
     </div>
 
-    <div class="card" id="dow-card" style="margin-bottom:14px">
-      <div class="ct" title="P&amp;L grouped by the weekday of each trade's entry — spot which days carry (or leak) your edge">BY DAY OF WEEK</div>
-      <div id="ds-dow-bd"></div>
+    <div class="card" id="cal-card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="ct" style="margin-bottom:0" title="Net P&amp;L per calendar day with weekly subtotals — click a traded day to see its trades">P&amp;L CALENDAR <span id="cal-total" style="color:var(--tx3);font-weight:400"></span></div>
+        <div style="display:flex;gap:4px;align-items:center">
+          <button class="pb" id="cal-prev" title="Previous month">‹</button>
+          <button class="pb" id="cal-label" title="Jump back to the latest traded month" style="min-width:88px"></button>
+          <button class="pb" id="cal-next" title="Next month">›</button>
+        </div>
+      </div>
+      <div class="cal-wrap" id="ds-cal"></div>
+    </div>
+
+    <div class="card" id="dist-card" style="margin-bottom:14px">
+      <div class="ct" title="How your per-trade results are distributed — a healthy system clusters small losses left of zero and lets the right tail run">P&amp;L DISTRIBUTION</div>
+      <div style="height:150px;position:relative"><canvas id="c-dist"></canvas></div>
+    </div>
+
+    <div class="bd-grid" id="ds-bd-grid">
+      <div class="card" id="dow-card">
+        <div class="ct" title="P&amp;L grouped by the weekday of each trade's entry — spot which days carry (or leak) your edge">BY DAY OF WEEK</div>
+        <div id="ds-dow-bd"></div>
+      </div>
+      <div class="card" id="dir-card">
+        <div class="ct" title="Long vs short performance — many traders have a strong edge in only one direction">BY DIRECTION</div>
+        <div id="ds-dir-bd"></div>
+      </div>
+      <div class="card" id="month-card">
+        <div class="ct" title="P&amp;L grouped by calendar month — is the edge consistent over time?">BY MONTH</div>
+        <div id="ds-month-bd"></div>
+      </div>
+      <div class="card" id="hour-card">
+        <div class="ct" title="P&amp;L grouped by the hour of each trade's entry — find your best (and worst) session windows">BY HOUR OF DAY</div>
+        <div id="ds-hour-bd"></div>
+      </div>
+    </div>
+
+    <div class="card" id="rdist-card" style="margin-bottom:14px">
+      <div class="ct" title="How many trades landed in each R-multiple bucket (only trades with a stop-loss). Big left-tail buckets mean stops aren't being honored">R-MULTIPLE DISTRIBUTION</div>
+      <div id="ds-rdist-bd"></div>
     </div>
 
     <div class="card" id="symbol-card" style="margin-bottom:0">
-      <div class="ct">BY SYMBOL</div>
+      <div class="ct" title="Performance by instrument — click a column header to sort, click a row to see that symbol's trades">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
     </div>
 
@@ -340,7 +411,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     <div class="ph">
       <div><div class="pt">Trade History</div><div class="ps" id="tr-sub">0 trades</div></div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-g" id="tr-export" title="Download the currently filtered trades as a CSV file">Export CSV</button>
+        <button class="btn btn-g" id="tr-export" title="Download the currently filtered trades as a CSV file (Ctrl+E)">Export CSV</button>
         <button class="btn btn-g" id="tr-clear-data" title="Clear all trades">Clear Data</button>
         <button class="btn btn-p" id="tr-import">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -350,12 +421,22 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…  ( / )" title="Press / anywhere to jump here" style="width:170px">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
+      <select class="fs" id="f-note" title="Filter by whether the trade has a journal note"><option value="">All notes</option><option value="yes">✎ Journaled</option><option value="no">○ Not journaled</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
       <input class="fi" type="date" id="f-to" title="To date">
+      <button class="btn btn-g tr-range-btn" data-range="today" style="padding:8px 10px;font-size:12px" title="Only today's trades">1D</button>
+      <button class="btn btn-g tr-range-btn" data-range="week" style="padding:8px 10px;font-size:12px" title="This week (since Monday)">1W</button>
+      <button class="btn btn-g tr-range-btn" data-range="month" style="padding:8px 10px;font-size:12px" title="This calendar month">1M</button>
+      <button class="btn btn-g tr-range-btn" data-range="ytd" style="padding:8px 10px;font-size:12px" title="Year to date">YTD</button>
       <button class="btn btn-g" id="f-clr">Clear</button>
+      <span class="sep"></span>
+      <select class="fs" id="f-pagesize" title="Rows per page">
+        <option value="25">25 / page</option><option value="50">50 / page</option>
+        <option value="100">100 / page</option><option value="250">250 / page</option>
+      </select>
     </div>
 
     <div class="empty" id="tr-empty" style="display:none">
@@ -369,17 +450,18 @@ textarea.nt::placeholder{color:var(--tx3);}
         <thead>
           <tr>
             <th data-col="#">#</th>
-            <th data-col="entryTime">Date / Time ↕</th>
-            <th data-col="symbol">Symbol ↕</th>
-            <th data-col="side">Side</th>
-            <th data-col="entryPrice">Entry</th>
-            <th data-col="exitPrice">Exit</th>
-            <th data-col="slPrice">SL Price</th>
-            <th data-col="tpPrice">TP Price</th>
-            <th data-col="qty">Qty</th>
-            <th data-col="riskPct">%Risk</th>
-            <th data-col="pnl">P&amp;L ↕</th>
-            <th>Note</th>
+            <th data-col="entryTime" title="When the position was opened — click to sort">Date / Time ↕</th>
+            <th data-col="symbol" title="Instrument — click to sort">Symbol ↕</th>
+            <th data-col="side" title="Buy (long) or Sell (short)">Side</th>
+            <th data-col="entryPrice" class="num" title="Average fill price at entry">Entry</th>
+            <th data-col="exitPrice" class="num" title="Average fill price at exit">Exit</th>
+            <th data-col="slPrice" class="num" title="Stop-loss price (used for %Risk and R-multiple)">SL Price</th>
+            <th data-col="tpPrice" class="num" title="Take-profit price">TP Price</th>
+            <th data-col="qty" class="num" title="Position size (lots / contracts / units)">Qty</th>
+            <th data-col="riskPct" class="num" title="Percent of account risked if the stop had been hit — red when above your target risk. Click to sort">%Risk ↕</th>
+            <th data-col="hold" class="num" title="Entry → exit duration — click to sort">Hold ↕</th>
+            <th data-col="pnl" class="num" title="Net profit/loss including commission; the small sub-line is the realised R-multiple when a stop is set">P&amp;L ↕</th>
+            <th title="Journal note — hover the pencil to preview it">Note</th>
           </tr>
         </thead>
         <tbody id="tr-body"></tbody>
@@ -392,25 +474,34 @@ textarea.nt::placeholder{color:var(--tx3);}
   <div class="view" id="v-journal">
     <div class="ph">
       <div><div class="pt">Journal</div><div class="ps" id="jn-sub">Your notes &amp; reflections</div></div>
+      <button class="btn btn-g" id="jn-export" title="Download the currently filtered journal entries as a Markdown file">Export Markdown</button>
     </div>
+    <!-- Rule-adherence summary (from the 交易结构 yes/no field) -->
+    <div class="jn-sum" id="jn-summary" style="display:none"></div>
     <!-- Journal filters -->
     <div class="fbar" id="jn-filters" style="margin-bottom:16px">
-      <input class="fi" id="jf-q" placeholder="Search notes…" oninput="renderJournal()" style="width:180px" title="Search the text of your journal notes (and symbol)">
-      <select class="fs" id="jf-symbol" onchange="renderJournal()">
+      <input class="fi" id="jf-q" placeholder="Search notes…  ( / )" oninput="onJournalFilter()" style="width:180px" title="Search the text of your journal notes (and symbol). Press / to jump here">
+      <select class="fs" id="jf-symbol" onchange="onJournalFilter()">
         <option value="">All products</option>
       </select>
-      <select class="fs" id="jf-side" onchange="renderJournal()">
+      <select class="fs" id="jf-side" onchange="onJournalFilter()">
         <option value="">All sides</option>
         <option value="buy">Buy</option>
         <option value="sell">Sell</option>
       </select>
+      <select class="fs" id="jf-sort" onchange="onJournalFilter()" title="Order of the journal entries">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="best">Largest win</option>
+        <option value="worst">Largest loss</option>
+      </select>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:12px;color:var(--tx3)">From</span>
-        <input type="date" class="fi" id="jf-date-from" onchange="renderJournal()" style="padding:7px 10px;font-size:12px">
+        <input type="date" class="fi" id="jf-date-from" onchange="onJournalFilter()" style="padding:7px 10px;font-size:12px">
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:12px;color:var(--tx3)">To</span>
-        <input type="date" class="fi" id="jf-date-to" onchange="renderJournal()" style="padding:7px 10px;font-size:12px">
+        <input type="date" class="fi" id="jf-date-to" onchange="onJournalFilter()" style="padding:7px 10px;font-size:12px">
       </div>
       <button class="pb" onclick="clearJournalFilters()" style="font-size:12px;padding:7px 12px">✕ Clear</button>
     </div>
@@ -427,7 +518,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     <div class="ph">
       <div><div class="pt">Cup &amp; Handle</div><div class="ps" id="cnh-sub">No strategy data loaded</div></div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-g" id="cnh-export" title="Download the currently filtered setups as a CSV file">Export CSV</button>
+        <button class="btn btn-g" id="cnh-export" title="Download the currently filtered setups as a CSV file (Ctrl+E)">Export CSV</button>
         <button class="btn btn-g" id="cnh-clear" title="Clear strategy data">Clear Data</button>
         <button class="btn btn-p" id="cnh-import">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -480,18 +571,18 @@ textarea.nt::placeholder{color:var(--tx3);}
         <table>
           <thead>
             <tr>
-              <th data-col="day">Date ↕</th>
-              <th data-col="symbol">Symbol ↕</th>
-              <th data-col="timeframe">TF</th>
-              <th data-col="entry">Entry</th>
-              <th data-col="stop">Stop</th>
-              <th data-col="target">Target</th>
-              <th data-col="pnlR">Result ↕</th>
-              <th data-col="mfeR">MFE</th>
-              <th data-col="maeR">MAE</th>
-              <th data-col="outcome">Outcome</th>
-              <th data-col="sizeTier">Size</th>
-              <th data-col="returnBucket">Gap</th>
+              <th data-col="day" title="Setup date — click to sort">Date ↕</th>
+              <th data-col="symbol" title="Instrument — click to sort">Symbol ↕</th>
+              <th data-col="timeframe" title="Chart timeframe the pattern formed on">TF</th>
+              <th data-col="entry" class="num" title="Breakout entry price">Entry</th>
+              <th data-col="stop" class="num" title="Stop price — defines 1R">Stop</th>
+              <th data-col="target" class="num" title="Full take-profit target">Target</th>
+              <th data-col="pnlR" class="num" title="Result in R-multiples (1R = the amount risked) — click to sort">Result ↕</th>
+              <th data-col="mfeR" class="num" title="Maximum favorable excursion — how far price ran in your favor before exit">MFE</th>
+              <th data-col="maeR" class="num" title="Maximum adverse excursion — how deep the trade went against you">MAE</th>
+              <th data-col="outcome" title="🎯 target hit · 🛑 stopped out · ⏱ timed out">Outcome</th>
+              <th data-col="sizeTier" title="Pattern size bucket">Size</th>
+              <th data-col="returnBucket" title="Gap / return bucket">Gap</th>
             </tr>
           </thead>
           <tbody id="cnh-body"></tbody>
@@ -551,6 +642,26 @@ textarea.nt::placeholder{color:var(--tx3);}
         </div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:14px;margin-bottom:14px">
+      <div class="ct">BACKUP &amp; RESTORE</div>
+      <div style="font-size:11px;color:var(--tx2);line-height:1.8;margin-bottom:12px">
+        Download everything — trades, journal notes, strategy data and settings — as one JSON file,
+        or restore from a previous backup. Restoring merges by trade ID and <span style="color:var(--tx)">never overwrites an existing journal note</span>.
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-g" id="bk-export" title="Download all app data as a single JSON backup file">⬇ Download Backup</button>
+        <button class="btn btn-g" id="bk-import" title="Restore trades, notes, strategy data and settings from a backup file">⬆ Restore Backup</button>
+      </div>
+    </div>
+
+    <div class="card" id="data-loc-card">
+      <div class="ct">WHERE YOUR DATA IS SAVED</div>
+      <div style="font-size:11px;color:var(--tx2);line-height:1.8">
+        Trades, journal notes, strategy data and settings live as plain JSON files on this computer — nothing is sent anywhere.<br>
+        <span id="data-path" style="color:var(--tx);user-select:text">—</span>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -560,7 +671,12 @@ textarea.nt::placeholder{color:var(--tx3);}
   <div class="md">
     <div class="mh">
       <div class="mtitle" id="m-title">Trade Journal</div>
-      <button class="mx" id="m-close">×</button>
+      <div style="display:flex;align-items:center;gap:2px">
+        <span id="m-pos" style="font-size:11px;color:var(--tx3);margin-right:6px"></span>
+        <button class="mx" id="m-prev" title="Previous trade (←)">‹</button>
+        <button class="mx" id="m-next" title="Next trade (→)">›</button>
+        <button class="mx" id="m-close">×</button>
+      </div>
     </div>
     <div class="mmeta" id="m-meta"></div>
 
@@ -590,14 +706,36 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="ma">
+      <button class="btn btn-g" id="m-copy" title="Copy this trade's journal (including unsaved edits) as plain text">⧉ Copy</button>
+      <span class="sep"></span>
       <button class="btn btn-g" id="m-cancel">Cancel</button>
-      <button class="btn btn-p" id="m-save">Save Journal</button>
+      <button class="btn btn-p" id="m-save" title="Save (Ctrl+Enter or Ctrl+S)">Save Journal</button>
     </div>
+  </div>
+</div>
+
+<!-- ── Keyboard shortcuts overlay ─────────── -->
+<div class="mo" id="help-modal">
+  <div class="md" style="width:420px">
+    <div class="mh">
+      <div class="mtitle">Keyboard Shortcuts</div>
+      <button class="mx" id="help-close">×</button>
+    </div>
+    <div class="help-row"><span>Dashboard / Trades / Journal / Strategy</span><span><span class="kbd">1</span> <span class="kbd">2</span> <span class="kbd">3</span> <span class="kbd">4</span></span></div>
+    <div class="help-row"><span>Import view</span><span class="kbd">i</span></div>
+    <div class="help-row"><span>Focus the search box</span><span class="kbd">/</span></div>
+    <div class="help-row"><span>Export current view's CSV</span><span><span class="kbd">Ctrl</span> <span class="kbd">E</span></span></div>
+    <div class="help-row"><span>Page through the Trades table</span><span><span class="kbd">←</span> <span class="kbd">→</span></span></div>
+    <div class="help-row"><span>Previous / next trade (in trade detail)</span><span><span class="kbd">←</span> <span class="kbd">→</span></span></div>
+    <div class="help-row"><span>Save journal note (in trade detail)</span><span><span class="kbd">Ctrl</span> <span class="kbd">Enter</span> / <span class="kbd">S</span></span></div>
+    <div class="help-row"><span>Close dialog / blur search</span><span class="kbd">Esc</span></div>
+    <div class="help-row"><span>This overlay</span><span class="kbd">?</span></div>
   </div>
 </div>
 
 <input type="file" id="file-in" accept=".csv" style="display:none">
 <input type="file" id="file-events" accept=".jsonl,.json,.ndjson,.csv,.txt" style="display:none">
+<input type="file" id="file-backup" accept=".json" style="display:none">
 
 <script>
 // ════════════════════════════════════════════════════
@@ -608,7 +746,8 @@ let notes    = {}
 let settings = { accountBalance: 10000, targetRisk: 10 }
 let filtered = []
 let page     = 1
-const PG     = 25
+const PG     = 25            // strategy-table page size
+let tradePageSize = 25       // trades-table page size (user-selectable, persisted)
 let sortCol  = 'entryTime'
 let sortDir  = 'desc'
 let pending  = null
@@ -640,6 +779,7 @@ async function boot() {
   } catch {}
   restoreTradeFilters()
   restoreCnhFilters()
+  restoreJournalFilters()
   renderAll()
   applyTradeSortIndicator()
   wire()
@@ -647,6 +787,13 @@ async function boot() {
   try {
     const last = localStorage.getItem(LAST_VIEW_KEY)
     if (last && MAIN_VIEWS.includes(last) && last !== 'dashboard') go(last)
+  } catch {}
+  // Show where the JSON stores live (Electron only; harmless in a browser)
+  try {
+    if (window.api && window.api.getUserDataPath) {
+      const p = await window.api.getUserDataPath()
+      if (p) document.getElementById('data-path').textContent = p
+    }
   } catch {}
 }
 
@@ -660,6 +807,8 @@ function go(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.id === 'v-' + v))
   // Rebuild charts that were sized while their view was hidden
   if (v === 'strategy') renderStrategy()
+  // Each view opens at its top instead of inheriting the previous scroll position
+  const main = document.querySelector('.main'); if (main) main.scrollTop = 0
   // Remember the last main view so it reopens on next launch (skip Import flow)
   if (MAIN_VIEWS.includes(v)) { try { localStorage.setItem(LAST_VIEW_KEY, v) } catch {} }
 }
@@ -942,6 +1091,36 @@ function calcRisk(trade) {
   }
 }
 
+// Realised R-multiple for one trade: P&L ÷ dollars risked at the stop.
+// Single source of truth for every R shown in the app (table, journal,
+// dashboard, breakdowns, exports). Null when there's no usable stop.
+function tradeR(t) {
+  const risk = calcRisk(t)
+  if (!risk || risk.breakeven || !(risk.actualRiskPct > 0)) return null
+  return t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
+}
+
+// Shared formatter for R-multiples: "+1.25R" / "-0.80R" / muted em-dash.
+function fmtR(v, dp = 2) {
+  if (v == null || !isFinite(v)) return '<span style="color:var(--tx3)">—</span>'
+  const col = v >= 0 ? 'var(--green)' : 'var(--red)'
+  return `<span style="color:${col}">${v >= 0 ? '+' : ''}${v.toFixed(dp)}R</span>`
+}
+
+// Average realised R over a group of trades (null when none carries a stop)
+function groupAvgR(ts) {
+  const rs = ts.map(tradeR).filter(v => v != null)
+  return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null
+}
+
+// Planned reward:risk from SL/TP prices, or null when either is missing
+function plannedRR(t) {
+  if (!t.slPrice || !t.tpPrice || !t.entryPrice) return null
+  const risk = Math.abs(t.entryPrice - t.slPrice)
+  if (risk === 0) return null
+  return Math.abs(t.tpPrice - t.entryPrice) / risk
+}
+
 // ════════════════════════════════════════════════════
 //  STATS
 // ════════════════════════════════════════════════════
@@ -964,26 +1143,44 @@ function stats(list) {
     else{cw=0;cl=0}
   })
 
+  // payoff ratio: average winner vs average loser
+  const payoff = avgL !== 0 ? Math.abs(avgW / avgL) : (avgW > 0 ? Infinity : 0)
+
   // max drawdown: largest peak-to-trough drop in cumulative P&L
   const sorted = [...list].sort((a,b)=>new Date(a.entryTime)-new Date(b.entryTime))
   let peak=0, cum=0, maxDD=0
+  // longest underwater stretch = most consecutive trades spent below a prior peak
+  let uw=0, maxUW=0
   sorted.forEach(t => {
     cum += t.pnl
     if (cum > peak) peak = cum
     const dd = peak - cum
     if (dd > maxDD) maxDD = dd
+    if (dd > 0.0049) { uw++; if (uw > maxUW) maxUW = uw } else uw = 0
   })
   // Current (open) drawdown = how far final equity sits below its running peak
   const curDD    = +(peak - cum).toFixed(2)
   const curDDPct = peak > 0 ? (curDD / peak) * 100 : 0
   const atHigh   = curDD <= 0.0049   // within rounding of a fresh high
 
+  // Current streak: trailing run of same-sign results (breakeven ends it).
+  // Positive = consecutive wins, negative = consecutive losses.
+  let curStreak = 0
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i].pnl
+    if (p === 0) break
+    if (curStreak === 0) curStreak = p > 0 ? 1 : -1
+    else if (p > 0 && curStreak > 0) curStreak++
+    else if (p < 0 && curStreak < 0) curStreak--
+    else break
+  }
+
   return { n:list.length, wins:wins.length, losses:losses.length,
     wr: list.length ? (wins.length/list.length)*100 : 0,
-    total, avgW, avgL, pf, mw, ml,
+    total, avgW, avgL, pf, mw, ml, payoff, curStreak,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
-    maxDD, curDD, curDDPct, peak, atHigh }
+    maxDD, curDD, curDDPct, peak, atHigh, maxUW }
 }
 
 // ════════════════════════════════════════════════════
@@ -995,20 +1192,28 @@ function renderAll() { renderDash(); renderTrades(); renderJournal(); renderStra
 function renderDash() {
   const s = stats(trades)
   const sg = document.getElementById('sg')
-  const cr = document.getElementById('charts-row')
-  const dc = document.getElementById('daily-card')
-  const syc = document.getElementById('symbol-card')
-  const dwc = document.getElementById('dow-card')
+  const cards = ['charts-row','daily-card','cal-card','dist-card','ds-bd-grid','rdist-card','symbol-card']
+    .map(id => document.getElementById(id)).filter(Boolean)
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = 'none'
+    cards.forEach(el => el.style.display = 'none')
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  sg.style.display = ''
+  cards.forEach(el => el.style.display = '')
 
-  document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
+  // Subtitle: count + the date span of the loaded log
+  const dates = trades.map(t => new Date(t.entryTime)).filter(d => !isNaN(d))
+  let range = ''
+  if (dates.length) {
+    const fd = d => d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' })
+    const lo = new Date(Math.min(...dates)), hi = new Date(Math.max(...dates))
+    range = ' · ' + (fd(lo) === fd(hi) ? fd(lo) : `${fd(lo)} → ${fd(hi)}`)
+  }
+  document.getElementById('ds-sub').textContent = `${trades.length} trades loaded${range}`
 
   // Avg hold time of winners vs losers — surfaces "do I hold losers too long?"
   const avgMs = list => { const a = list.map(holdMs).filter(v => v != null); return a.length ? a.reduce((x,y)=>x+y,0)/a.length : null }
@@ -1033,11 +1238,7 @@ function renderDash() {
 
   // Average realised R-multiple across trades that have a stop set — the
   // risk-adjusted twin of $ Expectancy (positive = an edge in R terms).
-  const rList = trades.map(t => {
-    const r = calcRisk(t)
-    return (r && !r.breakeven && r.actualRiskPct > 0)
-      ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
-  }).filter(v => v != null)
+  const rList = trades.map(tradeR).filter(v => v != null)
   const avgR = rList.length ? rList.reduce((a, b) => a + b, 0) / rList.length : null
   const avgRCard = avgR != null ? [[
     'Avg R',
@@ -1046,15 +1247,148 @@ function renderDash() {
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
+  // Medians resist the outliers that drag averages around
+  const medPnl = median(trades.map(t => t.pnl))
+  const medCard = medPnl != null ? [[
+    'Median P&L',
+    `<span class="${medPnl >= 0 ? 'col-g' : 'col-r'}">${fmtMoney(medPnl)}</span>`,
+    'typical trade',
+    'The middle trade result — half your trades did better, half worse. Unlike Expectancy, one huge win or loss cannot move it'
+  ]] : []
+  const medR = median(rList)
+  const medRCard = medR != null ? [[
+    'Median R',
+    `<span class="${medR >= 0 ? 'col-g' : 'col-r'}">${medR >= 0 ? '+' : ''}${medR.toFixed(2)}R</span>`,
+    `${rList.length} trade${rList.length !== 1 ? 's' : ''} w/ stop`,
+    'The middle R-multiple — the outlier-resistant twin of Avg R'
+  ]] : []
+
+  // Total R: the whole log expressed in risk units
+  const totalRv = rList.reduce((a, b) => a + b, 0)
+  const totalRCard = rList.length ? [[
+    'Total R',
+    `<span class="${totalRv >= 0 ? 'col-g' : 'col-r'}">${totalRv >= 0 ? '+' : ''}${totalRv.toFixed(1)}R</span>`,
+    `${rList.length} trade${rList.length !== 1 ? 's' : ''} w/ stop`,
+    'Sum of realised R-multiples across trades with a stop — your whole edge expressed in units of risk'
+  ]] : []
+
+  // System Quality Number (Van Tharp): avg R ÷ stdev(R) × √N, needs ≥2 R values
+  let sqnCard = []
+  if (rList.length >= 2) {
+    const mean = totalRv / rList.length
+    const sd = Math.sqrt(rList.reduce((a, r) => a + (r - mean) ** 2, 0) / (rList.length - 1))
+    if (sd > 0) {
+      const sqn = (mean / sd) * Math.sqrt(rList.length)
+      const grade = sqn >= 2.5 ? 'excellent' : sqn >= 1.6 ? 'good' : sqn >= 0 ? 'below average' : 'losing'
+      sqnCard = [[
+        'System Quality',
+        `<span class="${sqn >= 2.5 ? 'col-g' : sqn >= 1.6 ? 'col-gold' : 'col-r'}">${sqn.toFixed(2)}</span>`,
+        `${grade} · σ ${sd.toFixed(2)}`,
+        'SQN = Avg R ÷ standard deviation of R × √trades. Rewards a steady edge, punishes wild swings. Under 1.6 below average · 1.6–2.5 good · above 2.5 excellent'
+      ]]
+    }
+  }
+
+  // Kelly criterion from win probability and payoff ratio (decided trades only)
+  let kellyCard = []
+  const decided = s.wins + s.losses
+  if (decided > 0 && isFinite(s.payoff) && s.payoff > 0) {
+    const p = s.wins / decided
+    const f = p - (1 - p) / s.payoff
+    kellyCard = [[
+      'Kelly %',
+      f > 0 ? `<span class="col-gold">${(f * 100).toFixed(1)}%</span>` : `<span class="col-r">—</span>`,
+      f > 0 ? `½-Kelly ${(f * 50).toFixed(1)}%` : 'no positive edge',
+      'Kelly fraction from your win rate and payoff ratio — the theoretical ceiling on risk per trade, not a target. Most traders size at half-Kelly or less'
+    ]]
+  }
+
+  // Recovery factor: total profit relative to the deepest equity drawdown
+  const recCard = [[
+    'Recovery Factor',
+    s.maxDD > 0
+      ? `<span class="${s.total / s.maxDD >= 1 ? 'col-g' : s.total >= 0 ? 'col-gold' : 'col-r'}">${(s.total / s.maxDD).toFixed(2)}</span>`
+      : `<span class="col-g">∞</span>`,
+    s.maxDD > 0 ? `vs -${fmtMoney(s.maxDD, false)} max DD` : 'no drawdown yet',
+    'Net P&L ÷ deepest peak-to-trough equity drawdown. How many times over you have earned back your worst losing stretch'
+  ]]
+
+  // Risk discipline: how much was actually risked vs the target
+  const riskPcts = trades.map(t => { const r = calcRisk(t); return r && !r.breakeven && r.actualRiskPct > 0 ? r.actualRiskPct : null }).filter(v => v != null)
+  let riskCards = []
+  if (riskPcts.length) {
+    const avgRisk = riskPcts.reduce((a, b) => a + b, 0) / riskPcts.length
+    const over = riskPcts.filter(v => v > settings.targetRisk).length
+    riskCards = [
+      ['Avg Risk %', `<span class="${avgRisk > settings.targetRisk ? 'col-r' : 'col-g'}">${avgRisk.toFixed(1)}%</span>`, `target ${settings.targetRisk}%`,
+        'Average percent of account actually risked per trade (from entry→stop distance), vs your target risk setting'],
+      ['Over-Risk Trades', `<span class="${over ? 'col-r' : 'col-g'}">${over}</span>`, `${((over / riskPcts.length) * 100).toFixed(0)}% of ${riskPcts.length} w/ stop`,
+        'Trades that risked more than your target — position-sizing discipline at a glance'],
+    ]
+  }
+
+  // Planned reward:risk across trades that had both SL and TP set
+  const rrs = trades.map(plannedRR).filter(v => v != null)
+  const rrCard = rrs.length ? [[
+    'Avg Planned R:R',
+    (() => { const rr = rrs.reduce((a, b) => a + b, 0) / rrs.length
+      return `<span class="${rr >= 2 ? 'col-gold' : rr >= 1 ? 'col-g' : 'col-r'}">${rr.toFixed(2)} : 1</span>` })(),
+    `${rrs.length} trade${rrs.length !== 1 ? 's' : ''} w/ SL+TP`,
+    'Average reward-to-risk you PLANNED (TP distance ÷ SL distance) on trades with both orders set. Compare with realised Avg R to see execution quality'
+  ]] : []
+
+  // Journal coverage — the habit metric
+  const journaled = trades.filter(t => hasNote(notes[t.id])).length
+  const jPct = trades.length ? (journaled / trades.length) * 100 : 0
+  const journalCard = [[
+    'Journaled',
+    `<span class="${jPct >= 67 ? 'col-g' : jPct >= 34 ? 'col-gold' : 'col-r'}">${journaled} / ${trades.length}</span>`,
+    `${jPct.toFixed(0)}% of trades`,
+    'How many trades carry a journal note. The review habit is where the edge compounds — aim high'
+  ]]
+
+  // Breakeven win rate: the win rate needed to break even at the current payoff
+  let beWrCard = []
+  if (s.wins && s.losses) {
+    const beWr = Math.abs(s.avgL) / (s.avgW + Math.abs(s.avgL)) * 100
+    beWrCard = [[
+      'Breakeven Win%',
+      `<span class="${s.wr >= beWr ? 'col-g' : 'col-r'}">${beWr.toFixed(1)}%</span>`,
+      `you win ${s.wr.toFixed(1)}%`,
+      'The win rate your avg win/loss sizes require just to break even. Stay above it and the math works for you'
+    ]]
+  }
+
+  // Total commission & swap paid — how much the broker took. Summed as
+  // absolute values so it reads as a positive "fees paid" figure regardless of
+  // whether the export stores commission as a negative cost or a positive fee.
+  const totalFees = trades.reduce((a, t) => a + Math.abs(t.commission || 0), 0)
+  const feeTradeCount = trades.filter(t => t.commission).length
+  const feesCard = totalFees > 0.0049 ? [[
+    'Total Fees',
+    `<span class="col-r">-${fmtMoney(totalFees, false)}</span>`,
+    `commission & swap · ${feeTradeCount} trade${feeTradeCount !== 1 ? 's' : ''}`,
+    'Total commission and swap paid across all trades. Your P&L figures are already net of these — this shows how much the broker took'
+  ]] : []
+
+  // Longest underwater stretch — most consecutive trades equity spent below a
+  // prior high-water mark. Pairs with Current DD; a long run = a slow recovery.
+  const uwCard = s.maxUW > 0 ? [[
+    'Longest UW',
+    `<span class="col-r">${s.maxUW}</span>`,
+    `trade${s.maxUW !== 1 ? 's' : ''} below peak`,
+    'The longest run of consecutive trades your equity stayed below a prior high-water mark (underwater). A long stretch signals a deep or slow recovery from drawdown'
+  ]] : []
+
   // Best / worst single trading day by net P&L — surfaces outlier days that
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
-  let dayCards = []
+  let dayCards = [], greenCard = [], activityCards = []
   if (dayRows.length) {
     const best  = dayRows.reduce((a, b) => b[1] > a[1] ? b : a)
     const worst = dayRows.reduce((a, b) => b[1] < a[1] ? b : a)
@@ -1063,35 +1397,118 @@ function renderDash() {
       ['Best Day',  `<span class="col-g">${fmtMoney(best[1])}</span>`,  fday(best[0]),  'Your single most profitable trading day (sum of all P&L on that calendar date)'],
       ['Worst Day', `<span class="col-r">${fmtMoney(worst[1])}</span>`, fday(worst[0]), 'Your single worst trading day (sum of all P&L on that calendar date)'],
     ]
+    // Green days: share of trading days that ended positive
+    const green = dayRows.filter(([, v]) => v > 0).length
+    const gPct = (green / dayRows.length) * 100
+    greenCard = [[
+      'Green Days',
+      `<span class="${gPct >= 50 ? 'col-g' : 'col-r'}">${gPct.toFixed(0)}%</span>`,
+      `${green} of ${dayRows.length} days`,
+      'Share of trading days with net-positive P&L. A day-level view of consistency — can differ a lot from per-trade win rate'
+    ]]
+    // Activity: P&L and trade count per distinct trading day
+    activityCards = [
+      ['Avg / Day', `<span class="${s.total >= 0 ? 'col-g' : 'col-r'}">${fmtMoney(s.total / dayRows.length)}</span>`, `${dayRows.length} trading day${dayRows.length !== 1 ? 's' : ''}`,
+        'Net P&L divided by distinct days traded — what an average day at the desk is worth'],
+      ['Trades / Day', `<span class="col-b">${(trades.length / dayRows.length).toFixed(1)}</span>`, 'activity gauge',
+        'Average number of trades per trading day — a quick overtrading check'],
+    ]
   }
+
+  // Current streak (breakeven ends it)
+  const streakCard = s.curStreak !== 0 ? [[
+    'Current Streak',
+    s.curStreak > 0 ? `<span class="col-g">${s.curStreak}W</span>` : `<span class="col-r">${-s.curStreak}L</span>`,
+    'most recent trades',
+    'Your live run of consecutive wins or losses — worth knowing before the next trade, tilt is real. Max Consec shows the all-time records'
+  ]] : []
+
+  // Return on the configured account balance
+  const retCard = settings.accountBalance > 0 ? [[
+    'Return %',
+    `<span class="${s.total >= 0 ? 'col-g' : 'col-r'}">${s.total >= 0 ? '+' : ''}${(s.total / settings.accountBalance * 100).toFixed(1)}%</span>`,
+    `on ${fmtMoney(settings.accountBalance, false)} balance`,
+    'Net P&L as a percentage of the account balance configured in Import → Account Settings'
+  ]] : []
 
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
+    ...beWrCard,
     ['Net P&L', `<span class="${s.total>=0?'col-g':'col-r'}">${fmtMoney(s.total)}</span>`, 'all trades', 'Sum of profit/loss across every trade, net of commission'],
+    ...retCard,
     ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross profit ÷ gross loss. Above 1.0 is profitable; 2.0+ is strong'],
+    ['Payoff Ratio', `<span class="${s.payoff>=1?'col-g':'col-r'}">${isFinite(s.payoff)?s.payoff.toFixed(2)+' : 1':'∞'}</span>`, 'avg win vs avg loss', 'Average winner ÷ average loser. Below 1 : 1 you need a high win rate; pairs with Breakeven Win%'],
     ['Avg Win', `<span class="col-g">${fmtMoney(s.avgW)}</span>`, 'per winner', 'Average profit on your winning trades'],
     ['Avg Loss', `<span class="col-r">${fmtMoney(s.avgL)}</span>`, 'per loser', 'Average loss on your losing trades'],
     ['Max Profit',   `<span class="col-g">${fmtMoney(s.best)}</span>`, 'single trade', 'Your single largest winning trade'],
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
+    ['Max DD (Equity)', s.maxDD > 0 ? `<span class="col-r">-${fmtMoney(s.maxDD, false)}</span>` : `<span class="col-g">${fmtMoney(0, false)}</span>`, 'peak → trough', 'The deepest fall in cumulative equity from any peak to the following trough — the classic drawdown metric (Max Drawdown card shows the worst single trade)'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ...medCard,
     ...avgRCard,
+    ...medRCard,
+    ...totalRCard,
+    ...sqnCard,
+    ...kellyCard,
+    recCard[0],
     ddCard,
+    ...uwCard,
     ...dayCards,
+    ...greenCard,
+    ...activityCards,
+    ...streakCard,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
+    ...riskCards,
+    ...rrCard,
+    ...journalCard,
+    ...feesCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
   ).join('')
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderDirBreakdown()
+  renderMonthBreakdown()
+  renderHourBreakdown()
+  renderRDistBreakdown()
+  renderCalendar()
   buildCharts(s)
 }
 
+// ── Shared breakdown-table machinery ──────
+// One row of aggregate stats for a group of trades
+function breakdownRow(name, ts) {
+  const n = ts.length
+  const wins = ts.filter(t => t.pnl > 0).length
+  const total = ts.reduce((a, t) => a + t.pnl, 0)
+  return { name, n, wr: (wins / n) * 100, total, avg: total / n, avgR: groupAvgR(ts) }
+}
+
+// Render rows as the standard .bdt mini-table (Trades / Win% / Avg R / Avg per
+// trade / Net P&L + magnitude bar). rowAttrs lets callers make rows clickable.
+function breakdownTable(rows, nameHeader, emptyMsg, rowAttrs) {
+  if (!rows.length) return `<div style="font-size:12px;color:var(--tx3)">${emptyMsg || 'No data'}</div>`
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  return `<table class="bdt">
+    <thead><tr><th>${nameHeader}</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade — the per-trade edge, not just the running total">Avg/Trade</th><th class="r" title="Average realised R-multiple for this group (trades with a stop only)">Avg R</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      return `<tr${rowAttrs ? rowAttrs(r) : ''}>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r">${fmtR(r.avgR)}</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
+}
+
 // Day-of-week performance — answers "am I better on certain weekdays?".
-// Groups by the weekday of each trade's entry; rows stay in Mon→Sun order
-// (only weekdays that actually traded are shown). Reuses .bdt / .bd-bar.
 function renderDowBreakdown() {
   const el = document.getElementById('ds-dow-bd'); if (!el) return
   const NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
@@ -1103,61 +1520,269 @@ function renderDowBreakdown() {
     const k = d.getDay();
     (groups[k] = groups[k] || []).push(t)
   })
-  const rows = ORDER.filter(k => groups[k]).map(k => {
-    const ts = groups[k]
-    const n = ts.length
-    const wins = ts.filter(t => t.pnl > 0).length
-    const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n }
+  el.innerHTML = breakdownTable(ORDER.filter(k => groups[k]).map(k => breakdownRow(NAMES[k], groups[k])), 'Day', 'No dated trades')
+}
+
+// Long vs short — many traders only have an edge one way
+function renderDirBreakdown() {
+  const el = document.getElementById('ds-dir-bd'); if (!el) return
+  const longs = trades.filter(t => t.side !== 'sell')
+  const shorts = trades.filter(t => t.side === 'sell')
+  const rows = []
+  if (longs.length) rows.push(breakdownRow('Long', longs))
+  if (shorts.length) rows.push(breakdownRow('Short', shorts))
+  el.innerHTML = breakdownTable(rows, 'Direction', 'No trades')
+}
+
+// Month-by-month consistency
+function renderMonthBreakdown() {
+  const el = document.getElementById('ds-month-bd'); if (!el) return
+  const groups = {}
+  trades.forEach(t => {
+    const d = dayKey(t.entryTime)
+    if (!/^\d{4}-\d{2}/.test(d)) return
+    const k = d.slice(0, 7);
+    (groups[k] = groups[k] || []).push(t)
   })
-  if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades</div>'; return }
-  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  const rows = Object.keys(groups).sort().map(k => {
+    // parse as LOCAL midnight — a bare 'YYYY-MM-01' parses as UTC and shifts
+    // the label back a month for users west of Greenwich
+    const lbl = new Date(k + '-01T00:00:00').toLocaleDateString('en-US', { month:'short', year:'2-digit' })
+    return breakdownRow(lbl, groups[k])
+  })
+  el.innerHTML = breakdownTable(rows, 'Month', 'No dated trades')
+}
+
+// Hour-of-day performance — session windows. Hidden for date-only imports
+// (all trades would collapse into a meaningless 00:00 row).
+function renderHourBreakdown() {
+  const card = document.getElementById('hour-card')
+  const el = document.getElementById('ds-hour-bd'); if (!el) return
+  const groups = {}
+  trades.forEach(t => {
+    if (!/\d:\d/.test(t.entryTime || '')) return   // skip date-only timestamps
+    const d = new Date(t.entryTime)
+    if (isNaN(d)) return
+    const k = d.getHours();
+    (groups[k] = groups[k] || []).push(t)
+  })
+  const hours = Object.keys(groups).map(Number).sort((a, b) => a - b)
+  if (hours.length < 2) { if (card) card.style.display = 'none'; return }
+  if (card) card.style.display = ''
+  el.innerHTML = breakdownTable(hours.map(h => breakdownRow(String(h).padStart(2, '0') + ':00', groups[h])), 'Hour', 'No timed trades')
+}
+
+// R-multiple distribution — a table histogram of results in risk units
+function renderRDistBreakdown() {
+  const card = document.getElementById('rdist-card')
+  const el = document.getElementById('ds-rdist-bd'); if (!el) return
+  const rs = trades.map(tradeR).filter(v => v != null)
+  if (!rs.length) {
+    if (card) card.style.display = 'none'
+    return
+  }
+  if (card) card.style.display = ''
+  const BUCKETS = [
+    ['≤ -2R',      v => v <= -2],
+    ['-2R … -1R',  v => v > -2 && v <= -1],
+    ['-1R … 0R',   v => v > -1 && v < 0],
+    ['0R … +1R',   v => v >= 0 && v < 1],
+    ['+1R … +2R',  v => v >= 1 && v < 2],
+    ['+2R … +3R',  v => v >= 2 && v < 3],
+    ['≥ +3R',      v => v >= 3],
+  ]
+  const counts = BUCKETS.map(([label, test], i) => ({ label, n: rs.filter(test).length, loss: i < 3 }))
+  const maxN = Math.max(1, ...counts.map(c => c.n))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
-    <tbody>${rows.map(r => {
-      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
-      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+    <thead><tr><th>Bucket</th><th class="r">Trades</th><th class="r">Share</th><th style="width:45%"></th></tr></thead>
+    <tbody>${counts.map(c => {
+      const col = c.loss ? 'var(--red)' : 'var(--green)'
+      const w = Math.round(c.n / maxN * 100)
       return `<tr>
-        <td class="bd-name">${r.name}</td>
-        <td class="r">${r.n}</td>
-        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
-        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
-        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+        <td class="bd-name">${c.label}</td>
+        <td class="r">${c.n}</td>
+        <td class="r" style="color:var(--tx2)">${((c.n / rs.length) * 100).toFixed(0)}%</td>
+        <td><span class="bd-bar" style="width:${w}%;background:${col};margin-left:0"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
 }
 
-// Per-symbol performance mini-table — which instruments actually make money.
-// Reuses the Strategy view's breakdown table styling (.bdt / .bd-bar).
+// Per-symbol performance — sortable headers, clickable rows drill into Trades
+let symBdSort = 'total', symBdDir = 'desc'
 function renderSymbolBreakdown() {
   const el = document.getElementById('ds-symbol-bd'); if (!el) return
   const groups = {}
   trades.forEach(t => { (groups[t.symbol || 'UNKNOWN'] = groups[t.symbol || 'UNKNOWN'] || []).push(t) })
-  const rows = Object.entries(groups).map(([name, ts]) => {
-    const n = ts.length
-    const wins = ts.filter(t => t.pnl > 0).length
-    const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name, n, wr: (wins / n) * 100, total, avg: total / n }
-  }).sort((a, b) => b.total - a.total)
+  const rows = Object.entries(groups).map(([name, ts]) => breakdownRow(name, ts))
+  rows.sort((a, b) => {
+    let va = a[symBdSort], vb = b[symBdSort]
+    if (va == null) va = -Infinity; if (vb == null) vb = -Infinity
+    if (typeof va === 'string') { va = va.toLowerCase(); vb = String(vb).toLowerCase() }
+    return symBdDir === 'asc' ? (va > vb ? 1 : va < vb ? -1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0)
+  })
+  if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No trades</div>'; return }
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  const hh = (col, label, extra) => {
+    const arrow = symBdSort === col ? (symBdDir === 'asc' ? ' ↑' : ' ↓') : ''
+    return `<th class="${col === 'name' ? '' : 'r'}" style="cursor:pointer" onclick="sortSymbolBd('${col}')"${extra ? ` title="${extra}"` : ''}>${label}${arrow}</th>`
+  }
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr>${hh('name','Symbol')}${hh('n','Trades')}${hh('wr','Win%')}${hh('avg','Avg/Trade','Average $ result per trade — the per-trade edge, not just the running total')}${hh('avgR','Avg R','Average realised R-multiple for this symbol (trades with a stop only)')}${hh('total','Net P&L')}</tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
-      return `<tr>
+      return `<tr data-sym="${r.name}" style="cursor:pointer" title="Click to see ${r.name} trades">
         <td class="bd-name">${r.name}</td>
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
+  el.querySelectorAll('tr[data-sym]').forEach(tr =>
+    tr.addEventListener('click', () => drillToSymbol(tr.dataset.sym))
+  )
+}
+
+window.sortSymbolBd = col => {
+  if (symBdSort === col) symBdDir = symBdDir === 'asc' ? 'desc' : 'asc'
+  else { symBdSort = col; symBdDir = col === 'name' ? 'asc' : 'desc' }
+  renderSymbolBreakdown()
+}
+
+// Row click on By-Symbol: open Trades pre-filtered to that instrument.
+// Clears the other filters so stale side/result/date filters can't hide rows.
+function drillToSymbol(sym) {
+  ;['f-side','f-res','f-note','f-from','f-to'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '' })
+  const q = document.getElementById('f-q'); if (q) q.value = sym
+  page = 1
+  renderTrades(); saveTradeFilters()
+  go('trades')
+}
+
+// ── Monthly P&L calendar ──────────────────
+let calYM = null   // 'YYYY-MM' currently shown; null = latest traded month
+
+function latestTradedYM() {
+  const days = Object.keys(calDayData())
+  return days.length ? days.sort().pop().slice(0, 7) : null
+}
+
+// day → {pnl, n} across all trades
+function calDayData() {
+  const m = {}
+  trades.forEach(t => {
+    const d = dayKey(t.entryTime)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return
+    if (!m[d]) m[d] = { pnl: 0, n: 0 }
+    m[d].pnl += t.pnl; m[d].n++
+  })
+  return m
+}
+
+function calShift(delta) {
+  const ym = calYM || latestTradedYM()
+  if (!ym) return
+  const d = new Date(ym + '-01T00:00:00')
+  d.setMonth(d.getMonth() + delta)
+  calYM = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  renderCalendar()
+}
+
+function renderCalendar() {
+  const wrap = document.getElementById('ds-cal'); if (!wrap) return
+  const data = calDayData()
+  const card = document.getElementById('cal-card')
+  if (!Object.keys(data).length) { if (card) card.style.display = 'none'; return }
+  if (card) card.style.display = ''
+  const ym = calYM || latestTradedYM()
+  const [y, mo] = ym.split('-').map(Number)
+  const first = new Date(y, mo - 1, 1)
+  const daysInMonth = new Date(y, mo, 0).getDate()
+  // local calendar day, not UTC — toISOString would mark the wrong cell off-UTC
+  const now = new Date()
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+  document.getElementById('cal-label').textContent =
+    first.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+
+  // Monday-first grid
+  const lead = (first.getDay() + 6) % 7
+  const cells = []
+  for (let i = 0; i < lead; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  while (cells.length % 7) cells.push(null)
+
+  let monthPnl = 0, tradedDays = 0
+  const weekRows = []
+  for (let w = 0; w < cells.length / 7; w++) {
+    let weekPnl = 0, weekTraded = false
+    const tds = cells.slice(w * 7, w * 7 + 7).map(d => {
+      if (d == null) return '<td class="blank"></td>'
+      const k = `${ym}-${String(d).padStart(2, '0')}`
+      const v = data[k]
+      const today = k === todayKey ? ' today' : ''
+      if (!v) return `<td class="day${today}"><span class="cal-d">${d}</span></td>`
+      monthPnl += v.pnl; tradedDays++; weekPnl += v.pnl; weekTraded = true
+      const cls = v.pnl > 0 ? 'win' : v.pnl < 0 ? 'loss' : ''
+      const col = v.pnl > 0 ? 'var(--green)' : v.pnl < 0 ? 'var(--red)' : 'var(--tx2)'
+      return `<td class="day ${cls}${today}" data-day="${k}" title="Click to see this day's trades">
+        <span class="cal-d">${d}</span>
+        <div class="cal-v" style="color:${col}">${fmtMoney(v.pnl)}</div>
+        <div class="cal-n">${v.n} trade${v.n !== 1 ? 's' : ''}</div>
+      </td>`
+    })
+    const wkCol = weekPnl > 0 ? 'var(--green)' : weekPnl < 0 ? 'var(--red)' : 'var(--tx3)'
+    tds.push(`<td class="wk" style="color:${wkCol}">${weekTraded ? fmtMoney(weekPnl) : ''}</td>`)
+    weekRows.push(`<tr>${tds.join('')}</tr>`)
+  }
+
+  const totCol = monthPnl > 0 ? 'var(--green)' : monthPnl < 0 ? 'var(--red)' : 'var(--tx3)'
+  document.getElementById('cal-total').innerHTML = tradedDays
+    ? `— <span style="color:${totCol}">${fmtMoney(monthPnl)}</span> over ${tradedDays} day${tradedDays !== 1 ? 's' : ''}`
+    : '— no trades this month'
+
+  wrap.innerHTML = `<table class="cal">
+    <thead><tr>${['Mon','Tue','Wed','Thu','Fri','Sat','Sun','Wk'].map(d => `<th>${d}</th>`).join('')}</tr></thead>
+    <tbody>${weekRows.join('')}</tbody></table>`
+
+  wrap.querySelectorAll('td[data-day]').forEach(td =>
+    td.addEventListener('click', () => {
+      const k = td.dataset.day
+      ;['f-q','f-side','f-res','f-note'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '' })
+      document.getElementById('f-from').value = k
+      document.getElementById('f-to').value = k
+      page = 1
+      renderTrades(); saveTradeFilters()
+      go('trades')
+    })
+  )
 }
 
 let dailyRange = '1M'
 // Remember the last-used Daily P&L range (1W / 1M / All) across restarts.
 const DAILY_RANGE_KEY = 'tradelog.dailyRange'
+
+// Chart.js plugin factory: draw a big value + small label in a doughnut hole
+function donutCenter(value, label) {
+  return {
+    id: 'donutCenter',
+    afterDraw(chart) {
+      const { ctx, chartArea } = chart
+      if (!chartArea) return
+      const x = (chartArea.left + chartArea.right) / 2
+      const y = (chartArea.top + chartArea.bottom) / 2
+      ctx.save()
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillStyle = '#dde2f0'; ctx.font = "600 20px 'JetBrains Mono'"
+      ctx.fillText(value, x, y - 7)
+      ctx.fillStyle = '#7889a8'; ctx.font = "10px 'JetBrains Mono'"
+      ctx.fillText(label, x, y + 13)
+      ctx.restore()
+    }
+  }
+}
 
 function buildCharts(s) {
   const sorted = [...trades].sort((a,b)=>new Date(a.entryTime)-new Date(b.entryTime))
@@ -1175,7 +1800,7 @@ function buildCharts(s) {
     titleFont:{family:'JetBrains Mono',size:10},
     bodyFont:{family:'JetBrains Mono',size:12}
   }
-  const yAxis = { grid:{color:'#1c2333'}, ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:10}} }
+  const yAxis = { grid:{color:'#1c2333'}, ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},callback:fmtAxis} }
 
   // Cumulative P&L — with date + value tooltip on hover
   if (charts.pnl) charts.pnl.destroy()
@@ -1200,13 +1825,12 @@ function buildCharts(s) {
             label: item => {
               if (item.datasetIndex === 1) {
                 const dd = peakData[item.dataIndex] - cumData[item.dataIndex]
-                return `Peak: ${item.raw>=0?'+':''}${item.raw.toFixed(2)}` + (dd>0 ? `  ·  drawdown -${dd.toFixed(2)}` : '')
+                return `Peak: ${fmtMoney(item.raw)}` + (dd>0 ? `  ·  drawdown -${fmtMoney(dd, false)}` : '')
               }
-              const v = item.raw
               const trade = sorted[item.dataIndex]
               return [
-                `Cumulative: ${v>=0?'+':''}${v.toFixed(2)}`,
-                `This trade: ${trade.pnl>=0?'+':''}${trade.pnl.toFixed(2)} · ${trade.symbol}`
+                `Cumulative: ${fmtMoney(item.raw)}`,
+                `This trade: ${fmtMoney(trade.pnl)} · ${trade.symbol}`
               ]
             }
           }
@@ -1216,17 +1840,55 @@ function buildCharts(s) {
     }
   })
 
-  // Win/Loss donut
+  // Win/Loss donut — win rate readout in the hole
   if (charts.wl) charts.wl.destroy()
   const be = s.n - s.wins - s.losses
   charts.wl = new Chart(document.getElementById('c-wl').getContext('2d'), {
     type:'doughnut',
     data:{ labels:['Wins','Losses','Break Even'], datasets:[{data:[s.wins,s.losses,be],backgroundColor:['#00e599','#ff3d6b','#4f8cff'],borderWidth:0,hoverOffset:6}] },
     options:{ responsive:true,maintainAspectRatio:false,cutout:'68%',
-      plugins:{ legend:{display:true,position:'bottom',labels:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},boxWidth:10,padding:10}},tooltip:tipBase } }
+      plugins:{ legend:{display:true,position:'bottom',labels:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},boxWidth:10,padding:10}},tooltip:tipBase } },
+    plugins:[donutCenter(`${s.wr.toFixed(0)}%`, 'win rate')]
   })
 
   buildDailyChart(tipBase, yAxis)
+  buildDistChart(tipBase, yAxis)
+}
+
+// P&L distribution histogram — 11 equal-width bins across the result range
+function buildDistChart(tipBase, yAxis) {
+  const cv = document.getElementById('c-dist'); if (!cv) return
+  if (charts.dist) charts.dist.destroy()
+  const vals = trades.map(t => t.pnl)
+  if (!vals.length) return
+  const lo = Math.min(...vals), hi = Math.max(...vals)
+  const BINS = 11
+  const span = hi - lo || 1
+  const width = span / BINS
+  const bins = Array.from({ length: BINS }, (_, i) => ({ lo: lo + i * width, hi: lo + (i + 1) * width, n: 0 }))
+  vals.forEach(v => {
+    let i = Math.floor((v - lo) / width)
+    if (i >= BINS) i = BINS - 1
+    if (i < 0) i = 0
+    bins[i].n++
+  })
+  const labels = bins.map(b => fmtAxis((b.lo + b.hi) / 2))
+  charts.dist = new Chart(cv.getContext('2d'), {
+    type:'bar',
+    data:{ labels, datasets:[{
+      data:bins.map(b => b.n),
+      backgroundColor:bins.map(b => (b.lo + b.hi) / 2 >= 0 ? '#00e59933' : '#ff3d6b33'),
+      borderColor:bins.map(b => (b.lo + b.hi) / 2 >= 0 ? '#00e599' : '#ff3d6b'),
+      borderWidth:1, borderRadius:3
+    }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{...tipBase, callbacks:{
+        title: items => { const b = bins[items[0].dataIndex]; return `${fmtMoney(b.lo, false)} … ${fmtMoney(b.hi, false)}` },
+        label: item => `${item.raw} trade${item.raw !== 1 ? 's' : ''}`
+      }}},
+      scales:{ x:{ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:9},maxRotation:45},grid:{display:false}},
+               y:{...yAxis, ticks:{...yAxis.ticks, precision:0, callback:v=>v}} } }
+  })
 }
 
 function buildDailyChart(tipBase, yAxis) {
@@ -1242,13 +1904,13 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
 
   if (!tipBase) tipBase = { backgroundColor:'#131920',borderColor:'#1c2333',borderWidth:1,titleColor:'#7889a8',bodyColor:'#dde2f0',titleFont:{family:'JetBrains Mono',size:10},bodyFont:{family:'JetBrains Mono',size:12} }
-  if (!yAxis)   yAxis   = { grid:{color:'#1c2333'}, ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:10}} }
+  if (!yAxis)   yAxis   = { grid:{color:'#1c2333'}, ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},callback:fmtAxis} }
 
   if (charts.daily) charts.daily.destroy()
   charts.daily = new Chart(document.getElementById('c-daily').getContext('2d'), {
@@ -1257,7 +1919,7 @@ function buildDailyChart(tipBase, yAxis) {
     options:{ responsive:true,maintainAspectRatio:false,
       plugins:{ legend:{display:false}, tooltip:{...tipBase, callbacks:{
         title: items => items[0].label,
-        label: item => `P&L: ${item.raw>=0?'+':''}${item.raw.toFixed(2)}`
+        label: item => `P&L: ${fmtMoney(item.raw)}`
       }}},
       scales:{ x:{ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:9},maxRotation:45},grid:{display:false}}, y:yAxis } }
   })
@@ -1273,15 +1935,24 @@ function getFiltered() {
   const q    = (document.getElementById('f-q')?.value||'').toLowerCase()
   const side = document.getElementById('f-side')?.value||''
   const res  = document.getElementById('f-res')?.value||''
+  const note = document.getElementById('f-note')?.value||''
   const frm  = document.getElementById('f-from')?.value||''
   const to   = document.getElementById('f-to')?.value||''
 
   let list = [...trades]
 
-  // Sort
+  // Sort — computed columns (hold, riskPct) derive their value per trade;
+  // trades without the data sink to the bottom in either direction (the
+  // missing-value sentinel flips with the sort direction).
+  const missing = sortDir === 'asc' ? Infinity : -Infinity
+  const sortVal = t => {
+    if (sortCol === 'entryTime') return new Date(t.entryTime) || 0
+    if (sortCol === 'hold')      { const v = holdMs(t); return v == null ? missing : v }
+    if (sortCol === 'riskPct')   { const r = calcRisk(t); return (r && !r.breakeven && r.actualRiskPct > 0) ? r.actualRiskPct : missing }
+    return t[sortCol]
+  }
   list.sort((a,b) => {
-    let va = a[sortCol], vb = b[sortCol]
-    if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    const va = sortVal(a), vb = sortVal(b)
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -1293,68 +1964,116 @@ function getFiltered() {
     if (side === 'sell' && t.side !== 'sell') return false
     if (res  === 'win'  && t.pnl <= 0) return false
     if (res  === 'loss' && t.pnl >= 0) return false
+    if (note === 'yes' && !hasNote(notes[t.id])) return false
+    if (note === 'no'  &&  hasNote(notes[t.id])) return false
     if (frm  && (t.entryTime||'') < frm) return false
     if (to   && (t.entryTime||'') > to + 'z') return false
     return true
   })
 }
 
+// Any filter narrowing the Trades list right now?
+function anyTradeFilterActive() {
+  return ['f-q','f-side','f-res','f-note','f-from','f-to']
+    .some(id => (document.getElementById(id)?.value || '') !== '')
+}
+
+function clearTradeFilters() {
+  ;['f-q','f-side','f-res','f-note','f-from','f-to'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = ''
+  })
+  page = 1; renderTrades(); saveTradeFilters()
+}
+
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  syncTradePresetBtns()
+
+  // Sub-header: whole-filtered-set summary — count, W/L split, net, win rate,
+  // labeled "filtered" when a filter is narrowing the list.
+  const sub = document.getElementById('tr-sub')
+  if (filtered.length) {
+    const w = filtered.filter(t => t.pnl > 0).length
+    const l = filtered.filter(t => t.pnl < 0).length
+    const net = filtered.reduce((a, t) => a + t.pnl, 0)
+    const isFilt = filtered.length !== trades.length
+    sub.innerHTML = `${filtered.length} trade${filtered.length !== 1 ? 's' : ''} · ${w}W / ${l}L · ` +
+      `<span class="${net >= 0 ? 'col-g' : 'col-r'}" title="Net P&L of the trades currently shown">${fmtMoney(net)}</span> · ` +
+      `${filtered.length ? ((w / filtered.length) * 100).toFixed(0) : 0}% win` +
+      `<span style="color:var(--tx3)"> · ${isFilt ? 'filtered' : 'all trades'}</span>`
+  } else {
+    sub.textContent = '0 trades'
+  }
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
-  if (!filtered.length) { em.style.display='flex'; wr.style.display='none'; return }
+  if (!filtered.length) {
+    // Filter-aware empty state: importing help vs "your filters hid everything"
+    if (trades.length && anyTradeFilterActive()) {
+      em.innerHTML = `<div class="empty-icon">🔍</div>
+        <div class="empty-title">No trades match your filters</div>
+        <div class="empty-sub">${trades.length} trade${trades.length !== 1 ? 's are' : ' is'} hidden by the current filters</div>
+        <button class="btn btn-g" style="margin-top:16px" onclick="clearTradeFilters()">Clear filters</button>`
+    } else {
+      em.innerHTML = `<div class="empty-icon">📋</div>
+        <div class="empty-title">No trades found</div>
+        <div class="empty-sub">Import a CSV to get started</div>`
+    }
+    em.style.display='flex'; wr.style.display='none'; return
+  }
   em.style.display='none'; wr.style.display='block'
 
-  const pages = Math.ceil(filtered.length / PG)
+  const pages = Math.max(1, Math.ceil(filtered.length / tradePageSize))
   if (page > pages) page = 1
-  const slice = filtered.slice((page-1)*PG, page*PG)
+  const slice = filtered.slice((page-1)*tradePageSize, page*tradePageSize)
 
-  const fp = (n, dec=5) => {
-    if (!n) return '—'
-    const s = n.toFixed(dec).replace(/\.?0+$/, '')
-    return s
+  // Escape a note preview for use inside a title="" attribute
+  const tip = n => {
+    const p = notePreview(n).replace(/\s+/g, ' ').trim().slice(0, 160)
+    return p ? p.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;') : ''
   }
 
   document.getElementById('tr-body').innerHTML = slice.map((t, i) => {
-    const idx  = (page-1)*PG + i + 1
+    const idx  = (page-1)*tradePageSize + i + 1
     const pc   = t.pnl > 0 ? 'pnl-p' : t.pnl < 0 ? 'pnl-n' : ''
     const ps   = fmtMoney(t.pnl)
     const risk = calcRisk(t)
-    const slStr      = t.slPrice ? fp(t.slPrice) : '<span style="color:var(--tx3)">—</span>'
+    const slStr      = t.slPrice ? fmtPrice(t.slPrice) : '<span style="color:var(--tx3)">—</span>'
     const riskStr    = risk
       ? (risk.breakeven ? `<span style="color:var(--blue)">BE</span>` : `<span class="${risk.actualRiskPct > settings.targetRisk ? 'col-r' : 'col-g'}">${risk.actualRiskPct.toFixed(1)}%</span>`)
       : '<span style="color:var(--tx3)">—</span>'
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
+    const hold = fdur(t.entryTime, t.exitTime)
+    const noteTip = tip(notes[t.id])
     return `<tr data-id="${t.id}">
       <td style="color:var(--tx3)">${idx}</td>
       <td style="color:var(--tx2);white-space:nowrap">${fdt(t.entryTime)}</td>
       <td style="font-weight:600">${t.symbol}</td>
       <td><span class="badge ${t.side==='buy'?'bb':'bs'}">${t.side==='buy'?'Buy':'Sell'}</span></td>
-      <td style="color:var(--tx2)">${fp(t.entryPrice)}</td>
-      <td style="color:var(--tx2)">${fp(t.exitPrice)}</td>
-      <td>${slStr}</td>
-      <td>${t.tpPrice ? fp(t.tpPrice) : '<span style="color:var(--tx3)">—</span>'}</td>
-      <td style="color:var(--tx2)">${t.qty}</td>
-      <td>${riskStr}</td>
-
-      <td class="${pc}">${ps}${rLine}</td>
-      <td><span class="ni ${hasNote(notes[t.id])?'has':''}">✎</span></td>
+      <td class="num" style="color:var(--tx2)">${fmtPrice(t.entryPrice)}</td>
+      <td class="num" style="color:var(--tx2)">${fmtPrice(t.exitPrice)}</td>
+      <td class="num">${slStr}</td>
+      <td class="num">${t.tpPrice ? fmtPrice(t.tpPrice) : '<span style="color:var(--tx3)">—</span>'}</td>
+      <td class="num" style="color:var(--tx2)">${fmtQty(t.qty)}</td>
+      <td class="num">${riskStr}</td>
+      <td class="num" style="color:var(--tx2);white-space:nowrap">${hold || '<span style="color:var(--tx3)">—</span>'}</td>
+      <td class="num ${pc}">${ps}${rLine}</td>
+      <td><span class="ni ${hasNote(notes[t.id])?'has':''}" title="${noteTip || 'Click the row to add a note'}">✎</span></td>
     </tr>`
   }).join('')
 
+  const from = (page-1)*tradePageSize + 1
+  const to = Math.min(filtered.length, page*tradePageSize)
   document.getElementById('pg').innerHTML = `
-    <span>${filtered.length} trades</span><span class="sep"></span>
-    <button class="pb" onclick="chPg(-1)" ${page<=1?'disabled':''}>←</button>
+    <span>Showing ${from}–${to} of ${filtered.length}</span><span class="sep"></span>
+    <button class="pb" onclick="goPg(1)" ${page<=1?'disabled':''} title="First page">«</button>
+    <button class="pb" onclick="chPg(-1)" ${page<=1?'disabled':''} title="Previous page (←)">←</button>
     <span>Page ${page} / ${pages}</span>
-    <button class="pb" onclick="chPg(1)" ${page>=pages?'disabled':''}>→</button>
+    <button class="pb" onclick="chPg(1)" ${page>=pages?'disabled':''} title="Next page (→)">→</button>
+    <button class="pb" onclick="goPg(${pages})" ${page>=pages?'disabled':''} title="Last page">»</button>
   `
 
   document.querySelectorAll('#tr-body tr').forEach(tr =>
@@ -1362,7 +2081,43 @@ function renderTrades() {
   )
 }
 
-window.chPg = (d) => { const p=Math.ceil(filtered.length/PG); page=Math.max(1,Math.min(p,page+d)); renderTrades() }
+window.chPg = (d) => {
+  const p = Math.max(1, Math.ceil(filtered.length/tradePageSize))
+  page = Math.max(1, Math.min(p, page+d)); renderTrades()
+  document.getElementById('tr-wrap')?.scrollIntoView({ block:'start' })
+}
+window.goPg = (p) => {
+  const max = Math.max(1, Math.ceil(filtered.length/tradePageSize))
+  page = Math.max(1, Math.min(max, p)); renderTrades()
+  document.getElementById('tr-wrap')?.scrollIntoView({ block:'start' })
+}
+
+// ── Quick date-range presets (Trades) ─────
+function tradePresetRange(range) {
+  const now = new Date()
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  const today = iso(now)
+  if (range === 'today') return [today, today]
+  if (range === 'week')  { const d = new Date(now); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return [iso(d), today] }
+  if (range === 'month') return [today.slice(0, 8) + '01', today]
+  if (range === 'ytd')   return [today.slice(0, 5) + '01-01', today]
+  return ['', '']
+}
+function setTradeDateRange(range) {
+  const [from, to] = tradePresetRange(range)
+  document.getElementById('f-from').value = from
+  document.getElementById('f-to').value = to
+  page = 1; renderTrades(); saveTradeFilters()
+}
+// Highlight a preset button when the date inputs exactly match its range
+function syncTradePresetBtns() {
+  const from = document.getElementById('f-from')?.value || ''
+  const to   = document.getElementById('f-to')?.value || ''
+  document.querySelectorAll('.tr-range-btn').forEach(b => {
+    const [pf, pt] = tradePresetRange(b.dataset.range)
+    b.classList.toggle('on', !!from && from === pf && to === pt)
+  })
+}
 
 // ── Export filtered trades to CSV ─────────
 // Exports whatever the current filters/sort produce — including the
@@ -1374,19 +2129,30 @@ function exportTradesCSV() {
     const s = v == null ? '' : String(v)
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
   }
-  const header = ['#','Entry Time','Exit Time','Symbol','Side','Entry Price','Exit Price','SL Price','TP Price','Qty','Risk %','R Multiple','Net P&L','Commission']
+  // Running balance per trade id, computed chronologically so the right value
+  // appears on each row no matter how the export happens to be sorted.
+  const balById = {}
+  let bal = settings.accountBalance || 0
+  ;[...list].sort((a, b) => new Date(a.entryTime) - new Date(b.entryTime)).forEach(t => {
+    bal += t.pnl; balById[t.id] = +bal.toFixed(2)
+  })
+  const header = ['#','Entry Time','Exit Time','Hold Time','Symbol','Side','Entry Price','Exit Price','SL Price','TP Price','Qty','Risk %','R Multiple','Net P&L','Commission','Balance']
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
-      : ''
-    return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
-            t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
+    const rMult = tradeR(t)
+    return [i+1, t.entryTime, t.exitTime, fdur(t.entryTime, t.exitTime) || '', t.symbol, t.side, t.entryPrice, t.exitPrice,
+            t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult != null ? +rMult.toFixed(2) : '', t.pnl, t.commission || 0, balById[t.id]]
       .map(esc).join(',')
   })
+  // Totals footer: whole-export sums where summing makes sense
+  const totR = list.map(tradeR).filter(v => v != null).reduce((a, b) => a + b, 0)
+  const totPnl = list.reduce((a, t) => a + t.pnl, 0)
+  const totComm = list.reduce((a, t) => a + (t.commission || 0), 0)
+  rows.push(['TOTAL','','','','','','','','','','','', +totR.toFixed(2), +totPnl.toFixed(2), +totComm.toFixed(2), `${list.length} trades`].map(esc).join(','))
   const csv  = [header.join(','), ...rows].join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  // UTF-8 BOM so Excel detects the encoding instead of mangling symbols
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href = url
@@ -1403,8 +2169,8 @@ function saveTradeFilters() {
   try {
     const v = id => document.getElementById(id)?.value || ''
     localStorage.setItem(TR_FILTERS_KEY, JSON.stringify({
-      q: v('f-q'), side: v('f-side'), res: v('f-res'),
-      from: v('f-from'), to: v('f-to'), sortCol, sortDir
+      q: v('f-q'), side: v('f-side'), res: v('f-res'), note: v('f-note'),
+      from: v('f-from'), to: v('f-to'), sortCol, sortDir, pageSize: tradePageSize
     }))
   } catch {}
 }
@@ -1413,10 +2179,14 @@ function restoreTradeFilters() {
     const s = JSON.parse(localStorage.getItem(TR_FILTERS_KEY) || 'null')
     if (!s) return
     const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
-    set('f-q', s.q); set('f-side', s.side); set('f-res', s.res)
+    set('f-q', s.q); set('f-side', s.side); set('f-res', s.res); set('f-note', s.note)
     set('f-from', s.from); set('f-to', s.to)
     if (s.sortCol) sortCol = s.sortCol
     if (s.sortDir) sortDir = s.sortDir
+    if ([25, 50, 100, 250].includes(s.pageSize)) {
+      tradePageSize = s.pageSize
+      set('f-pagesize', String(s.pageSize))
+    }
   } catch {}
 }
 function applyTradeSortIndicator() {
@@ -1440,13 +2210,15 @@ const J_LABELS = {
 function hasNote(n) {
   if (!n) return false
   if (typeof n === 'string') return n.trim().length > 0
-  return J_FIELDS.some(f => n[f] && n[f].trim().length > 0)
+  // structure is 'yes'/'no'; text fields must be non-empty strings (tolerate
+  // foreign shapes so one odd record can't crash a render pass)
+  return J_FIELDS.some(f => typeof n[f] === 'string' && n[f].trim().length > 0)
 }
 
 function notePreview(n) {
   if (!n) return ''
   if (typeof n === 'string') return n
-  return J_FIELDS.map(f => n[f]).find(v => v && v.trim()) || ''
+  return J_FIELDS.map(f => n[f]).find(v => typeof v === 'string' && v.trim()) || ''
 }
 
 // Full searchable text of a note (all sections joined) for journal keyword search
@@ -1459,7 +2231,7 @@ function noteText(n) {
 function filledCount(n) {
   if (!n) return 0
   if (typeof n === 'string') return n.trim() ? 1 : 0
-  return J_FIELDS.filter(f => n[f] && n[f].trim()).length
+  return J_FIELDS.filter(f => typeof n[f] === 'string' && n[f].trim()).length
 }
 
 function populateJournalSymbols() {
@@ -1475,17 +2247,48 @@ function clearJournalFilters() {
   const qEl = document.getElementById('jf-q'); if (qEl) qEl.value = ''
   document.getElementById('jf-symbol').value = ''
   document.getElementById('jf-side').value = ''
+  const so = document.getElementById('jf-sort'); if (so) so.value = 'newest'
   document.getElementById('jf-date-from').value = ''
   document.getElementById('jf-date-to').value = ''
+  jnPendingSymbol = null
+  saveJournalFilters()
   renderJournal()
 }
 
-function renderJournal() {
-  populateJournalSymbols()
+// ── Journal filter persistence ────────────
+// Same pattern as the Trades/Strategy views; the dynamically rebuilt symbol
+// select restores via a one-shot pending value applied in populateJournalSymbols.
+const JN_FILTERS_KEY = 'tradelog.journalFilters'
+let jnPendingSymbol = null
+function saveJournalFilters() {
+  try {
+    const v = id => document.getElementById(id)?.value || ''
+    localStorage.setItem(JN_FILTERS_KEY, JSON.stringify({
+      q: v('jf-q'), symbol: v('jf-symbol'), side: v('jf-side'),
+      sort: v('jf-sort'), from: v('jf-date-from'), to: v('jf-date-to')
+    }))
+  } catch {}
+}
+function restoreJournalFilters() {
+  try {
+    const s = JSON.parse(localStorage.getItem(JN_FILTERS_KEY) || 'null')
+    if (!s) return
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
+    set('jf-q', s.q); set('jf-side', s.side); set('jf-sort', s.sort)
+    set('jf-date-from', s.from); set('jf-date-to', s.to)
+    jnPendingSymbol = s.symbol || null
+  } catch {}
+}
+// Filter inputs call this (render + persist)
+function onJournalFilter() { renderJournal(); saveJournalFilters() }
 
+// The currently filtered + sorted journal entries — single source of truth
+// shared by the list render, the summary strip, and the Markdown export.
+function getJournalFiltered() {
   const q          = (document.getElementById('jf-q')?.value || '').toLowerCase().trim()
   const symFilter  = document.getElementById('jf-symbol')?.value || ''
   const sideFilter = document.getElementById('jf-side')?.value || ''
+  const sort       = document.getElementById('jf-sort')?.value || 'newest'
   const dateFrom   = document.getElementById('jf-date-from')?.value  // 'YYYY-MM-DD' or ''
   const dateTo     = document.getElementById('jf-date-to')?.value
 
@@ -1505,11 +2308,74 @@ function renderJournal() {
     return true
   })
 
+  noted.sort((a, b) => {
+    if (sort === 'best')  return b.pnl - a.pnl
+    if (sort === 'worst') return a.pnl - b.pnl
+    const da = new Date(a.entryTime) || 0, db = new Date(b.entryTime) || 0
+    return sort === 'oldest' ? da - db : db - da
+  })
+  return noted
+}
+
+// Rule-adherence summary from the structured 交易结构 yes/no field:
+// does following the system actually pay?
+function renderJournalSummary(noted) {
+  const el = document.getElementById('jn-summary'); if (!el) return
+  const rated = noted.filter(t => typeof notes[t.id] === 'object' && (notes[t.id].structure === 'yes' || notes[t.id].structure === 'no'))
+  if (!rated.length) { el.style.display = 'none'; return }
+  const followed = rated.filter(t => notes[t.id].structure === 'yes')
+  const broke    = rated.filter(t => notes[t.id].structure === 'no')
+  const pct = (followed.length / rated.length) * 100
+  const avg = ts => ts.length ? ts.reduce((a, t) => a + t.pnl, 0) / ts.length : null
+  const avgF = avg(followed), avgB = avg(broke)
+  const items = [
+    `<div class="jn-sum-item" title="Share of rated entries where 交易结构是否完全符合系统 = 是">
+      <div class="jn-sum-k">System Followed</div>
+      <div class="jn-sum-v" style="color:${pct >= 50 ? 'var(--green)' : 'var(--red)'}">${pct.toFixed(0)}%<span style="font-size:11px;color:var(--tx3)"> of ${rated.length} rated</span></div>
+    </div>`,
+    avgF != null ? `<div class="jn-sum-item" title="Average P&L of trades that followed the system">
+      <div class="jn-sum-k">Avg P&L · Followed</div>
+      <div class="jn-sum-v" style="color:${avgF >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtMoney(avgF)}</div>
+    </div>` : '',
+    avgB != null ? `<div class="jn-sum-item" title="Average P&L of trades that broke the system — if this is better than Followed, the system (or the ratings) needs a look">
+      <div class="jn-sum-k">Avg P&L · Broke Rules</div>
+      <div class="jn-sum-v" style="color:${avgB >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtMoney(avgB)}</div>
+    </div>` : '',
+  ].filter(Boolean)
+  el.innerHTML = items.join('')
+  el.style.display = 'flex'
+}
+
+function renderJournal() {
+  populateJournalSymbols()
+  if (jnPendingSymbol) {
+    const sel = document.getElementById('jf-symbol')
+    if (sel && [...sel.options].some(o => o.value === jnPendingSymbol)) {
+      sel.value = jnPendingSymbol; jnPendingSymbol = null
+      return renderJournal()   // re-filter with the restored symbol applied
+    }
+  }
+  const noted = getJournalFiltered()
+  renderJournalSummary(noted)
+
   const em = document.getElementById('jn-empty')
   const ls = document.getElementById('jn-list')
   document.getElementById('jn-sub').textContent = `${noted.length} entr${noted.length!==1?'ies':'y'}`
 
-  if (!noted.length) { em.style.display='flex'; ls.style.display='none'; return }
+  if (!noted.length) {
+    const anyNoted = trades.some(t => hasNote(notes[t.id]))
+    if (anyNoted) {
+      em.innerHTML = `<div class="empty-icon">🔍</div>
+        <div class="empty-title">No entries match your filters</div>
+        <div class="empty-sub">Your journal entries are hidden by the current filters</div>
+        <button class="btn btn-g" style="margin-top:16px" onclick="clearJournalFilters()">Clear filters</button>`
+    } else {
+      em.innerHTML = `<div class="empty-icon">📝</div>
+        <div class="empty-title">No journal entries yet</div>
+        <div class="empty-sub">Click any trade row to add notes,<br>set your thesis, or log what you learned.</div>`
+    }
+    em.style.display='flex'; ls.style.display='none'; return
+  }
   em.style.display='none'; ls.style.display='flex'
 
   ls.innerHTML = noted.map(t => {
@@ -1519,15 +2385,12 @@ function renderJournal() {
 
     // Realised R-multiple in the header — mirrors the Trades table sub-line so
     // R-based traders can scan their journal in risk units, not just dollars.
-    const risk  = calcRisk(t)
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
 
     // Build per-section rows
     const sectionRows = typeof n === 'object' ? J_FIELDS.map((f, i) => {
       const val = n[f]
-      if (!val || (typeof val === 'string' && !val.trim())) return ''
+      if (!val || typeof val !== 'string' || !val.trim()) return ''
       const label = `<div class="jc-section-label">${J_LABELS[f]}</div>`
       let body
       if (f === 'structure') {
@@ -1560,6 +2423,49 @@ function renderJournal() {
   )
 }
 
+// ── Journal → Markdown export ─────────────
+// Exports exactly what the current filters show, one section per entry, so a
+// month or a single symbol can be reviewed (or shared) outside the app.
+function exportJournalMarkdown() {
+  const noted = getJournalFiltered()
+  if (!noted.length) { alert('No journal entries to export. Adjust your filters or add some notes first.'); return }
+  const lines = []
+  noted.forEach(t => {
+    const n = notes[t.id]
+    const rMult = tradeR(t)
+    lines.push(`## ${t.symbol} · ${t.side.toUpperCase()} · ${fdt(t.entryTime)}`)
+    const meta = [`Net P&L: ${fmtMoney(t.pnl)}`]
+    if (rMult != null) meta.push(`${rMult >= 0 ? '+' : ''}${rMult.toFixed(2)}R`)
+    if (t.qty) meta.push(`Qty ${t.qty}`)
+    lines.push(`- ${meta.join(' · ')}`)
+    if (t.entryPrice && t.exitPrice) {
+      let px = `- Entry / Exit: ${t.entryPrice} → ${t.exitPrice}`
+      if (t.slPrice) px += ` · SL ${t.slPrice}`
+      if (t.tpPrice) px += ` · TP ${t.tpPrice}`
+      lines.push(px)
+    }
+    lines.push('')
+    if (typeof n === 'string') {
+      lines.push(n.trim(), '')
+    } else {
+      J_FIELDS.forEach(f => {
+        const val = n[f]
+        if (!val || (typeof val === 'string' && !val.trim())) return
+        if (f === 'structure') lines.push(`**${J_LABELS[f]}**: ${val === 'yes' ? '是 ✓' : '否 ✗'}`, '')
+        else lines.push(`**${J_LABELS[f]}**`, '', String(val).trim(), '')
+      })
+    }
+    lines.push('---', '')
+  })
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `tradelog-journal-${new Date().toISOString().slice(0,10)}.md`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
+}
+
 // ════════════════════════════════════════════════════
 //  MODAL
 // ════════════════════════════════════════════════════
@@ -1590,6 +2496,34 @@ function modalIsDirty() {
   return JSON.stringify(currentModalNote()) !== modalBaseline
 }
 
+// Ordered id list the open modal can step through with ‹ › / arrow keys:
+// the current filtered+sorted Trades view when the trade is in it, else all trades.
+function modalNavList() {
+  if (activeTrade && filtered.some(t => t.id === activeTrade.id)) return filtered.map(t => t.id)
+  return trades.map(t => t.id)
+}
+
+function updateModalNav() {
+  const list = modalNavList()
+  const i = activeTrade ? list.indexOf(activeTrade.id) : -1
+  const pos = document.getElementById('m-pos')
+  if (pos) pos.textContent = i >= 0 ? `${i + 1} / ${list.length}` : ''
+  const prev = document.getElementById('m-prev'), next = document.getElementById('m-next')
+  if (prev) prev.disabled = i <= 0
+  if (next) next.disabled = i < 0 || i >= list.length - 1
+}
+
+// Step to the adjacent trade in the nav list (dirty guard included)
+function stepModal(dir) {
+  if (!activeTrade) return
+  const list = modalNavList()
+  const i = list.indexOf(activeTrade.id)
+  const j = i + dir
+  if (i < 0 || j < 0 || j >= list.length) return
+  if (modalIsDirty() && !confirm('You have unsaved journal changes. Discard them?')) return
+  openModal(list[j])
+}
+
 function openModal(id) {
   const t = trades.find(t => t.id === id)
   if (!t) return
@@ -1609,23 +2543,63 @@ function openModal(id) {
   const riskItems = risk ? [
     ['Actual %Risk',  risk.breakeven ? `<span style="color:var(--blue)">Breakeven Stop</span>` : `<span style="color:${risk.actualRiskPct > settings.targetRisk ? 'var(--red)' : 'var(--green)'}">${risk.actualRiskPct.toFixed(2)}% <span style="font-size:10px;color:var(--tx3)">(target ${settings.targetRisk}%)</span></span>`],
   ] : []
+  const rMult = tradeR(t)
+  const rr = plannedRR(t)
   const dur = fdur(t.entryTime, t.exitTime)
   document.getElementById('m-meta').innerHTML = [
     ['Entry Time',  fdt(t.entryTime)],
     ['Exit Time',   fdt(t.exitTime)],
     ...(dur ? [['Hold Time', dur]] : []),
-    ['Entry Price', t.entryPrice || '—'],
-    ['Exit Price',  t.exitPrice  || '—'],
-    ['SL Price',    t.slPrice ? t.slPrice : '—'],
-    ['TP Price',    t.tpPrice ? t.tpPrice : '—'],
-    ['Quantity',    t.qty],
+    ['Entry Price', t.entryPrice ? fmtPrice(t.entryPrice) : '—'],
+    ['Exit Price',  t.exitPrice  ? fmtPrice(t.exitPrice)  : '—'],
+    ['SL Price',    t.slPrice ? fmtPrice(t.slPrice) : '—'],
+    ['TP Price',    t.tpPrice ? fmtPrice(t.tpPrice) : '—'],
+    ['Quantity',    fmtQty(t.qty)],
     ['Net P&L',      `<span style="color:${pc}">${fmtMoney(t.pnl)}</span>`],
+    ...(rMult != null ? [['Realized R', `<span style="color:${rMult >= 0 ? 'var(--green)' : 'var(--red)'}">${rMult >= 0 ? '+' : ''}${rMult.toFixed(2)}R</span>`]] : []),
+    ...(rr != null ? [['Planned R:R', `<span style="color:${rr >= 2 ? 'var(--gold)' : rr >= 1 ? 'var(--green)' : 'var(--red)'}">${rr.toFixed(2)} : 1</span>`]] : []),
     ...(t.commission ? [['Commission', `<span style="color:var(--red)">${fmtMoney(t.commission, false)}</span>`]] : []),
     ...riskItems,
   ].map(([k,v]) => `<div class="mi"><div class="mk">${k}</div><div class="mv">${v}</div></div>`).join('')
   // Capture the just-populated field state as the clean baseline for dirty-checking
   modalBaseline = JSON.stringify(currentModalNote())
+  updateModalNav()
+  updateDirtyIndicator()
   document.getElementById('modal').classList.add('on')
+}
+
+// Gold dot on the Save button while the note has unsaved edits
+function updateDirtyIndicator() {
+  const btn = document.getElementById('m-save')
+  if (!btn) return
+  btn.textContent = (activeTrade && modalIsDirty()) ? '● Save Journal' : 'Save Journal'
+}
+
+// Copy the open trade's journal — including unsaved edits — as plain text
+async function copyJournalText() {
+  if (!activeTrade) return
+  const t = activeTrade
+  const n = currentModalNote()
+  const lines = [`${t.symbol} · ${t.side.toUpperCase()} · ${fdt(t.entryTime)}`, `Net P&L: ${fmtMoney(t.pnl)}`, '']
+  J_FIELDS.forEach(f => {
+    if (n[f] == null) return
+    if (f === 'structure') lines.push(`【${J_LABELS[f]}】 ${n[f] === 'yes' ? '是 ✓' : '否 ✗'}`)
+    else lines.push(`【${J_LABELS[f]}】`, n[f], '')
+  })
+  const text = lines.join('\n')
+  const btn = document.getElementById('m-copy')
+  const flash = () => { if (!btn) return; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = '⧉ Copy', 1500) }
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); flash(); return }
+    throw new Error('no clipboard API')
+  } catch {
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'
+      document.body.appendChild(ta); ta.select()
+      document.execCommand('copy'); ta.remove(); flash()
+    } catch { alert('Could not copy to clipboard.') }
+  }
 }
 
 function setStructure(val) {
@@ -1644,7 +2618,8 @@ async function saveNote() {
   else delete notes[activeTrade.id]
   if (window.api) await window.api.save('notes', notes)
   modalBaseline = JSON.stringify(note)   // saved state is now the clean baseline
-  closeModal(true); renderTrades(); renderJournal()
+  updateDirtyIndicator()
+  closeModal(true); renderTrades(); renderJournal(); renderDash()
 }
 
 // force = bypass the unsaved-changes guard (used right after a successful save)
@@ -1669,9 +2644,15 @@ function handleText(text) {
   pending = parseCSV(text)
   if (!pending.length) { alert('Could not parse CSV. Check the format and try again.'); return }
   const s = stats(pending)
+  // Merge transparency: how many rows are new vs updates to already-loaded trades
+  const existingIds = new Set(trades.map(t => t.id))
+  const updates = pending.filter(t => existingIds.has(t.id)).length
+  const mergeLine = trades.length
+    ? `<span style="color:var(--tx3)">${pending.length - updates} new · ${updates} update${updates !== 1 ? 's' : ''} to existing trades (loading merges — nothing already saved is lost)</span><br>`
+    : ''
   document.getElementById('prev-title').textContent = `PREVIEW — ${pending.length} trades detected`
   document.getElementById('prev-body').innerHTML =
-    `<strong style="color:var(--tx)">${pending.length}</strong> trades detected<br>
+    `<strong style="color:var(--tx)">${pending.length}</strong> trades detected<br>${mergeLine}
      Net P&L: <span style="color:${s.total>=0?'var(--green)':'var(--red)'}">${fmtMoney(s.total)}</span><br>
      Win Rate: <span style="color:var(--tx)">${s.wr.toFixed(1)}%</span> (${s.wins}W / ${s.losses}L)<br>
      Symbols: ${[...new Set(pending.map(t=>t.symbol))].slice(0,8).join(', ')}<br>
@@ -1680,6 +2661,88 @@ function handleText(text) {
      <span style="color:var(--tx3)">Last trade:  ${pending[pending.length-1]?.entryTime||'—'}</span>`
   document.getElementById('imp-preview').style.display = 'block'
   go('import')
+}
+
+// ── Full JSON backup & restore ────────────
+// One versioned file containing all four stores. Restore merges by stable id
+// and never overwrites an existing journal note — notes are sacred.
+function backupAllData() {
+  const payload = { app: 'tradelog', kind: 'backup', version: 1,
+    exportedAt: new Date().toISOString(), trades, notes, events, settings }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `tradelog-backup-${new Date().toISOString().slice(0,10)}.json`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
+}
+
+async function restoreBackup(text) {
+  let data
+  try { data = JSON.parse(text) } catch { alert('That file is not valid JSON.'); return }
+  if (!data || data.app !== 'tradelog' || data.kind !== 'backup') {
+    alert('That file does not look like a TradeLog backup.'); return
+  }
+  // Sanitize before merging: a record only enters a store if the renderers can
+  // digest it — a malformed backup must never be able to poison a saved store
+  // (a bad record would otherwise crash every subsequent boot).
+  const validTrade = t => t && typeof t === 'object' && t.id != null &&
+    Number.isFinite(+t.pnl) && typeof t.entryTime !== 'object'
+  const validEvent = ev => ev && typeof ev === 'object' && ev.id != null && Number.isFinite(+ev.pnlR)
+  const cleanNote = n => {
+    if (typeof n === 'string') return n.trim() ? n : null
+    if (!n || typeof n !== 'object') return null
+    const out = {}
+    J_FIELDS.forEach(f => {
+      const v = n[f]
+      if (f === 'structure') { if (v === 'yes' || v === 'no') out.structure = v }
+      else if (typeof v === 'string' && v.trim()) out[f] = v
+    })
+    return Object.keys(out).length ? out : null
+  }
+  const bTrades = (Array.isArray(data.trades) ? data.trades : []).filter(validTrade)
+  const bNotes  = (data.notes && typeof data.notes === 'object' && !Array.isArray(data.notes)) ? data.notes : {}
+  const bEvents = (Array.isArray(data.events) ? data.events : []).filter(validEvent)
+  if (!confirm(`Restore backup from ${data.exportedAt ? fdt(data.exportedAt) : 'unknown date'}?\n\n` +
+    `${bTrades.length} trades · ${Object.keys(bNotes).length} notes · ${bEvents.length} strategy setups\n\n` +
+    `Existing data is merged, not replaced. Existing journal notes are never overwritten.`)) return
+
+  // Merge trades/events by stable id (backup fills the gaps, current data wins)
+  const tm = new Map()
+  bTrades.forEach(t => tm.set(t.id, t))
+  trades.forEach(t => tm.set(t.id, t))
+  trades = [...tm.values()].sort((a, b) => new Date(b.entryTime) - new Date(a.entryTime))
+
+  const em = new Map()
+  bEvents.forEach(ev => em.set(ev.id, ev))
+  events.forEach(ev => em.set(ev.id, ev))
+  events = [...em.values()].sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
+
+  // Notes: only fill ids that have no note yet — never clobber existing text
+  let restoredNotes = 0
+  for (const [id, n] of Object.entries(bNotes)) {
+    const clean = cleanNote(n)
+    if (clean && !hasNote(notes[id])) { notes[id] = clean; restoredNotes++ }
+  }
+
+  // Settings: only accept a sane, finite shape (Infinity would JSON-serialize
+  // to null and persist a broken settings store)
+  if (data.settings && Number.isFinite(data.settings.accountBalance) && data.settings.accountBalance > 0) {
+    settings = { accountBalance: data.settings.accountBalance,
+                 targetRisk: (Number.isFinite(data.settings.targetRisk) && data.settings.targetRisk > 0) ? data.settings.targetRisk : settings.targetRisk }
+    document.getElementById('s-balance').value = settings.accountBalance
+    document.getElementById('s-risk').value    = settings.targetRisk
+  }
+
+  if (window.api) {
+    await window.api.save('trades', trades)
+    await window.api.save('notes', notes)
+    await window.api.save('events', events)
+    await window.api.save('settings', settings)
+  }
+  renderAll()
+  alert(`Restore complete.\n${trades.length} trades · ${Object.keys(notes).length} notes (${restoredNotes} restored) · ${events.length} setups`)
 }
 
 async function confirmImport() {
@@ -1845,6 +2908,21 @@ function eventStats(list) {
     else {cw=0;cl=0}
   })
 
+  // R-drawdown over the chronological cumulative-R curve
+  let peakR = 0, cumR = 0, maxRDD = 0
+  ordered.forEach(e => {
+    cumR += e.pnlR
+    if (cumR > peakR) peakR = cumR
+    const dd = peakR - cumR
+    if (dd > maxRDD) maxRDD = dd
+  })
+  const curRDD  = +(peakR - cumR).toFixed(2)
+  const atHighR = curRDD <= 0.0049
+
+  // MFE / MAE averages (abs at accumulation so mixed sign conventions can't cancel)
+  const mfes = list.filter(e => e.mfeR != null)
+  const maes = list.filter(e => e.maeR != null)
+
   return {
     n: list.length, wins: wins.length, losses: losses.length,
     flat: list.filter(e => e.pnlR === 0).length,
@@ -1854,7 +2932,11 @@ function eventStats(list) {
     avgL: losses.length ? -gl/losses.length : 0,
     bestR:  Math.max(...list.map(e=>e.pnlR)),
     worstR: Math.min(...list.map(e=>e.pnlR)),
-    avgMfe: list.filter(e=>e.mfeR!=null).length ? list.reduce((a,e)=>a+(e.mfeR||0),0)/list.filter(e=>e.mfeR!=null).length : 0,
+    avgMfe: mfes.length ? mfes.reduce((a,e)=>a+(e.mfeR||0),0)/mfes.length : 0,
+    avgMae: maes.length ? maes.reduce((a,e)=>a+Math.abs(e.maeR||0),0)/maes.length : null,
+    hasMfe: mfes.length > 0, hasMae: maes.length > 0,
+    medR: median(list.map(e => e.pnlR)),
+    maxRDD, curRDD, atHighR,
     tgt, stopped, timeout, mw, ml
   }
 }
@@ -2010,8 +3092,12 @@ function exportEventsCSV() {
     e.mfeR != null ? e.mfeR : '', e.maeR != null ? e.maeR : '',
     ocName(e.outcome), e.sizeTier, e.returnBucket, e.reason || 'na', e.earningsBucket, e.handleNum
   ].map(esc).join(','))
+  // Totals footer
+  const totR = list.reduce((a, e) => a + e.pnlR, 0)
+  rows.push(['TOTAL','','','','','', +totR.toFixed(2), '', '', '', '', '', '', '', `${list.length} setups`].map(esc).join(','))
   const csv  = [header.join(','), ...rows].join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  // UTF-8 BOM so Excel detects the encoding
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href = url
@@ -2049,10 +3135,15 @@ function renderStrategy() {
       ['Target Hit', `<span class="${tgtRate>=50?'col-g':'col-gold'}">${tgtRate.toFixed(1)}%</span>`, `${s.tgt} reached full TP`, 'Share of setups that reached the full take-profit target (vs stopped out or timed out). Differs from Win Rate, which counts any green close'],
       ['Total R', `<span class="${s.totalR>=0?'col-g':'col-r'}">${rNum(s.totalR,1)}R</span>`, 'sum of results', 'Sum of R-multiple results across all setups. 1R = the amount risked per trade'],
       ['Expectancy', `<span class="${s.expectancy>=0?'col-g':'col-r'}">${rNum(s.expectancy)}R</span>`, 'per setup', 'Average R per setup (Total R ÷ setups). Positive means a profitable edge'],
+      ...(s.medR != null ? [['Median R', `<span class="${s.medR>=0?'col-g':'col-r'}">${rNum(s.medR)}R</span>`, 'typical setup', 'The middle setup result — outlier-resistant twin of Expectancy']] : []),
       ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross R won ÷ gross R lost. Above 1.0 is profitable'],
       ['Avg Win', `<span class="col-g">${rNum(s.avgW)}R</span>`, 'per winner', 'Average R-multiple on winning setups'],
       ['Avg Loss', `<span class="col-r">${rNum(s.avgL)}R</span>`, 'per loser', 'Average R-multiple on losing setups'],
       ['Best R', `<span class="col-g">${rNum(s.bestR)}R</span>`, `worst ${rNum(s.worstR)}R`, 'Best single-setup R-multiple (worst shown below)'],
+      ['Max DD (R)', s.maxRDD > 0 ? `<span class="col-r">-${s.maxRDD.toFixed(1)}R</span>` : `<span class="col-g">0R</span>`, 'peak → trough', 'Deepest fall of the cumulative-R curve from any peak — the drawdown you would have sat through trading every setup at 1R'],
+      ['Current DD (R)', s.atHighR ? `<span class="col-g">At new high</span>` : `<span class="col-r">-${s.curRDD.toFixed(1)}R</span>`, s.atHighR ? 'no open drawdown' : 'below peak R', 'How far the cumulative-R curve currently sits below its running peak (the dashed line on the chart)'],
+      ...(s.hasMfe ? [['Avg MFE', `<span class="col-gold">${rNum(s.avgMfe)}R</span>`, 'peak before exit', 'Average maximum favorable excursion — how far setups ran in your favor before exit. Large MFE vs small results hints at exits left on the table']] : []),
+      ...(s.hasMae ? [['Avg MAE', `<span class="col-r">-${s.avgMae.toFixed(2)}R</span>`, 'heat before exit', 'Average maximum adverse excursion — how deep setups went against you. Near 1R means stops are being tested hard']] : []),
       ['Max Consec', `<span class="col-g">${s.mw}W</span> / <span class="col-r">${s.ml}L</span>`, 'win / loss streak', 'Longest streak of consecutive winning / losing setups'],
     ].map(([l,v,ss,ti]) =>
       `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
@@ -2122,12 +3213,12 @@ function renderCnhTable(list) {
       <td style="white-space:nowrap">${e.day}</td>
       <td><strong>${e.symbol}</strong>${e.handleNum>1?` <span style="color:var(--tx3);font-size:11px">h${e.handleNum}</span>`:''}</td>
       <td><span style="color:var(--tx2)">${e.timeframe}</span></td>
-      <td>${f(e.entry,4)}</td>
-      <td style="color:var(--red)">${f(e.stop,4)}</td>
-      <td style="color:var(--green)">${f(e.target,4)}</td>
-      <td class="${pc}">${rNum(e.pnlR)}R</td>
-      <td style="color:var(--tx2)">${e.mfeR!=null?rNum(e.mfeR)+'R':'—'}</td>
-      <td style="color:var(--tx2)">${e.maeR!=null?'-'+Math.abs(e.maeR).toFixed(2)+'R':'—'}</td>
+      <td class="num">${f(e.entry,4)}</td>
+      <td class="num" style="color:var(--red)">${f(e.stop,4)}</td>
+      <td class="num" style="color:var(--green)">${f(e.target,4)}</td>
+      <td class="num ${pc}">${rNum(e.pnlR)}R</td>
+      <td class="num" style="color:var(--tx2)">${e.mfeR!=null?rNum(e.mfeR)+'R':'—'}</td>
+      <td class="num" style="color:var(--tx2)">${e.maeR!=null?'-'+Math.abs(e.maeR).toFixed(2)+'R':'—'}</td>
       <td>${ocTag(e.outcome)}</td>
       <td><span style="color:var(--tx2)">${e.sizeTier}</span></td>
       <td><span style="color:var(--tx2)">${e.returnBucket}</span></td>
@@ -2140,8 +3231,9 @@ function renderCnhTable(list) {
     <button class="pb" id="cnh-prev" ${cnhPage<=1?'disabled':''}>‹ Prev</button>
     <span>Page ${cnhPage} / ${pages} · ${sorted.length} setups</span>
     <button class="pb" id="cnh-next" ${cnhPage>=pages?'disabled':''}>Next ›</button>`
-  document.getElementById('cnh-prev').onclick = () => { if (cnhPage>1){cnhPage--; renderCnhTable(cnhFiltered())} }
-  document.getElementById('cnh-next').onclick = () => { if (cnhPage<pages){cnhPage++; renderCnhTable(cnhFiltered())} }
+  const cnhTop = () => document.querySelector('#v-strategy .tw')?.scrollIntoView({ block:'start' })
+  document.getElementById('cnh-prev').onclick = () => { if (cnhPage>1){cnhPage--; renderCnhTable(cnhFiltered()); cnhTop()} }
+  document.getElementById('cnh-next').onclick = () => { if (cnhPage<pages){cnhPage++; renderCnhTable(cnhFiltered()); cnhTop()} }
 }
 
 // ── Charts: cumulative R + outcomes donut ──
@@ -2153,10 +3245,12 @@ function buildCnhCharts(list, s) {
   }
   const yAxis = { grid:{color:'#1c2333'}, ticks:{color:'#7889a8',font:{family:'JetBrains Mono',size:10}} }
 
-  // Cumulative R curve (chronological)
+  // Cumulative R curve (chronological) with a peak-R high-water-mark overlay
   const ordered = [...list].sort((a,b)=> (a.day<b.day?-1:a.day>b.day?1:0))
   let cum = 0
   const cumData = ordered.map(e => { cum += e.pnlR; return +cum.toFixed(2) })
+  let peakR = -Infinity
+  const peakData = cumData.map(v => { peakR = Math.max(peakR, v); return +peakR.toFixed(2) })
   const finalColor = (cumData[cumData.length-1]||0) >= 0 ? '#00e599' : '#ff3d6b'
 
   if (charts.cnhR) charts.cnhR.destroy()
@@ -2165,12 +3259,19 @@ function buildCnhCharts(list, s) {
   grad.addColorStop(0, finalColor+'40'); grad.addColorStop(1, finalColor+'00')
   charts.cnhR = new Chart(ctx, {
     type:'line',
-    data:{ labels:ordered.map(e=>e.symbol+' '+e.day), datasets:[{data:cumData,borderColor:finalColor,backgroundColor:grad,fill:true,borderWidth:2,pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:finalColor,tension:.25}] },
+    data:{ labels:ordered.map(e=>e.symbol+' '+e.day), datasets:[
+      {label:'Cumulative R',data:cumData,borderColor:finalColor,backgroundColor:grad,fill:true,borderWidth:2,pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:finalColor,tension:.25,order:2},
+      {label:'Peak R',data:peakData,borderColor:'#7889a8',backgroundColor:'transparent',fill:false,borderWidth:1,borderDash:[4,4],pointRadius:0,pointHoverRadius:0,tension:0,order:1}
+    ] },
     options:{ responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      plugins:{ legend:{display:false}, tooltip:{...tipBase, callbacks:{
+      plugins:{ legend:{display:true,position:'top',align:'end',labels:{color:'#7889a8',font:{family:'JetBrains Mono',size:9},boxWidth:14,padding:8,usePointStyle:true}}, tooltip:{...tipBase, callbacks:{
         title: items => items[0].label,
         label: item => {
+          if (item.datasetIndex === 1) {
+            const dd = peakData[item.dataIndex] - cumData[item.dataIndex]
+            return `Peak: ${rNum(item.raw,1)}R` + (dd > 0 ? `  ·  drawdown -${dd.toFixed(1)}R` : '')
+          }
           const e = ordered[item.dataIndex]
           return [`Cumulative: ${rNum(item.raw,1)}R`, `This setup: ${rNum(e.pnlR)}R`]
         }
@@ -2179,13 +3280,15 @@ function buildCnhCharts(list, s) {
     }
   })
 
-  // Outcomes donut: target / stop / timeout
+  // Outcomes donut: target / stop / timeout, with target-hit % in the hole
   if (charts.cnhOut) charts.cnhOut.destroy()
+  const tgtPct = s && s.n ? ((s.tgt / s.n) * 100).toFixed(0) + '%' : '—'
   charts.cnhOut = new Chart(document.getElementById('c-cnh-out').getContext('2d'), {
     type:'doughnut',
     data:{ labels:['🎯 Target','🛑 Stopped','⏱ Timed out'], datasets:[{data:[s?s.tgt:0,s?s.stopped:0,s?s.timeout:0],backgroundColor:['#00e599','#ff3d6b','#f5c242'],borderWidth:0,hoverOffset:6}] },
     options:{ responsive:true,maintainAspectRatio:false,cutout:'68%',
-      plugins:{ legend:{display:true,position:'bottom',labels:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},boxWidth:10,padding:10}},tooltip:tipBase } }
+      plugins:{ legend:{display:true,position:'bottom',labels:{color:'#7889a8',font:{family:'JetBrains Mono',size:10},boxWidth:10,padding:10}},tooltip:tipBase } },
+    plugins:[donutCenter(tgtPct, 'target hit')]
   })
 }
 
@@ -2235,12 +3338,42 @@ function fmtMoney(n, sign = true) {
   return (n < 0 ? '-' : sign ? '+' : '') + s
 }
 
+// Calendar-day key from a timestamp: works for both ISO ("2026-01-05T09:30")
+// and space-separated broker formats ("2026-01-05 09:30").
+const dayKey = s => (s || '').split(/[T ]/)[0] || ''
+
+// Quantity with thousands separators; preserves fractional lot sizes
+function fmtQty(q) {
+  if (q == null || !isFinite(+q)) return q
+  return (+q).toLocaleString('en-US', { maximumFractionDigits: 8 })
+}
+
+// Price with thousands separators, up to 5 decimals, trailing zeros trimmed
+function fmtPrice(n) {
+  if (!n || !isFinite(n)) return '—'
+  let s = n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 5 })
+  return s
+}
+
+// Compact axis-tick money format (no decimals, thousands separators)
+const fmtAxis = v => (v < 0 ? '-' : '') + Math.abs(Math.round(v)).toLocaleString('en-US')
+
+// Median of a numeric array (null when empty)
+function median(arr) {
+  if (!arr.length) return null
+  const s = [...arr].sort((a, b) => a - b)
+  const m = Math.floor(s.length / 2)
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+}
+
 // ════════════════════════════════════════════════════
 //  WIRE
 // ════════════════════════════════════════════════════
 function wire() {
-  // Nav
-  document.querySelectorAll('.nav').forEach(n => n.addEventListener('click', () => go(n.dataset.v)))
+  // Nav (skip items without a data-v target, e.g. the shortcuts help button)
+  document.querySelectorAll('.nav').forEach(n => {
+    if (n.dataset.v) n.addEventListener('click', () => go(n.dataset.v))
+  })
 
   // Import triggers
   const doImport = async () => {
@@ -2282,6 +3415,11 @@ function wire() {
     pending = null; document.getElementById('imp-preview').style.display = 'none'
   })
 
+  // Calendar month navigation
+  document.getElementById('cal-prev')?.addEventListener('click', () => calShift(-1))
+  document.getElementById('cal-next')?.addEventListener('click', () => calShift(1))
+  document.getElementById('cal-label')?.addEventListener('click', () => { calYM = null; renderCalendar() })
+
   // Daily range buttons
   document.querySelectorAll('.daily-range-btn').forEach(b =>
     b.addEventListener('click', () => { dailyRange = b.dataset.range; try { localStorage.setItem(DAILY_RANGE_KEY, dailyRange) } catch {} ; buildDailyChart() })
@@ -2310,13 +3448,20 @@ function wire() {
   })
 
   // Filters
-  ;['f-q','f-side','f-res','f-from','f-to'].forEach(id =>
+  ;['f-q','f-side','f-res','f-note','f-from','f-to'].forEach(id =>
     document.getElementById(id)?.addEventListener('input', () => { page=1; renderTrades(); saveTradeFilters() })
   )
-  document.getElementById('f-clr').addEventListener('click', () => {
-    ;['f-q','f-from','f-to'].forEach(id => document.getElementById(id).value = '')
-    ;['f-side','f-res'].forEach(id => document.getElementById(id).value = '')
-    page = 1; renderTrades(); saveTradeFilters()
+  document.getElementById('f-clr').addEventListener('click', clearTradeFilters)
+
+  // Quick date presets
+  document.querySelectorAll('.tr-range-btn').forEach(b =>
+    b.addEventListener('click', () => setTradeDateRange(b.dataset.range))
+  )
+
+  // Rows per page
+  document.getElementById('f-pagesize')?.addEventListener('change', e => {
+    const v = parseInt(e.target.value, 10)
+    if ([25, 50, 100, 250].includes(v)) { tradePageSize = v; page = 1; renderTrades(); saveTradeFilters() }
   })
 
   // Column sort (trades table only)
@@ -2363,17 +3508,100 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  document.getElementById('m-prev').addEventListener('click', () => stepModal(-1))
+  document.getElementById('m-next').addEventListener('click', () => stepModal(1))
+  document.getElementById('m-copy').addEventListener('click', copyJournalText)
+  // Clicking the dark backdrop closes (through the unsaved-changes guard);
+  // clicks inside the dialog never bubble to the backdrop target.
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal()
+  })
+  // Live unsaved-edit indicator on the Save button
+  J_FIELDS.forEach(f => {
+    if (f === 'structure') return
+    document.getElementById(`jf-${f}`)?.addEventListener('input', updateDirtyIndicator)
+  })
+  document.getElementById('jf-structure-yes')?.addEventListener('click', updateDirtyIndicator)
+  document.getElementById('jf-structure-no')?.addEventListener('click', updateDirtyIndicator)
+
+  // Help overlay
+  const helpModal = document.getElementById('help-modal')
+  const toggleHelp = () => helpModal.classList.toggle('on')
+  document.getElementById('nav-help').addEventListener('click', toggleHelp)
+  document.getElementById('help-close').addEventListener('click', toggleHelp)
+  helpModal.addEventListener('click', e => { if (e.target === e.currentTarget) toggleHelp() })
+
+  // Journal export
+  document.getElementById('jn-export')?.addEventListener('click', exportJournalMarkdown)
+
+  // Backup & restore
+  document.getElementById('bk-export')?.addEventListener('click', backupAllData)
+  document.getElementById('bk-import')?.addEventListener('click', () => document.getElementById('file-backup').click())
+  document.getElementById('file-backup')?.addEventListener('change', e => {
+    const f = e.target.files[0]
+    if (!f) return
+    const r = new FileReader()
+    r.onload = ev => restoreBackup(ev.target.result)
+    r.readAsText(f)
+    e.target.value = ''
+  })
+
+  // ── Global keyboard shortcuts ──
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
-    const isTyping = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)
-    if (!isModalOpen && !isTyping) {
-      if (e.key === '1') go('dashboard')
-      else if (e.key === '2') go('trades')
-      else if (e.key === '3') go('journal')
-      else if (e.key === '4') go('strategy')
+    const isHelpOpen  = helpModal.classList.contains('on')
+    const active      = document.activeElement
+    const isTyping    = ['INPUT','TEXTAREA','SELECT'].includes(active?.tagName)
+
+    if (e.key === 'Escape') {
+      // Escape first blurs a focused search box, then closes overlays
+      if (isTyping && (active.id === 'f-q' || active.id === 'jf-q')) { active.blur(); return }
+      if (isHelpOpen) { toggleHelp(); return }
+      closeModal(); return
     }
-    if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
+
+    // Ctrl/Cmd+E: export the active view's CSV (Trades or Strategy)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'E') && !isModalOpen) {
+      const view = document.querySelector('.view.on')?.id
+      if (view === 'v-trades')   { e.preventDefault(); exportTradesCSV() }
+      if (view === 'v-strategy') { e.preventDefault(); exportEventsCSV() }
+      return
+    }
+
+    if (isModalOpen) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'Enter' || e.key === 's' || e.key === 'S')) {
+        e.preventDefault(); saveNote(); return
+      }
+      // Arrow keys step through trades while not editing a field
+      if (!isTyping && e.key === 'ArrowLeft')  { e.preventDefault(); stepModal(-1) }
+      if (!isTyping && e.key === 'ArrowRight') { e.preventDefault(); stepModal(1) }
+      return
+    }
+
+    if (isTyping) return
+
+    if (isHelpOpen) {
+      if (e.key === '?') toggleHelp()
+      return
+    }
+
+    if (e.key === '1') go('dashboard')
+    else if (e.key === '2') go('trades')
+    else if (e.key === '3') go('journal')
+    else if (e.key === '4') go('strategy')
+    else if (e.key === 'i' || e.key === 'I') go('import')
+    else if (e.key === '?') toggleHelp()
+    else if (e.key === '/') {
+      // Focus the active view's search box; from other views jump to Trades.
+      e.preventDefault()
+      let box = document.getElementById('v-trades').classList.contains('on')  ? document.getElementById('f-q')
+              : document.getElementById('v-journal').classList.contains('on') ? document.getElementById('jf-q')
+              : null
+      if (!box) { go('trades'); box = document.getElementById('f-q') }
+      if (box) { box.focus(); box.select() }
+    }
+    else if (e.key === 'ArrowLeft' && document.getElementById('v-trades').classList.contains('on'))  chPg(-1)
+    else if (e.key === 'ArrowRight' && document.getElementById('v-trades').classList.contains('on')) chPg(1)
   })
 }
 

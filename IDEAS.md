@@ -82,3 +82,26 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-05 — Shipped
+- **`/` keyboard shortcut to focus the search box** — pressing `/` on the Trades or Journal view jumps into that view's search input (and selects its text), so power users can filter without reaching for the mouse. Wired into the existing global keydown handler; ignored while typing or with the modal open, and `preventDefault` keeps the `/` out of the field. No data-shape change.
+- **Total Fees stat card on Dashboard** — new card sums all commission & swap paid across trades (as absolute values, so it reads correctly whether the broker export stores fees as negative costs or positive charges) and shows it in red. Since the app's P&L is already net of fees, this surfaces exactly how much the broker skimmed — a cost many journals hide. Only appears when fee data exists. Pure derivation from existing `trades`; no persistence change.
+- **Longest Underwater (UW) stat card on Dashboard** — the longest run of consecutive trades equity spent below a prior high-water mark, computed in the same `stats()` peak/cum walk as Max/Current Drawdown. Pairs with the existing Current DD card: a long underwater stretch flags a deep or slow recovery even when the dollar drawdown looks modest. Only appears when there's been any drawdown.
+
+### Deferred / next-up ideas (2026-08-05)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column (factor out a shared `tradeR()` helper to avoid duplicating the formula)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Underwater in days, not just trades** — complement Longest UW with the longest calendar-time stretch below a prior peak
+- **NOTE for maintainers:** ~30 prior `daily/*` PRs (#37–#66) are open and unmerged, so `main` and this IDEAS.md are frozen at 2026-06-07. Every run rebases off the same stale base and re-proposes overlapping ideas. Merging (or closing) the backlog would let future runs build forward instead of repeating.
+
+## 2026-08-06 — THE SUPER CONSOLIDATION (branch super/2026-08-06)
+On request, every distinct feature from the 60 open daily PRs (#4, #9–#67) was deduplicated (~190 overlapping feature instances → ~70 unique features) and re-implemented as ONE coherent build on top of main. Highlights: shared `tradeR()`/`fmtR()` helpers; `dayKey()` + %Risk-sort bug fixes; Hold column; journaled filter; date presets; rows-per-page + first/last/arrow paging; filtered-set header; filter-aware empty states; P&L calendar with week totals + click-to-drill; P&L histogram; R-distribution; By-Direction/Month/Hour breakdowns; sortable + drillable By-Symbol; ~20 new stat cards (Return %, Payoff, Breakeven Win%, Max DD (Equity), Median P&L/R, Total R, SQN, Kelly, Recovery Factor, Current Streak, Green Days, Avg/Day, Trades/Day, Avg Risk %, Over-Risk, Avg Planned R:R, Journaled, Total Fees, Longest UW); journal filter persistence + sort + rule-adherence summary + Markdown export; modal prev/next + Realized R + Planned R:R + copy + dirty-dot + click-backdrop; keyboard suite (`/`, `i`, `?`, Ctrl+E, Ctrl+S/Enter, arrows, Esc-blur) with a help overlay; Strategy R-drawdown cards + Peak-R line + MFE/MAE + Median R; CSV exports with BOM/Hold/Balance/totals; versioned JSON backup/restore with sanitization + note protection; data-folder panel; import merge transparency. Verified by a 40-check runtime smoke harness (two timezones) plus 4 adversarial review agents; all 7 confirmed findings fixed (calendar nav wiring, two UTC bugs, sort sentinels, restoreBackup poisoning, settings Infinity, fee-count subtitle).
+Merging the super PR supersedes ALL open daily PRs — close them afterwards.
+
+### Deferred (post-consolidation)
+- **Underwater in days** — longest calendar-time (not trade-count) stretch below peak
+- **Persist calendar month + By-Symbol sort** across restarts (in-memory by design for now)
+- **Equity-curve % axis toggle** — show cumulative P&L as % of balance
+- **Note-quality nudges** — highlight journaled trades missing the 复盘总结 section
+- **Light theme** — the palette is centralized in :root, feasible now
