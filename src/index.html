@@ -967,11 +967,15 @@ function stats(list) {
   // max drawdown: largest peak-to-trough drop in cumulative P&L
   const sorted = [...list].sort((a,b)=>new Date(a.entryTime)-new Date(b.entryTime))
   let peak=0, cum=0, maxDD=0
+  // Longest underwater stretch: the most consecutive trades spent below a prior
+  // equity peak (i.e. still recovering a drawdown). Complements Current DD.
+  let uw=0, maxUW=0
   sorted.forEach(t => {
     cum += t.pnl
     if (cum > peak) peak = cum
     const dd = peak - cum
     if (dd > maxDD) maxDD = dd
+    if (dd > 0.0049) { uw++; if (uw > maxUW) maxUW = uw } else { uw = 0 }
   })
   // Current (open) drawdown = how far final equity sits below its running peak
   const curDD    = +(peak - cum).toFixed(2)
@@ -983,7 +987,7 @@ function stats(list) {
     total, avgW, avgL, pf, mw, ml,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
-    maxDD, curDD, curDDPct, peak, atHigh }
+    maxDD, curDD, curDDPct, peak, atHigh, maxUW }
 }
 
 // ════════════════════════════════════════════════════
@@ -1029,6 +1033,16 @@ function renderDash() {
     s.atHigh ? `<span class="col-g">At new high</span>` : `<span class="col-r">${fmtMoney(-s.curDD)}</span>`,
     curDDsub,
     'How far your current equity sits below its all-time peak (the running high-water mark on the P&L chart). "At new high" means you are at peak equity right now'
+  ]
+
+  // Longest underwater stretch — the most consecutive trades spent recovering a
+  // drawdown before making a new equity high. A long stretch flags how much
+  // patience (and psychological drawdown) the strategy has demanded.
+  const uwCard = [
+    'Longest Underwater',
+    s.maxUW > 0 ? `<span class="col-r">${s.maxUW}</span>` : `<span class="col-g">0</span>`,
+    s.maxUW > 0 ? 'consecutive trades below peak' : 'never below a prior peak',
+    'The longest run of consecutive trades that stayed below a prior equity high before a new peak was reached. A long underwater stretch means slow recovery from drawdowns'
   ]
 
   // Average realised R-multiple across trades that have a stop set — the
@@ -1077,6 +1091,7 @@ function renderDash() {
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
     ddCard,
+    uwCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
@@ -1301,7 +1316,17 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Header sub-line summarises the CURRENT filtered/sorted set, so slicing by
+  // symbol/side/date/result instantly shows that slice's Net P&L and win rate.
+  const fSum  = filtered.reduce((a,t) => a + t.pnl, 0)
+  const fWins = filtered.filter(t => t.pnl > 0).length
+  const fWr   = filtered.length ? (fWins / filtered.length) * 100 : 0
+  document.getElementById('tr-sub').innerHTML =
+    `${filtered.length} trade${filtered.length!==1?'s':''}` +
+    (filtered.length
+      ? ` · <span class="${fSum>=0?'col-g':'col-r'}" title="Net P&L of the currently filtered trades">${fmtMoney(fSum)}</span>`
+        + ` · <span title="Win rate of the currently filtered trades">${fWr.toFixed(0)}% win</span>`
+      : '')
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -2372,6 +2397,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps to the Trades view and focuses the symbol search — fast,
+      // keyboard-driven filtering without reaching for the mouse.
+      else if (e.key === '/') {
+        e.preventDefault(); go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
