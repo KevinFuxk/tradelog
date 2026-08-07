@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-07 — Shipped
+- **Longest Underwater stat card on Dashboard** — surfaces the most consecutive trades spent below a prior equity high before a new peak was reached. Computed in `stats()` from the same peak/cum walk used for Max/Current DD (new `maxUW`). Complements the Current DD card (depth) with a *duration* view of drawdowns — how much patience the strategy has demanded. Reads `0 · never below a prior peak` when the equity curve only ever made new highs.
+- **Filtered summary in the Trades header** — the sub-line now shows the **Net P&L** and **win rate** of the *currently filtered/sorted* set (e.g. filter to one symbol or a date range and instantly see that slice's $ result and win%), not just the trade count. Pure derivation from the already-computed `filtered` list; empty/zero states fall back to just the count.
+- **`/` keyboard shortcut** — pressing `/` (when not typing and no modal open) jumps to the Trades view and focuses the symbol search box, so filtering is fully keyboard-driven. Was explicitly deferred on 2026-06-07. Guards against firing while a field is focused or the journal modal is open.
+
+### Deferred / next-up ideas (2026-08-07)
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week tables with an Avg R column (factor out a shared `tradeR()` helper first to avoid duplicating the R formula now used in 4+ places)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Filtered summary on the Strategy view too** — mirror the new Trades header (filtered Total R / win%) on the Cup & Handle `SETUPS` count line
+- **⚠️ Process note for a human:** ~60 daily PRs (#9–#69) are OPEN and UNMERGED against `main` (frozen at 2026-06-07), plus a "SUPER" consolidation PR #68. Because nothing merges, each run rebases off stale `main` and re-proposes overlapping features. The backlog needs a human to merge/close before daily runs add durable value.
