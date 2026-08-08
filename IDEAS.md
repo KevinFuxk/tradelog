@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-08 — Shipped
+- **Export Journal to Markdown** — new "Export Journal" button in the Journal header downloads the currently-shown entries as a readable `.md` file (heading per trade with symbol/side/date + P&L/entry/exit/SL line, then each filled section under its Chinese label). A portable, human-readable backup of the app's most precious data — notes — that survives outside the JSON store; respects the active journal filters so a trader can export a slice too. Read-only, no persistence change. Refactored `getJournalFiltered()` out of `renderJournal()` so the list and export always agree on what's shown.
+- **`/` keyboard shortcut** — pressing `/` anywhere (when not typing / no modal open) jumps to the Trades view and focuses + selects the search box, for fast keyboard-driven filtering. Slots in beside the existing 1–4 nav shortcuts; the search box title now hints it.
+- **Realised R-multiple in the trade-detail modal** — the modal was the only risk surface missing R (the Trades table, Journal cards, and Dashboard all show it). Added an "R Multiple" meta card next to "Actual %Risk" (green/red, `realised` sub-label) using the same `calcRisk`-based formula, so a trader reviewing one trade sees its result in risk units without leaving the modal.
+
+### Deferred / next-up ideas (2026-08-08)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column (factor out a shared `tradeR()` helper to avoid duplicating the formula, which now lives in 4 places)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Export whole journal (ignore filters) option** — a "backup everything" variant so a stray filter can't silently shrink the export
