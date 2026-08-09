@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-09 — Shipped
+- **Shared `tradeR()` R-multiple helper (dedupe)** — the realised R formula (P&L ÷ dollars risked at the stop) was copy-pasted in four places (Dashboard Avg R card, Trades table sub-line, Journal card header, CSV export). Factored into one `tradeR(t)` source of truth plus `groupAvgR(list)` / `fmtR(v)` helpers, so the number can never silently diverge between views. Pure refactor — behaviour identical.
+- **Avg R column on the By-Symbol AND By-Day-of-Week breakdowns** — both dashboard mini-tables now show average realised R per trade (only trades with a stop count; dimmed `—` when none do), so a trader sees which instruments / weekdays give the best *risk-adjusted* edge, not just raw $. Uses the new shared `groupAvgR()`.
+- **`/` keyboard shortcut** — pressing `/` anywhere (outside a text field / modal) jumps straight to the Trades view and focuses+selects the symbol search box, for fast keyboard-driven filtering (mirrors common web apps). `preventDefault` stops the browser quick-find.
+- **By-Hour-of-Day breakdown card** on the Dashboard — mini-table (Hour · Trades · Win% · Avg R · Avg/Trade · Net P&L, with a magnitude bar) grouping every trade by the local clock hour of entry, to spot which sessions carry or leak the edge. Auto-hidden when trades carry no intraday time (date-only imports that would collapse into a single misleading "00:00" row). Reuses `.bdt` styling.
+
+### Deferred / next-up ideas (2026-08-09)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Avg R column on the Strategy Cup & Handle breakdowns already show R** — but consider surfacing best/worst *hour* on the strategy view too if intraday timestamps land there
+- **Best/worst hour-of-day for the Journal filter** — let traders filter journal entries by entry session, not just symbol/side/date
+- **Escape inside the Trades search should clear it** — small polish now that `/` focuses it

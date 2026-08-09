@@ -322,6 +322,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div id="ds-dow-bd"></div>
     </div>
 
+    <div class="card" id="hod-card" style="margin-bottom:14px">
+      <div class="ct" title="P&amp;L grouped by the clock hour of each trade's entry — spot which sessions carry (or leak) your edge. Hidden when trades carry no intraday time.">BY HOUR OF DAY</div>
+      <div id="ds-hod-bd"></div>
+    </div>
+
     <div class="card" id="symbol-card" style="margin-bottom:0">
       <div class="ct">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
@@ -942,6 +947,26 @@ function calcRisk(trade) {
   }
 }
 
+// Realised R-multiple for a single trade: P&L ÷ dollars risked at the stop.
+// Returns null when there's no usable stop (breakeven or missing SL, so risk
+// can't be computed). Single source of truth shared by the Trades table,
+// Journal headers, Dashboard Avg R card, the breakdown tables, and CSV export.
+function tradeR(t) {
+  const r = calcRisk(t)
+  if (!r || r.breakeven || !(r.actualRiskPct > 0)) return null
+  return t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance)
+}
+
+// Average realised R across a list of trades (ignoring those without a stop),
+// or null when none of them carry a usable stop. Used by the breakdown tables.
+function groupAvgR(list) {
+  const rs = list.map(tradeR).filter(v => v != null)
+  return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null
+}
+
+// Compact R-multiple label, e.g. "+1.20R" / "-0.50R", or "—" when null.
+function fmtR(v) { return v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(2) + 'R' }
+
 // ════════════════════════════════════════════════════
 //  STATS
 // ════════════════════════════════════════════════════
@@ -999,14 +1024,16 @@ function renderDash() {
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
+  const hoc = document.getElementById('hod-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = hoc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
   sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  hoc.style.display = ''  // renderHodBreakdown() hides it again when there's no intraday time
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1033,11 +1060,7 @@ function renderDash() {
 
   // Average realised R-multiple across trades that have a stop set — the
   // risk-adjusted twin of $ Expectancy (positive = an edge in R terms).
-  const rList = trades.map(t => {
-    const r = calcRisk(t)
-    return (r && !r.breakeven && r.actualRiskPct > 0)
-      ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
-  }).filter(v => v != null)
+  const rList = trades.map(tradeR).filter(v => v != null)
   const avgR = rList.length ? rList.reduce((a, b) => a + b, 0) / rList.length : null
   const avgRCard = avgR != null ? [[
     'Avg R',
@@ -1086,7 +1109,52 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderHodBreakdown()
   buildCharts(s)
+}
+
+// Hour-of-day performance — for intraday traders, which entry hours carry the
+// edge and which leak it. Grouped by the local clock hour of each trade's entry.
+// Auto-hidden when trades don't carry meaningful intraday times (e.g. date-only
+// imports that would all collapse into a single "00:00" row). Reuses .bdt.
+function renderHodBreakdown() {
+  const card = document.getElementById('hod-card')
+  const el   = document.getElementById('ds-hod-bd')
+  if (!card || !el) return
+  const groups = {}
+  trades.forEach(t => {
+    const d = new Date(t.entryTime)
+    if (isNaN(d)) return
+    const h = d.getHours();
+    (groups[h] = groups[h] || []).push(t)
+  })
+  const hours = Object.keys(groups)
+  // Needs real intraday timestamps to say anything — hide when everything lands
+  // in one hour (date-only data), so we never show a misleading single row.
+  if (hours.length < 2) { card.style.display = 'none'; return }
+  card.style.display = ''
+  const rows = hours.map(Number).sort((a, b) => a - b).map(h => {
+    const ts = groups[h]
+    const n = ts.length
+    const wins = ts.filter(t => t.pnl > 0).length
+    const total = ts.reduce((a, t) => a + t.pnl, 0)
+    return { name: String(h).padStart(2, '0') + ':00', n, wr: (wins / n) * 100, total, avg: total / n, avgR: groupAvgR(ts) }
+  })
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  el.innerHTML = `<table class="bdt">
+    <thead><tr><th>Hour</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average realised R-multiple per trade (only trades with a stop set count)">Avg R</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      return `<tr>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avgR==null?'var(--tx3)':r.avgR>=0?'var(--green)':'var(--red)'}">${fmtR(r.avgR)}</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
 }
 
 // Day-of-week performance — answers "am I better on certain weekdays?".
@@ -1108,12 +1176,12 @@ function renderDowBreakdown() {
     const n = ts.length
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n }
+    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n, avgR: groupAvgR(ts) }
   })
   if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades</div>'; return }
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average realised R-multiple per trade (only trades with a stop set count)">Avg R</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1121,6 +1189,7 @@ function renderDowBreakdown() {
         <td class="bd-name">${r.name}</td>
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avgR==null?'var(--tx3)':r.avgR>=0?'var(--green)':'var(--red)'}">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
@@ -1137,11 +1206,11 @@ function renderSymbolBreakdown() {
     const n = ts.length
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name, n, wr: (wins / n) * 100, total, avg: total / n }
+    return { name, n, wr: (wins / n) * 100, total, avg: total / n, avgR: groupAvgR(ts) }
   }).sort((a, b) => b.total - a.total)
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average realised R-multiple per trade (only trades with a stop set count)">Avg R</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1149,6 +1218,7 @@ function renderSymbolBreakdown() {
         <td class="bd-name">${r.name}</td>
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avgR==null?'var(--tx3)':r.avgR>=0?'var(--green)':'var(--red)'}">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
@@ -1327,9 +1397,7 @@ function renderTrades() {
     const riskStr    = risk
       ? (risk.breakeven ? `<span style="color:var(--blue)">BE</span>` : `<span class="${risk.actualRiskPct > settings.targetRisk ? 'col-r' : 'col-g'}">${risk.actualRiskPct.toFixed(1)}%</span>`)
       : '<span style="color:var(--tx3)">—</span>'
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
@@ -1378,9 +1446,8 @@ function exportTradesCSV() {
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
-      : ''
+    const rMultRaw = tradeR(t)
+    const rMult = rMultRaw != null ? +rMultRaw.toFixed(2) : ''
     return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
             t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
       .map(esc).join(',')
@@ -1519,10 +1586,7 @@ function renderJournal() {
 
     // Realised R-multiple in the header — mirrors the Trades table sub-line so
     // R-based traders can scan their journal in risk units, not just dollars.
-    const risk  = calcRisk(t)
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
 
     // Build per-section rows
     const sectionRows = typeof n === 'object' ? J_FIELDS.map((f, i) => {
@@ -2372,6 +2436,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps straight to the Trades view and focuses the symbol search —
+      // fast keyboard-driven filtering for power users (mirrors many web apps).
+      else if (e.key === '/') {
+        e.preventDefault(); go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
