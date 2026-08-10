@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-10 — Shipped
+- **Shared `tradeR()` helper** — the realised R-multiple formula (`P&L ÷ dollars risked at the stop`) was duplicated verbatim in five places (Trades table, Journal headers, Dashboard Avg R card, CSV export, and now the breakdowns). Factored into one `tradeR(t)` (plus `avgTradeR(list)` and an `rCell()` renderer) so the formula can never drift between views. Pure refactor — identical numbers, no data-shape change.
+- **Avg R column on the By-Symbol and By-Day-of-Week dashboard breakdowns** — each mini-table now shows the average realised R alongside its $ Avg/Trade, so a trader sees the *risk-adjusted* edge per instrument and per weekday, not just raw dollars (a symbol can be net-positive in $ but negative in R if the wins were oversized). Trades without a stop are ignored; the cell reads "—" when no R data exists.
+- **`/` keyboard shortcut** — pressing `/` anywhere (when not typing / no modal open) jumps to the Trades view and drops the cursor into the symbol search box, selecting any existing text. Mirrors the search-focus shortcut traders expect from GitHub/Gmail-style apps. The search placeholder now hints `(/)`.
+
+### Deferred / next-up ideas (2026-08-10)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Avg R column on the Strategy (Cup & Handle) breakdowns already exist** — consider surfacing per-symbol Avg R on that view too for consistency
+- **`?` shortcut opening a small keyboard-shortcut cheatsheet** — now that there are several shortcuts (1–4, /, Ctrl+Enter, Esc), a discoverable overlay would help new users
