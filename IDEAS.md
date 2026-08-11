@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-11 — Shipped
+- **Fix calendar-day grouping bug** — added a shared `dayKey()` helper that extracts `YYYY-MM-DD` from a timestamp no matter the separator (`T`, space, or dotted `2026.08.11`). The old code split only on `"T"`, so space/dot broker formats (Tickmill `update time`) mis-grouped — every timestamp became its own "day", silently breaking the **Best/Worst Day** stat cards and the **Daily P&L** chart bars. Now used in both.
+- **By-Month performance breakdown** on the Dashboard — a new mini-table (Month · Trades · Win% · Avg/Trade · Net P&L, with a magnitude bar) grouping every trade by calendar month in chronological order. Surfaces seasonal streaks/slumps that a per-day or per-symbol view hides. Reuses the `.bdt`/`.bd-bar` styling; hides with the rest of the Dashboard when there's no data.
+- **Trading Days + Avg/Day stat cards** — "Trading Days" counts the distinct calendar days you traded (with a `N trades/day` sub-line); "Avg / Day" shows average net P&L per trading day. Puts the Net P&L total into per-session terms — the day-level twin of the per-trade Expectancy card. Both derive from the corrected `dayKey()` grouping; no persistence change.
+
+### Deferred / next-up ideas (2026-08-11)
+- **By-Month row click → filter Trades to that month** — make the breakdown tables interactive drill-downs
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour (uses `dayKey`-style time parsing)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Monthly P&L bar chart** — a visual companion to the new By-Month table (mirrors the Daily P&L chart at month granularity)
+- **Longest underwater stretch** — longest run of consecutive trades spent below a prior equity peak, to complement the Current DD card
