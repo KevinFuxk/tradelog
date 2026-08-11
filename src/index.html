@@ -322,6 +322,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div id="ds-dow-bd"></div>
     </div>
 
+    <div class="card" id="month-card" style="margin-bottom:14px">
+      <div class="ct" title="Net P&amp;L grouped by calendar month — see which months carried the year and spot seasonal streaks/slumps">BY MONTH</div>
+      <div id="ds-month-bd"></div>
+    </div>
+
     <div class="card" id="symbol-card" style="margin-bottom:0">
       <div class="ct">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
@@ -999,14 +1004,15 @@ function renderDash() {
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
+  const mtc = document.getElementById('month-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = mtc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = mtc.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1050,7 +1056,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1062,6 +1068,18 @@ function renderDash() {
     dayCards = [
       ['Best Day',  `<span class="col-g">${fmtMoney(best[1])}</span>`,  fday(best[0]),  'Your single most profitable trading day (sum of all P&L on that calendar date)'],
       ['Worst Day', `<span class="col-r">${fmtMoney(worst[1])}</span>`, fday(worst[0]), 'Your single worst trading day (sum of all P&L on that calendar date)'],
+    ]
+  }
+
+  // Activity: how many distinct calendar days were traded, and the average net
+  // P&L per trading day — puts the Net P&L total in "per session" terms.
+  let tradeDayCards = []
+  if (dayRows.length) {
+    const nDays  = dayRows.length
+    const avgDay = s.total / nDays
+    tradeDayCards = [
+      ['Trading Days', `<span class="col-b">${nDays}</span>`, `${(s.n / nDays).toFixed(1)} trades/day`, 'Number of distinct calendar days on which you placed at least one trade'],
+      ['Avg / Day', `<span class="${avgDay>=0?'col-g':'col-r'}">${fmtMoney(avgDay)}</span>`, 'net P&L per trading day', 'Average net P&L per trading day (Net P&L ÷ days traded). Complements Expectancy, which is per-trade'],
     ]
   }
 
@@ -1078,6 +1096,7 @@ function renderDash() {
     ...avgRCard,
     ddCard,
     ...dayCards,
+    ...tradeDayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
   ].map(([l,v,ss,ti]) =>
@@ -1086,7 +1105,44 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderMonthBreakdown()
   buildCharts(s)
+}
+
+// By-month performance — net P&L grouped by calendar month (chronological).
+// Surfaces seasonal streaks/slumps a per-day or per-symbol view can hide.
+// Reuses the .bdt / .bd-bar styling shared with the other breakdown tables.
+function renderMonthBreakdown() {
+  const el = document.getElementById('ds-month-bd'); if (!el) return
+  const groups = {}
+  trades.forEach(t => {
+    const k = dayKey(t.entryTime).slice(0, 7) // YYYY-MM
+    if (k.length === 7) (groups[k] = groups[k] || []).push(t)
+  })
+  const keys = Object.keys(groups).sort() // chronological
+  if (!keys.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades</div>'; return }
+  const rows = keys.map(k => {
+    const ts = groups[k], n = ts.length
+    const wins = ts.filter(t => t.pnl > 0).length
+    const total = ts.reduce((a, t) => a + t.pnl, 0)
+    const [y, m] = k.split('-')
+    const name = new Date(+y, +m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+    return { name, n, wr: (wins / n) * 100, total, avg: total / n }
+  })
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  el.innerHTML = `<table class="bdt">
+    <thead><tr><th>Month</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      return `<tr>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
 }
 
 // Day-of-week performance — answers "am I better on certain weekdays?".
@@ -1242,7 +1298,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -2233,6 +2289,17 @@ function fmtMoney(n, sign = true) {
   if (n == null || !isFinite(n)) return '—'
   const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (n < 0 ? '-' : sign ? '+' : '') + s
+}
+
+// Extract the calendar-day key (YYYY-MM-DD) from a timestamp regardless of the
+// separator used: "2026-08-11T14:30", "2026-08-11 14:30" and "2026.08.11 14:30"
+// all group to "2026-08-11". The old code split only on "T", so space/dotted
+// broker formats mis-grouped — every timestamp became its own "day".
+function dayKey(s) {
+  const str = String(s || '')
+  const m = str.match(/^\s*(\d{4}[-/.]\d{2}[-/.]\d{2})/)
+  if (m) return m[1].replace(/[/.]/g, '-')
+  return str.split(/[T ]/)[0] || ''
 }
 
 // ════════════════════════════════════════════════════
