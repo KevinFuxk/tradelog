@@ -414,6 +414,8 @@ textarea.nt::placeholder{color:var(--tx3);}
       </div>
       <button class="pb" onclick="clearJournalFilters()" style="font-size:12px;padding:7px 12px">✕ Clear</button>
     </div>
+    <!-- System-adherence summary (filled by renderAdherence when trades have answered 结构是否符合系统) -->
+    <div id="jn-adherence" style="display:none;margin-bottom:14px"></div>
     <div class="empty" id="jn-empty">
       <div class="empty-icon">📝</div>
       <div class="empty-title">No journal entries yet</div>
@@ -1480,6 +1482,48 @@ function clearJournalFilters() {
   renderJournal()
 }
 
+// System-adherence summary — for journaled trades that answered
+// 交易结构是否完全符合系统 (是 / 否), compare "followed the rules" vs "broke them"
+// by count, win rate, net P&L and $/trade. Answers a trader's core discipline
+// question — does sticking to the system actually pay? Reads the existing
+// note.structure flag; no persistence-shape change. Hidden until ≥2 answered.
+function renderAdherence(noted) {
+  const el = document.getElementById('jn-adherence'); if (!el) return
+  const withStruct = noted.filter(t => {
+    const n = notes[t.id]
+    return n && typeof n === 'object' && (n.structure === 'yes' || n.structure === 'no')
+  })
+  if (withStruct.length < 2) { el.style.display = 'none'; el.innerHTML = ''; return }
+
+  const grp = yn => {
+    const ts = withStruct.filter(t => notes[t.id].structure === yn)
+    if (!ts.length) return null
+    const wins  = ts.filter(t => t.pnl > 0).length
+    const total = ts.reduce((a, t) => a + t.pnl, 0)
+    return { n: ts.length, wr: (wins / ts.length) * 100, total, avg: total / ts.length }
+  }
+  const yes = grp('yes'), no = grp('no')
+
+  const cell = (label, color, g) => g ? `
+    <div style="flex:1;min-width:190px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:12px 14px">
+      <div style="font-size:11px;color:${color};font-weight:600;margin-bottom:6px">${label}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--tx2)">
+        <span><span style="color:var(--tx);font-weight:600">${g.n}</span> trade${g.n!==1?'s':''}</span>
+        <span>Win <span style="color:${g.wr>=50?'var(--green)':'var(--tx)'}">${g.wr.toFixed(0)}%</span></span>
+        <span>Net <span style="color:${g.total>=0?'var(--green)':'var(--red)'}">${fmtMoney(g.total)}</span></span>
+        <span>Avg <span style="color:${g.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(g.avg)}</span>/trade</span>
+      </div>
+    </div>` : ''
+
+  el.style.display = 'block'
+  el.innerHTML = `
+    <div class="ct" style="margin-bottom:10px" title="Compares journaled trades where you followed your system (是) vs broke your rules (否) — does discipline pay off in win rate and P&L?">SYSTEM ADHERENCE</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      ${cell('✓ Followed system (是)', 'var(--green)', yes)}
+      ${cell('✗ Broke rules (否)', 'var(--red)', no)}
+    </div>`
+}
+
 function renderJournal() {
   populateJournalSymbols()
 
@@ -1508,6 +1552,9 @@ function renderJournal() {
   const em = document.getElementById('jn-empty')
   const ls = document.getElementById('jn-list')
   document.getElementById('jn-sub').textContent = `${noted.length} entr${noted.length!==1?'ies':'y'}`
+
+  // Discipline summary — respects the active journal filters (uses `noted`).
+  renderAdherence(noted)
 
   if (!noted.length) { em.style.display='flex'; ls.style.display='none'; return }
   em.style.display='none'; ls.style.display='flex'
@@ -1613,6 +1660,7 @@ function openModal(id) {
   document.getElementById('m-meta').innerHTML = [
     ['Entry Time',  fdt(t.entryTime)],
     ['Exit Time',   fdt(t.exitTime)],
+    ...(fmtExitType(t.exitType) ? [['Exit Type', fmtExitType(t.exitType)]] : []),
     ...(dur ? [['Hold Time', dur]] : []),
     ['Entry Price', t.entryPrice || '—'],
     ['Exit Price',  t.exitPrice  || '—'],
@@ -2233,6 +2281,18 @@ function fmtMoney(n, sign = true) {
   if (n == null || !isFinite(n)) return '—'
   const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (n < 0 ? '-' : sign ? '+' : '') + s
+}
+
+// How a position actually closed — surfaces whether you let your TP/SL work or
+// exited by hand, so trade review can catch discipline slips ("did I cut my
+// winner early?"). Only Tickmill order-based imports carry exitType (set from the
+// closing order's type); other formats simply omit the row. Returns coloured HTML.
+function fmtExitType(x) {
+  if (!x) return null
+  const s = String(x).toLowerCase()
+  if (s.includes('take profit') || s === 'tp') return '<span style="color:var(--green)">🎯 Take Profit</span>'
+  if (s.includes('stop loss')   || s === 'sl') return '<span style="color:var(--red)">🛑 Stop Loss</span>'
+  return `<span style="color:var(--tx)">✋ ${x}</span>` // Market / Limit / manual close
 }
 
 // ════════════════════════════════════════════════════
