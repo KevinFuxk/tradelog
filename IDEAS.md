@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-12 — Shipped
+> ⚠️ **Backlog note:** `main` is still at the 2026-06-07 state. There are ~60 open, unmerged `daily/*` PRs (see PR #68 "SUPER: consolidate all 60 open daily PRs"). Nearly every idea in the lists above has already been implemented in one or more of those open PRs (shared `tradeR()`, `/` search shortcut, Longest Underwater, filtered P&L header, by-hour/month/direction breakdowns, Total Fees, sortable Hold, day-grouping fix, journal Markdown export, etc.). Today's batch was deliberately chosen to be **novel** — not duplicated by any open PR — to reduce further pile-up. The real blocker is that PRs aren't being reviewed/merged, not a shortage of features.
+- **Exit-type in the trade-detail modal** — when a Tickmill order-based import records how a position closed, the modal now shows an **Exit Type** row: 🎯 Take Profit (green) / 🛑 Stop Loss (red) / ✋ Market/manual. Lets a trader instantly see in review whether they let their TP/SL work or overrode it — a discipline signal that was already parsed (`exitType`) but never surfaced. Degrades cleanly for CSV/Strategy-Tester imports that don't carry it. No data-shape change.
+- **System-adherence summary on the Journal view** — a compact two-panel bar above the journal list comparing trades where you *followed the system* (是) vs *broke your rules* (否): trade count, win %, net P&L, and $/trade for each. Directly answers "does sticking to my system actually pay?" — the single most valuable thing a structured journal can tell a trader. Reads the existing `note.structure` flag, respects active journal filters, and only appears once ≥2 journaled trades have answered the structure question. No persistence change.
+
+### Deferred / next-up ideas (2026-08-12)
+- **Merge the backlog first** — the highest-value action is not another feature but getting the ~60 open `daily/*` PRs reviewed/merged (or closing PR #68's consolidation). Future runs keep rebuilding on a 2-month-stale `main`.
+- **By-Exit-Type breakdown on the Dashboard** — group trades by 🎯/🛑/✋ to show win% and net P&L by exit reason ("do my manual exits leak money?"); only render when >1 exit type exists.
+- **Adherence in R, not just $** — extend the System-Adherence summary with avg R per group once a shared `tradeR()` helper lands (avoid duplicating the formula).
+- **Exit-type tag in the Trades table** — a small 🎯/🛑/✋ marker per row (needs the deferred responsive-width pass, since the table is already 12 columns).
+- **Adherence trend** — track system-adherence % over time to see if discipline is improving or slipping.
