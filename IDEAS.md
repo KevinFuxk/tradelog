@@ -1,5 +1,18 @@
 # TradeLog — Ideas Log
 
+## 2026-08-13 — Shipped
+- **Shared `tradeR()` helper** — factored the realised R-multiple formula (P&L ÷ amount risked at the stop) into a single function, replacing four hand-copied inline copies (Dashboard Avg R, Trades table sub-line, Journal card header, CSV export). No behaviour change; one place to trust and to extend from.
+- **Avg R column on the By-Symbol and By-Day-of-Week dashboard tables** — each breakdown row now shows average realised R alongside Avg/Trade ($), so a trader sees per-instrument and per-weekday edge in risk-adjusted units, not just dollars (a fat single trade no longer flatters a symbol/day's R). Shows `—` for groups with no stop-loss data.
+- **"Longest DD" stat card** — surfaces the most consecutive trades equity spent below a prior high-water mark, i.e. drawdown *duration*, to complement the existing Max/Current Drawdown *depth* cards. Computed in the same peak/cum walk in `stats()`; the card hides when equity was never underwater.
+- **`/` keyboard shortcut** — press `/` anywhere (outside inputs/modal) to jump to the Trades view and focus + select the symbol search box, for fast keyboard-driven filtering. Search placeholder now hints `( / )`.
+
+### Deferred / next-up ideas (2026-08-13)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Underwater duration in *days*** — complement the trade-count "Longest DD" with a calendar-days version (and current time-since-peak)
+- **Avg R column on the Strategy view breakdowns** already uses R natively; consider a Net-$ R-weighted column if account sizing is added there
+- **Export the Journal to CSV/Markdown** — data-portability for the app's most precious data (notes), mirroring the Trades/Strategy exports
+
 ## 2026-06-01 — Shipped
 - **Keyboard shortcuts** (`1`–`4` navigate Dashboard/Trades/Journal/Strategy; `Ctrl+Enter` saves journal note in modal; `Escape` already worked)
 - **Sidebar tooltip hints** — tooltips now show `[1]`–`[4]` to surface the shortcuts to new users
