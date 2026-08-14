@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-14 — Shipped
+- **Shared `tradeR()` helper (refactor)** — the realised R-multiple formula (`P&L ÷ amount risked at the stop`) was copy-pasted in four places (Trades table sub-line, Journal card header, Avg R stat card, CSV export). Extracted to a single `tradeR(t)` function so the number is defined once and can't drift. Behaviour-preserving; JS parses.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show the average realised R per group (trades with a stop only), so a trader sees risk-adjusted edge per instrument / per weekday, not just raw dollars. New `groupAvgR()` + `avgRCell()` helpers; em-dash when a group has no stops set. No data-shape change.
+- **Longest Underwater stat card** — new Dashboard card showing the longest run of consecutive trades spent below a prior equity peak before making a new high. Pairs with Max Drawdown (how *deep*) to answer how *long* recoveries take. Computed in the existing `stats()` peak/cum walk (`maxUW`); reads "never underwater" (green) when the curve only ever made new highs.
+- **`/` keyboard shortcut** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades view and focuses the symbol search box, for fast keyboard-driven filtering. The search input placeholder/title now advertises `[/]`.
+
+### Deferred / next-up ideas (2026-08-14)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Undo / soft-delete for "Clear Data"** — a mis-click still wipes an imported log irreversibly; keep a one-shot in-memory snapshot to restore
+- **Underwater *duration* in days** — complement the trade-count stretch with calendar days spent below a prior peak (longest time-to-recover)
+- **Avg R column in the CSV export summary** — the per-trade R is already exported; consider a footer summary row (Net P&L, Avg R, Win%)
