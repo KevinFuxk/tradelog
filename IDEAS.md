@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-15 — Shipped
+- **Thousands separators on prices** — new `fmtPrice()` helper renders Entry / Exit / SL / TP prices with grouping (`65,000`, `21,530.5`) while trimming trailing zeros so FX pip precision is untouched (`1.2345`). Applied across the Trades table and the trade-detail modal (which previously showed raw, unformatted prices). Much easier to read for index/BTC-priced instruments. Distinct from the Qty-separators idea in open PR #65; no data-shape change.
+- **Fixed backwards date-range labels in the import preview** — the preview's "First trade / Last trade" lines used `pending[0]` / `pending[last]`, but the Tickmill parser returns rows newest-first, so the labels were swapped (and unformatted). Now computes the true chronological min/max entry time and renders them via `fdt()`. Small correctness fix in a user-facing summary.
+- **←/→ arrow-key pagination on the Trades table** — when the Trades view is active (and no modal/input is focused), Left/Right arrows page through trade history, mirroring the existing 1–4 view shortcuts. Pagination buttons gained `title` hints so the shortcut is discoverable. Keyboard efficiency for reviewing a long log.
+- **Explanatory tooltips on Trades table headers** — %Risk, SL Price, TP Price, P&L, Note, Date and Symbol columns now carry `title` tooltips explaining what each means (e.g. %Risk colour coding, the R-multiple sub-line, the gold ✎ note indicator). Pure readability/onboarding help; no logic change.
+
+### Deferred / next-up ideas (2026-08-15)
+- **`fmtPrice()` in the Cup & Handle setups table** — the strategy table still uses a fixed `toFixed(4)`; route its Entry/Stop/Target through `fmtPrice` for the same grouped, trailing-zero-trimmed formatting.
+- **Copy-trade-summary button in the modal** — a one-click "copy" of the trade's key stats (symbol/side/entry/exit/P&L/R) to the clipboard for pasting into an external chat/journal (clipboard API only, no network).
+- **Arrow-key pagination on the Strategy setups table too** — mirror the Trades ←/→ shortcut for the Cup & Handle view when it's active.
+- **Win-rate % in the centre of the Win/Loss donut** — a small Chart.js center-text plugin so the headline number is readable at a glance.
+- **Low-contrast `--tx3` audit** — the `#3d4f6b` used for row indices and em-dashes is quite dim on the dark background; consider a slightly lighter shade for accessibility.
