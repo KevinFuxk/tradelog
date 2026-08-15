@@ -369,17 +369,17 @@ textarea.nt::placeholder{color:var(--tx3);}
         <thead>
           <tr>
             <th data-col="#">#</th>
-            <th data-col="entryTime">Date / Time ↕</th>
-            <th data-col="symbol">Symbol ↕</th>
+            <th data-col="entryTime" title="Entry date &amp; time — click to sort">Date / Time ↕</th>
+            <th data-col="symbol" title="Instrument — click to sort">Symbol ↕</th>
             <th data-col="side">Side</th>
             <th data-col="entryPrice">Entry</th>
             <th data-col="exitPrice">Exit</th>
-            <th data-col="slPrice">SL Price</th>
-            <th data-col="tpPrice">TP Price</th>
+            <th data-col="slPrice" title="Stop-loss price recorded for this trade">SL Price</th>
+            <th data-col="tpPrice" title="Take-profit target price recorded for this trade">TP Price</th>
             <th data-col="qty">Qty</th>
-            <th data-col="riskPct">%Risk</th>
-            <th data-col="pnl">P&amp;L ↕</th>
-            <th>Note</th>
+            <th data-col="riskPct" title="Actual % of account risked if the stop had been hit. Green = at/under your target risk, red = over. BE = breakeven stop.">%Risk</th>
+            <th data-col="pnl" title="Profit/loss net of commission. Realised R-multiple (P&amp;L ÷ amount risked) shown below when a stop is set.">P&amp;L ↕</th>
+            <th title="Journal indicator — a gold ✎ means this trade has notes. Click any row to add or edit.">Note</th>
           </tr>
         </thead>
         <tbody id="tr-body"></tbody>
@@ -1312,18 +1312,12 @@ function renderTrades() {
   if (page > pages) page = 1
   const slice = filtered.slice((page-1)*PG, page*PG)
 
-  const fp = (n, dec=5) => {
-    if (!n) return '—'
-    const s = n.toFixed(dec).replace(/\.?0+$/, '')
-    return s
-  }
-
   document.getElementById('tr-body').innerHTML = slice.map((t, i) => {
     const idx  = (page-1)*PG + i + 1
     const pc   = t.pnl > 0 ? 'pnl-p' : t.pnl < 0 ? 'pnl-n' : ''
     const ps   = fmtMoney(t.pnl)
     const risk = calcRisk(t)
-    const slStr      = t.slPrice ? fp(t.slPrice) : '<span style="color:var(--tx3)">—</span>'
+    const slStr      = t.slPrice ? fmtPrice(t.slPrice) : '<span style="color:var(--tx3)">—</span>'
     const riskStr    = risk
       ? (risk.breakeven ? `<span style="color:var(--blue)">BE</span>` : `<span class="${risk.actualRiskPct > settings.targetRisk ? 'col-r' : 'col-g'}">${risk.actualRiskPct.toFixed(1)}%</span>`)
       : '<span style="color:var(--tx3)">—</span>'
@@ -1338,10 +1332,10 @@ function renderTrades() {
       <td style="color:var(--tx2);white-space:nowrap">${fdt(t.entryTime)}</td>
       <td style="font-weight:600">${t.symbol}</td>
       <td><span class="badge ${t.side==='buy'?'bb':'bs'}">${t.side==='buy'?'Buy':'Sell'}</span></td>
-      <td style="color:var(--tx2)">${fp(t.entryPrice)}</td>
-      <td style="color:var(--tx2)">${fp(t.exitPrice)}</td>
+      <td style="color:var(--tx2)">${fmtPrice(t.entryPrice)}</td>
+      <td style="color:var(--tx2)">${fmtPrice(t.exitPrice)}</td>
       <td>${slStr}</td>
-      <td>${t.tpPrice ? fp(t.tpPrice) : '<span style="color:var(--tx3)">—</span>'}</td>
+      <td>${t.tpPrice ? fmtPrice(t.tpPrice) : '<span style="color:var(--tx3)">—</span>'}</td>
       <td style="color:var(--tx2)">${t.qty}</td>
       <td>${riskStr}</td>
 
@@ -1352,9 +1346,9 @@ function renderTrades() {
 
   document.getElementById('pg').innerHTML = `
     <span>${filtered.length} trades</span><span class="sep"></span>
-    <button class="pb" onclick="chPg(-1)" ${page<=1?'disabled':''}>←</button>
+    <button class="pb" onclick="chPg(-1)" ${page<=1?'disabled':''} title="Previous page (← arrow key)">←</button>
     <span>Page ${page} / ${pages}</span>
-    <button class="pb" onclick="chPg(1)" ${page>=pages?'disabled':''}>→</button>
+    <button class="pb" onclick="chPg(1)" ${page>=pages?'disabled':''} title="Next page (→ arrow key)">→</button>
   `
 
   document.querySelectorAll('#tr-body tr').forEach(tr =>
@@ -1614,10 +1608,10 @@ function openModal(id) {
     ['Entry Time',  fdt(t.entryTime)],
     ['Exit Time',   fdt(t.exitTime)],
     ...(dur ? [['Hold Time', dur]] : []),
-    ['Entry Price', t.entryPrice || '—'],
-    ['Exit Price',  t.exitPrice  || '—'],
-    ['SL Price',    t.slPrice ? t.slPrice : '—'],
-    ['TP Price',    t.tpPrice ? t.tpPrice : '—'],
+    ['Entry Price', fmtPrice(t.entryPrice)],
+    ['Exit Price',  fmtPrice(t.exitPrice)],
+    ['SL Price',    fmtPrice(t.slPrice)],
+    ['TP Price',    fmtPrice(t.tpPrice)],
     ['Quantity',    t.qty],
     ['Net P&L',      `<span style="color:${pc}">${fmtMoney(t.pnl)}</span>`],
     ...(t.commission ? [['Commission', `<span style="color:var(--red)">${fmtMoney(t.commission, false)}</span>`]] : []),
@@ -1669,6 +1663,11 @@ function handleText(text) {
   pending = parseCSV(text)
   if (!pending.length) { alert('Could not parse CSV. Check the format and try again.'); return }
   const s = stats(pending)
+  // Chronological span — compute the true earliest/latest entry, since parsers
+  // return rows in different orders (Tickmill is newest-first) and blindly using
+  // pending[0] / pending[last] would label the date range backwards.
+  const times = pending.map(t => t.entryTime).filter(Boolean).sort((a,b) => new Date(a) - new Date(b))
+  const firstT = times[0], lastT = times[times.length - 1]
   document.getElementById('prev-title').textContent = `PREVIEW — ${pending.length} trades detected`
   document.getElementById('prev-body').innerHTML =
     `<strong style="color:var(--tx)">${pending.length}</strong> trades detected<br>
@@ -1676,8 +1675,8 @@ function handleText(text) {
      Win Rate: <span style="color:var(--tx)">${s.wr.toFixed(1)}%</span> (${s.wins}W / ${s.losses}L)<br>
      Symbols: ${[...new Set(pending.map(t=>t.symbol))].slice(0,8).join(', ')}<br>
      <br>
-     <span style="color:var(--tx3)">First trade: ${pending[0]?.entryTime||'—'}</span><br>
-     <span style="color:var(--tx3)">Last trade:  ${pending[pending.length-1]?.entryTime||'—'}</span>`
+     <span style="color:var(--tx3)">First trade: ${firstT ? fdt(firstT) : '—'}</span><br>
+     <span style="color:var(--tx3)">Last trade:  ${lastT ? fdt(lastT) : '—'}</span>`
   document.getElementById('imp-preview').style.display = 'block'
   go('import')
 }
@@ -2235,6 +2234,15 @@ function fmtMoney(n, sign = true) {
   return (n < 0 ? '-' : sign ? '+' : '') + s
 }
 
+// Format a price with thousands separators but no forced decimals, e.g.
+// 65,000 · 1.2345 · 21,530.5. Trailing zeros are trimmed automatically, so
+// high-priced instruments (indices, BTC) stay readable without hurting FX pip
+// precision. Returns '—' for empty/zero prices.
+function fmtPrice(n) {
+  if (n == null || !isFinite(n) || n === 0) return '—'
+  return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 5 })
+}
+
 // ════════════════════════════════════════════════════
 //  WIRE
 // ════════════════════════════════════════════════════
@@ -2372,6 +2380,11 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // ←/→ page through the Trades table when it's the active view
+      else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+               document.getElementById('v-trades').classList.contains('on')) {
+        e.preventDefault(); chPg(e.key === 'ArrowLeft' ? -1 : 1)
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
