@@ -76,6 +76,20 @@
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
 - **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
 
+## 2026-08-16 — Shipped
+- **By Exit Type breakdown** on the Dashboard — a mini-table grouping trades by how each position actually closed (Stop Loss / Take Profit / Market), with Trades · Win% · Avg/Trade · Net P&L and a magnitude bar. Answers a discipline blind-spot: *am I letting my targets work, getting stopped out, or bailing manually?* Uses the `exitType` field already set by the Tickmill parser; the card auto-hides when no exit-type data is present (standard/strategy-tester imports), so it never shows an empty table. Reuses `.bdt`/`.bd-bar` — no new CSS, no persistence change.
+- **Payoff Ratio stat card** on the Dashboard — average winner ÷ average loser (realised reward-to-risk), the per-trade twin of the gross Profit Factor. Read next to Win Rate it exposes the classic tradeoff: a low win rate can still be profitable with a high payoff, and a high win rate can bleed with a poor one. Pure derivation from existing win/loss averages.
+- **P&L Std Dev stat card** on the Dashboard — standard deviation of per-trade P&L, surfacing result *consistency*. Two systems with identical Expectancy but different Std Dev trade very differently; a smaller number means a smoother equity curve. Only appears with 2+ trades. Pure derivation from `trades`, no data-shape change.
+
+*(Context: a large backlog of open daily PRs (#49–#78) already covers tradeR() helper, Avg R breakdown columns, `/` search shortcut, Longest Underwater, Total Fees, hour-of-day, filtered Net P&L header, exit-type-in-modal, etc. — those were deliberately avoided here to add fresh value rather than a duplicate.)*
+
+### Deferred / next-up ideas (2026-08-16)
+- **By Exit Type: add Avg R column** once a shared `tradeR()` helper lands (several open PRs propose one) — keeps the R formula un-duplicated
+- **Sharpe-like ratio / risk-adjusted return** — Expectancy ÷ P&L Std Dev as a single "quality" number now that Std Dev is computed
+- **Coefficient of variation** display option (Std Dev ÷ |Expectancy|) for comparing consistency across accounts of different size
+- **Consolidate the open PR backlog** — 30+ unmerged daily PRs overlap heavily; a maintainer merge/cleanup pass would let future runs build on a current baseline instead of re-proposing the same features
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour (also proposed in open PRs)
+
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak

@@ -322,6 +322,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div id="ds-dow-bd"></div>
     </div>
 
+    <div class="card" id="exit-card" style="margin-bottom:14px;display:none">
+      <div class="ct" title="P&amp;L grouped by how each position actually closed (Stop Loss / Take Profit / Market) — are you letting targets work, getting stopped, or bailing manually?">BY EXIT TYPE</div>
+      <div id="ds-exit-bd"></div>
+    </div>
+
     <div class="card" id="symbol-card" style="margin-bottom:0">
       <div class="ct">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
@@ -999,10 +1004,12 @@ function renderDash() {
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
+  const exc = document.getElementById('exit-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
     sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    if (exc) exc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
@@ -1065,16 +1072,29 @@ function renderDash() {
     ]
   }
 
+  // Payoff ratio — average winner ÷ average loser (realised reward:risk). Read
+  // alongside Win Rate: a low win rate can still profit with a high payoff, and
+  // vice-versa. This is the per-trade average twin of the gross Profit Factor.
+  const payoff = s.avgL !== 0 ? s.avgW / Math.abs(s.avgL) : (s.avgW > 0 ? Infinity : 0)
+
+  // Standard deviation of per-trade P&L — how spread out your results are. Two
+  // systems with the same Expectancy but different Std Dev feel very different
+  // to trade; a smaller number means a smoother, more consistent equity curve.
+  const meanPnl = s.total / s.n
+  const sd = s.n > 1 ? Math.sqrt(trades.reduce((a, t) => a + (t.pnl - meanPnl) ** 2, 0) / s.n) : null
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
     ['Net P&L', `<span class="${s.total>=0?'col-g':'col-r'}">${fmtMoney(s.total)}</span>`, 'all trades', 'Sum of profit/loss across every trade, net of commission'],
     ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross profit ÷ gross loss. Above 1.0 is profitable; 2.0+ is strong'],
+    ['Payoff Ratio', `<span class="${payoff>=1?'col-g':'col-r'}">${isFinite(payoff)?payoff.toFixed(2):'∞'}</span>`, 'avg win÷avg loss', 'Average winner ÷ average loser (realised reward-to-risk). Read with Win Rate: a low win rate can still profit with a high payoff, and vice-versa'],
     ['Avg Win', `<span class="col-g">${fmtMoney(s.avgW)}</span>`, 'per winner', 'Average profit on your winning trades'],
     ['Avg Loss', `<span class="col-r">${fmtMoney(s.avgL)}</span>`, 'per loser', 'Average loss on your losing trades'],
     ['Max Profit',   `<span class="col-g">${fmtMoney(s.best)}</span>`, 'single trade', 'Your single largest winning trade'],
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ...(sd != null ? [['P&L Std Dev', `<span class="col-b">${fmtMoney(sd, false)}</span>`, 'per-trade spread', 'Standard deviation of per-trade P&L — how spread out your results are. Same Expectancy with a smaller Std Dev means a smoother, more consistent equity curve']] : []),
     ...avgRCard,
     ddCard,
     ...dayCards,
@@ -1086,7 +1106,43 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderExitBreakdown()
   buildCharts(s)
+}
+
+// Exit-type performance — for brokers that record how each position closed
+// (e.g. Tickmill sets exitType to Stop Loss / Take Profit / Market), group
+// trades by exit reason so a trader sees whether they let targets work, get
+// stopped, or bail manually. Only renders when exit-type data is present.
+function renderExitBreakdown() {
+  const card = document.getElementById('exit-card')
+  const el   = document.getElementById('ds-exit-bd')
+  if (!card || !el) return
+  const typed = trades.filter(t => t.exitType)
+  if (!typed.length) { card.style.display = 'none'; return }
+  card.style.display = ''
+  const groups = {}
+  typed.forEach(t => { (groups[t.exitType] = groups[t.exitType] || []).push(t) })
+  const rows = Object.entries(groups).map(([name, ts]) => {
+    const n = ts.length
+    const wins = ts.filter(t => t.pnl > 0).length
+    const total = ts.reduce((a, t) => a + t.pnl, 0)
+    return { name, n, wr: (wins / n) * 100, total, avg: total / n }
+  }).sort((a, b) => b.total - a.total)
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  el.innerHTML = `<table class="bdt">
+    <thead><tr><th>Exit</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      return `<tr>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
 }
 
 // Day-of-week performance — answers "am I better on certain weekdays?".
