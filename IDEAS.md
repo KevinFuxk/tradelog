@@ -76,6 +76,18 @@
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
 - **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
 
+## 2026-08-17 — Shipped
+- **Longest Underwater stat card** on the Dashboard — shows the most consecutive trades equity spent below a prior high-water mark before making a new peak. The *duration* companion to Max Drawdown's *depth*: a trader now sees not just how deep the worst slump went, but how long it dragged on. Computed in `stats()` from the same peak/cum walk as `maxDD`/`curDD`; only appears when there was an underwater stretch. No data-shape change.
+- **Filtered P&L + win-rate in the Trades sub-header** — the "N trades" line now also shows the net P&L and win rate of the *currently filtered* set (e.g. filter to one symbol or Buy-only and instantly read that slice's edge, without exporting). Reuses `stats()` + `fmtMoney`; falls back to plain count when nothing matches.
+- **`/` keyboard shortcut to focus the Trades search box** — pressing `/` anywhere (outside an input/modal) jumps to the Trades view and focuses + selects the symbol search, for fast keyboard-driven filtering. Long-deferred; complements the existing `1`–`4` nav shortcuts.
+
+### Deferred / next-up ideas (2026-08-17)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch in *days*** — now that the trade-count version ships, optionally surface the calendar-day span of the worst underwater run too
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week tables with an Avg R column (factor out a shared `tradeR()` helper to avoid duplicating the formula)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Filtered summary header on the Journal + Strategy views** — mirror the new Trades filtered-P&L header where it makes sense
+
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
