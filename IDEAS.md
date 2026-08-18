@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-18 — Shipped
+- **Robust calendar-day grouping (`dayKey()` helper)** — the Best/Worst Day stat cards and the Daily P&L bar chart derived each trade's calendar day with `split('T')[0]`, which only works for ISO timestamps. Space-separated (`2026-06-07 14:30`) and dotted (`2026.06.07 14:30`) broker exports fell through to the whole datetime string, so **every trade became its own "day"** — Best/Worst Day showed single-trade values and Daily P&L drew one bar per trade. New `dayKey()` parses to a Date and reads the local Y-M-D (matching the By-Day-of-Week breakdown, which already used `new Date()`), with a leading-token fallback for unparseable strings. Used in both `renderDash` and `buildDailyChart`.
+- **Trades date filters normalized to the day key** — the From/To filters compared raw timestamp strings (`entryTime < from`, `entryTime > to + 'z'`), which silently mis-filtered dotted/space formats and relied on a `'z'` hack for end-of-day inclusivity. They now compare `dayKey(entryTime)` against the `YYYY-MM-DD` inputs, so both bounds are inclusive and format-agnostic.
+- **%Risk column now sorts correctly** — `%Risk` is computed via `calcRisk`, not stored on the trade, so clicking that header sorted by an `undefined` field (a silent no-op that also stranded the table on an unsortable column and persisted a dead sort). Added a `sortVal()` helper in `getFiltered` that derives `actualRiskPct` for the `riskPct` column (breakeven/no-stop rows sink to the bottom) while every other column is unchanged.
+
+### Deferred / next-up ideas (2026-08-18)
+- **⚠️ 60+ open `daily/*` PRs are unmerged** (last merge was PR #8 on 2026-06-07). Many propose the same features (shared `tradeR()` helper, Avg R columns, `/` search shortcut, Longest Underwater, Journal export, filtered P&L header). Future runs risk adding more duplicates — the backlog needs the owner to merge/close before net-new feature work is worthwhile. A consolidation ("SUPER") PR #68 already exists.
+- **Make the Strategy view's date filters format-agnostic too** — `cnhFiltered` compares `e.day` strings directly; fine for ISO `day` fields but worth a `dayKey`-style guard if CSVs bring other formats.
+- **Shared `tradeR(t)` helper** — the realised-R formula is still duplicated in ~4 places (dashboard Avg R card, trades table, journal header, CSV export). Factoring it out would de-risk the many open PRs that touch R.
+- **`/` keyboard shortcut to focus the active view's search box** — still genuinely missing from the app despite several stale PRs proposing it.
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour.

@@ -1050,7 +1050,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1242,7 +1242,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -1278,23 +1278,33 @@ function getFiltered() {
 
   let list = [...trades]
 
-  // Sort
+  // Value used to order the table for a given column. Most columns read straight
+  // off the trade; entryTime sorts chronologically, and %Risk is *computed* (via
+  // calcRisk) so it must be derived here — otherwise clicking the %Risk header
+  // sorted by an undefined field, a silent no-op that also stranded the table.
+  const sortVal = t => {
+    if (sortCol === 'entryTime') { const d = new Date(t.entryTime); return isNaN(d) ? 0 : +d }
+    if (sortCol === 'riskPct')   { const r = calcRisk(t); return r && !r.breakeven ? r.actualRiskPct : -Infinity }
+    return t[sortCol]
+  }
   list.sort((a,b) => {
-    let va = a[sortCol], vb = b[sortCol]
-    if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    const va = sortVal(a), vb = sortVal(b)
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
   })
 
   return list.filter(t => {
+    // Compare on the calendar-day key so date filters are robust to the timestamp
+    // format (ISO / space / dotted), and the "to" day is included in full.
+    const dk = dayKey(t.entryTime)
     if (q    && !t.symbol.toLowerCase().includes(q)) return false
     if (side === 'buy'  && t.side !== 'buy')  return false
     if (side === 'sell' && t.side !== 'sell') return false
     if (res  === 'win'  && t.pnl <= 0) return false
     if (res  === 'loss' && t.pnl >= 0) return false
-    if (frm  && (t.entryTime||'') < frm) return false
-    if (to   && (t.entryTime||'') > to + 'z') return false
+    if (frm  && dk && dk < frm) return false
+    if (to   && dk && dk > to)  return false
     return true
   })
 }
@@ -2233,6 +2243,25 @@ function fmtMoney(n, sign = true) {
   if (n == null || !isFinite(n)) return '—'
   const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (n < 0 ? '-' : sign ? '+' : '') + s
+}
+
+// Calendar-day key (YYYY-MM-DD) from a trade timestamp. Broker exports use a
+// mix of formats — ISO ("2026-06-07T14:30"), space-separated ("2026-06-07 14:30"),
+// and dotted ("2026.06.07 14:30") — so parse to a Date and read the local
+// date, matching the By-Day-of-Week breakdown (which already uses new Date()).
+// Falls back to the leading date token only if the string won't parse.
+// (The old `split('T')[0]` returned the whole datetime for non-"T" formats,
+//  making every trade its own "day" and breaking Best/Worst Day + Daily P&L.)
+function dayKey(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  if (!isNaN(d)) {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const da = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${da}`
+  }
+  return String(ts).split(/[T ]/)[0] || ''
 }
 
 // ════════════════════════════════════════════════════
