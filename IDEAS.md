@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-19 — Shipped
+- **`/` keyboard shortcut to focus the Trades search** — pressing `/` anywhere (outside an input / with no modal open) jumps to the Trades view and focuses + selects the symbol search box, so power users can filter without reaching for the mouse. Mirrors the `1–4` view shortcuts already in place; `preventDefault` stops the `/` from being typed.
+- **Total Fees dashboard card** — sums commission/fees across all trades (magnitude, shown in red as a cost) with a `N trades w/ fees` sub-line. Fees are already netted out of Net P&L but were invisible as an aggregate; this surfaces the controllable drag on a trader's edge. Hidden when no commission data is present. Pure derivation from `t.commission`; no persistence change.
+- **Click-backdrop-to-close the trade/journal modal** — clicking the dark overlay outside the dialog now closes it, matching standard modal UX. Still routes through `closeModal()`, so the unsaved-journal-changes guard fires exactly as it does for Cancel/×/Escape — no risk of silently dropping notes.
+- **Scroll-to-top on view navigation** — switching views (`go()`) resets the main scroll position, so a long Dashboard no longer leaves you mid-page when you land on Trades/Journal/Strategy.
+
+### Deferred / next-up ideas (2026-08-19)
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Sortable Hold Time column in the Trades table** — pending a responsive width pass before adding another column
+- **Avg R column on the By-Symbol / By-Day-of-Week tables** — factor out a shared `tradeR()` helper first to avoid duplicating the R formula
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Filtered Net P&L / win% header on the Trades view** — show live totals for the current filter set, not just the full log
