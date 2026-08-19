@@ -658,6 +658,8 @@ const MAIN_VIEWS = ['dashboard','trades','journal','strategy']
 function go(v) {
   document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v))
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.id === 'v-' + v))
+  // Reset scroll so a new view always opens at the top, not wherever the last one was left
+  const mainEl = document.querySelector('.main'); if (mainEl) mainEl.scrollTop = 0
   // Rebuild charts that were sized while their view was hidden
   if (v === 'strategy') renderStrategy()
   // Remember the last main view so it reopens on next launch (skip Import flow)
@@ -1046,6 +1048,17 @@ function renderDash() {
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
+  // Total commission / fees paid — a real, controllable cost that quietly
+  // erodes the edge. Already netted out of P&L; surfaced here so it's visible.
+  const feeTrades = trades.filter(t => t.commission)
+  const totalFees = feeTrades.reduce((a, t) => a + Math.abs(t.commission), 0)
+  const feesCard = feeTrades.length ? [[
+    'Total Fees',
+    `<span class="col-r">-${fmtMoney(totalFees, false)}</span>`,
+    `${feeTrades.length} trade${feeTrades.length !== 1 ? 's' : ''} w/ fees`,
+    'Total commission & fees paid across all trades (already deducted from Net P&L). A controllable drag on your edge — worth watching if it rivals your net profit'
+  ]] : []
+
   // Best / worst single trading day by net P&L — surfaces outlier days that
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
@@ -1080,6 +1093,7 @@ function renderDash() {
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
+    ...feesCard,
   ].map(([l,v,ss,ti]) =>
     `<div class="sc"${ti?` title="${ti}"`:''}><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${ss}</div></div>`
   ).join('')
@@ -2363,6 +2377,10 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  // Click the dark backdrop (outside the dialog) to close — still guards unsaved edits
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target.id === 'modal') closeModal()
+  })
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
@@ -2372,6 +2390,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump to Trades and focus its search box — fast keyboard-driven filtering
+        e.preventDefault()
+        go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
