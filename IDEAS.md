@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-20 — Shipped
+- **Shared `tradeR()` helper** — the realised R-multiple formula (P&L ÷ dollars risked at the stop) was duplicated inline in four places (Dashboard Avg R card, Trades table sub-line, Journal card header, CSV export). Factored into a single `tradeR(t)` helper next to `calcRisk`; all four sites now call it. Pure refactor, identical output, and the R rule now lives in exactly one place so future R features can't drift.
+- **Avg R column on the By-Symbol and By-Day-of-Week dashboard tables** — both breakdown mini-tables now show average realised R per group (only counting trades that have a stop set), between Avg/Trade and Net P&L. A trader can now see not just which symbol/weekday makes the most *dollars* but which delivers the best *risk-adjusted* edge — a big total driven by oversized bets vs. a steady per-R edge is now distinguishable. Renders an em-dash when a group has no stops. Uses the new shared `tradeR()` + a small `avgTradeR()`/`fmtR()` pair.
+- **`/` keyboard shortcut jumps to the Trades search box** — pressing `/` anywhere (outside a text field/modal) opens the Trades view and focuses + selects the symbol-search input, so power users can filter without reaching for the mouse. Mirrors the `/`-to-search convention users know from GitHub/Gmail. The search box placeholder/tooltip now advertise the shortcut. Complements the existing `1`–`4` view shortcuts.
+
+### Deferred / next-up ideas (2026-08-20)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Avg R column on the Strategy view is native (pnlR)** — consider surfacing the same Avg R on the modal/trade detail so it's visible per-trade without the table sub-line
+- **Click a By-Symbol row to filter the Trades table** to that symbol — turn the read-only breakdown into a navigation shortcut
