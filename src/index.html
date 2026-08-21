@@ -640,6 +640,7 @@ async function boot() {
   } catch {}
   restoreTradeFilters()
   restoreCnhFilters()
+  restoreJournalFilters()
   renderAll()
   applyTradeSortIndicator()
   wire()
@@ -1425,6 +1426,34 @@ function applyTradeSortIndicator() {
   if (th) th.classList.add('sort-' + sortDir)
 }
 
+// ── Journal filter persistence ────────────
+// The Trades and Strategy views already remember their filters across restarts;
+// the Journal view now does too, so returning to your notes keeps the last
+// search / product / side / date range. localStorage only — no JSON-store change.
+const JN_FILTERS_KEY = 'tradelog.journalFilters'
+let jnPendingSymbol = null
+function saveJournalFilters() {
+  try {
+    const v = id => document.getElementById(id)?.value || ''
+    localStorage.setItem(JN_FILTERS_KEY, JSON.stringify({
+      q: v('jf-q'), symbol: v('jf-symbol'), side: v('jf-side'),
+      from: v('jf-date-from'), to: v('jf-date-to')
+    }))
+  } catch {}
+}
+function restoreJournalFilters() {
+  try {
+    const s = JSON.parse(localStorage.getItem(JN_FILTERS_KEY) || 'null')
+    if (!s) return
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
+    set('jf-q', s.q); set('jf-side', s.side)
+    set('jf-date-from', s.from); set('jf-date-to', s.to)
+    // The product <select> is rebuilt from noted trades in populateJournalSymbols,
+    // so defer restoring it until those options exist.
+    jnPendingSymbol = s.symbol || null
+  } catch {}
+}
+
 // ── Journal ───────────────────────────────
 // ── Note helpers ─────────────────────────────
 const J_FIELDS = ['macro','technical','structure','management','result','review']
@@ -1469,6 +1498,11 @@ function populateJournalSymbols() {
   const symbols = [...new Set(trades.filter(t => hasNote(notes[t.id])).map(t => t.symbol))].sort()
   sel.innerHTML = '<option value="">All products</option>' +
     symbols.map(s => `<option value="${s}"${s===current?' selected':''}>${s}</option>`).join('')
+  // Apply a restored product filter once its option actually exists
+  if (jnPendingSymbol) {
+    if (symbols.includes(jnPendingSymbol)) sel.value = jnPendingSymbol
+    jnPendingSymbol = null
+  }
 }
 
 function clearJournalFilters() {
@@ -1504,6 +1538,8 @@ function renderJournal() {
     }
     return true
   })
+
+  saveJournalFilters()   // remember the current filter set across restarts
 
   const em = document.getElementById('jn-empty')
   const ls = document.getElementById('jn-list')
@@ -1610,6 +1646,12 @@ function openModal(id) {
     ['Actual %Risk',  risk.breakeven ? `<span style="color:var(--blue)">Breakeven Stop</span>` : `<span style="color:${risk.actualRiskPct > settings.targetRisk ? 'var(--red)' : 'var(--green)'}">${risk.actualRiskPct.toFixed(2)}% <span style="font-size:10px;color:var(--tx3)">(target ${settings.targetRisk}%)</span></span>`],
   ] : []
   const dur = fdur(t.entryTime, t.exitTime)
+  // Planned reward-to-risk: |TP − entry| ÷ |entry − SL|, shown only when both a
+  // stop and target are set. Lets a trader judge whether the setup was worth
+  // taking on its planned R:R, independent of how it actually resolved.
+  const rr = (t.slPrice && t.tpPrice && t.entryPrice && Math.abs(t.entryPrice - t.slPrice) > 0)
+    ? Math.abs(t.tpPrice - t.entryPrice) / Math.abs(t.entryPrice - t.slPrice)
+    : null
   document.getElementById('m-meta').innerHTML = [
     ['Entry Time',  fdt(t.entryTime)],
     ['Exit Time',   fdt(t.exitTime)],
@@ -1618,6 +1660,7 @@ function openModal(id) {
     ['Exit Price',  t.exitPrice  || '—'],
     ['SL Price',    t.slPrice ? t.slPrice : '—'],
     ['TP Price',    t.tpPrice ? t.tpPrice : '—'],
+    ...(rr && isFinite(rr) ? [['Planned R:R', `<span style="color:${rr >= 1 ? 'var(--green)' : 'var(--gold)'}">${rr.toFixed(2)} : 1</span>`]] : []),
     ['Quantity',    t.qty],
     ['Net P&L',      `<span style="color:${pc}">${fmtMoney(t.pnl)}</span>`],
     ...(t.commission ? [['Commission', `<span style="color:var(--red)">${fmtMoney(t.commission, false)}</span>`]] : []),
@@ -1686,6 +1729,13 @@ async function confirmImport() {
   if (!pending) return
   // Merge: existing trades are preserved; new CSV data updates matching positions.
   // Notes (keyed by stable Position ID) survive automatically since IDs don't change.
+  // Count new-vs-updated (against the same complete-row filter the merge applies)
+  // so the trader gets clear feedback on what a re-import actually changed.
+  const prevIds  = new Set(trades.map(t => t.id))
+  const incoming = pending.filter(t => t.entryPrice > 0 && t.exitPrice > 0)
+  let added = 0, updated = 0
+  incoming.forEach(t => { if (prevIds.has(t.id)) updated++; else added++ })
+
   const merged = new Map()
   trades.forEach(t => merged.set(t.id, t))       // seed with existing
   pending.forEach(t => merged.set(t.id, t))       // overlay with fresh CSV data
@@ -1696,6 +1746,9 @@ async function confirmImport() {
   if (window.api) await window.api.save('trades', trades)
   document.getElementById('imp-preview').style.display = 'none'
   renderAll(); go('dashboard')
+  alert(`Import complete — ${added} new, ${updated} updated.` +
+        (updated ? `\nExisting journal notes were kept.` : '') +
+        `\n${trades.length} trades total.`)
 }
 
 // ════════════════════════════════════════════════════
