@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-21 — Shipped
+> Note: many earlier `daily/*` PRs (June–Aug) remain open/unmerged on `main`, so they overlap heavily (shared `tradeR()`, `/` search shortcut, Longest Underwater, Total Fees, backdrop-close modal, Avg R columns, by-hour/by-month breakdowns). This batch deliberately picks items **not** present in that open-PR pile.
+- **Import merge summary** — after confirming a broker-CSV import, an alert now reports `N new, M updated` and the new total, plus "Existing journal notes were kept" when any trades were updated. Re-importing an updated broker export is the norm, and this gives the trader explicit confirmation that new trades landed and (crucially) that their notes survived the merge. Counted with the same complete-row filter the merge applies. No data-shape change.
+- **Planned R:R in the trade modal** — when a trade has both a stop and a target set, the detail modal now shows `Planned R:R` = `|TP − entry| ÷ |entry − SL|` (green ≥ 1:1, gold below), so a trader reviewing a trade can judge whether the *setup* was worth taking on its planned reward-to-risk, independent of how it actually resolved. Modal-only derivation; no persistence change.
+- **Journal filter persistence** — the Journal view now remembers its search / product / side / date-range filters across restarts via `localStorage` (`tradelog.journalFilters`), closing the consistency gap with the already-persisted Trades and Strategy filters. The dynamically-built product `<select>` is restored once its options are rebuilt (pending-apply pattern, mirroring the Strategy view). Separate from the JSON note store — no risk to saved notes.
+
+### Deferred / next-up ideas (2026-08-21)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Import summary as a non-blocking toast** — the alert works but a dismissable in-app toast would be less intrusive on repeated imports
+- **Realised R:R vs planned** — pair the new Planned R:R with the achieved R-multiple in the modal to show slippage between plan and outcome
+- **"No filters match" vs "no notes yet"** — the Journal empty state could distinguish an over-filtered view from a genuinely empty journal
+- **Consolidate the open daily-PR backlog** — the biggest real win now is merging/rationalising the ~20 stacked daily PRs so future runs build forward instead of re-shipping the same ideas
