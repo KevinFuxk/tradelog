@@ -82,3 +82,19 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-22 — Shipped
+- **Fix calendar-day grouping bug** — Best Day / Worst Day stats and the Daily P&L chart grouped trades with `split('T')[0] || split(' ')[0]`, which returned the *whole* timestamp for space-separated formats (`"2024-01-15 09:30"`), so multiple trades on one day were counted as separate "days". Introduced a `dayKey()` helper (matches a leading `YYYY-MM-DD`, else falls back to the token before `T`/space) and used it in both places. Correctness fix; no data-shape change.
+- **Payoff Ratio stat card on Dashboard** — average winner ÷ average loser (in $), computed in `stats()` from existing `avgW`/`avgL`. Read with Win Rate it shows whether the edge comes from hit-rate or from letting winners run — a classic complement the dashboard was missing. Gold ≥1, red below; shows `∞` when there are no losses.
+- **Current Streak stat card on Dashboard** — the trader's live run of consecutive winning/losing trades (counting back from the most recent; break-even trades skipped, not counted). A long losing run is a visible cue to review process or size down. Only appears when there is at least one non-BE trade.
+- **`/` keyboard shortcut focuses the Trades search box** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades view and focuses+selects the symbol search. Placeholder/title now hint `[ / ]`. Fast keyboard-driven filtering for power users.
+
+### Context for future runs
+- **`main` is stale (last merge PR #8, 2026-06-07) but PRs #9–#84 are all OPEN/unmerged.** Because IDEAS.md and the code both come from `main`, past runs kept re-implementing the same ideas (shared `tradeR()`, Avg R columns, `/` search, Longest Underwater — each done 5–15× across open PRs). Before adding a "new" feature, assume it may already exist in an open PR; prefer correctness fixes and genuinely un-done items, or ask a human to merge/close the backlog.
+
+### Deferred / next-up ideas (2026-08-22)
+- **Shared `tradeR()` helper + Avg R columns** on By-Symbol / By-Day-of-Week tables (repeatedly attempted in open PRs; still not on `main`)
+- **Longest underwater stretch** stat — longest run of consecutive trades below a prior equity high-water mark (computed from the same peak/cum walk as `curDD`)
+- **Best/worst hour-of-day breakdown** — mirror the weekday table by entry hour for intraday traders
+- **Total commission / fees card** — sum of `commission` across trades, so fee drag is visible next to Net P&L
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
