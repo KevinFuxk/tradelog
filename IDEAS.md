@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-23 — Shipped
+- **Shared `tradeR()` helper** — extracted the realised R-multiple formula (P&L ÷ dollars risked at the stop) that was copy-pasted inline in four places (Dashboard Avg R, Trades table sub-line, Journal card header, CSV export) into a single `tradeR(t)` function. One source of truth — future R features can't drift, and the R math is now impossible to get subtly wrong in one spot but not another. No behaviour change.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show the average realised R per trade for each symbol / weekday (across trades that have a stop set), beside the existing Avg/Trade $ column. Lets R-based traders see the risk-adjusted edge per instrument and per weekday, not just raw dollars (a symbol with a fat total but a mediocre Avg R is a different story than a steady 0.5R grinder). Reuses `rNum()` for formatting; shows "—" when no stops are set. Built on the new `tradeR()` helper.
+- **"Longest Underwater" stat card** on the Dashboard — the longest run of consecutive trades spent below a prior equity high-water mark, i.e. how *drawn-out* the deepest slump was (in trades), complementing the existing Current DD ($ depth) and Max Drawdown cards. Computed in the same peak/cum walk as `maxDD`; 0 (green) means never traded below a prior peak.
+- **`/` keyboard shortcut** — pressing `/` anywhere (outside a text field / modal) jumps straight to the Trades view and focuses + selects the symbol-search box, for fast keyboard-driven filtering. Placeholder now hints `( / )`.
+
+### Deferred / next-up ideas (2026-08-23)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Avg R column on the Trades CSV-export summary / a per-symbol export** — the export already has a per-trade R column; consider an aggregate sheet
+- **Undo / soft-delete for "Clear Data"** — confirm() exists, but a mis-click still wipes an imported log with no recovery
+- **`Esc` to blur the search box** (currently only closes the modal) and `j/k` row navigation in the Trades table for full keyboard review
