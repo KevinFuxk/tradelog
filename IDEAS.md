@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-24 — Shipped
+- **Shared `tradeR(t)` helper** — the realised R-multiple formula (`P&L ÷ dollars risked at the stop`, null when no usable stop) was duplicated in four places (Dashboard Avg R, Trades table sub-line, Journal card header, CSV export). Consolidated into one function next to `calcRisk`, so the R math has a single source of truth and can't drift. Pure refactor — same numbers, no behaviour or data-shape change. Unblocks the Avg-R breakdown columns below.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show the average realised R-multiple per group (over that group's trades that have a stop set), between Avg/Trade and Net P&L. A symbol/weekday can be net-green on dollars yet negative on R (or vice-versa); this surfaces the risk-adjusted edge per bucket. Trades without a stop are excluded from the average; groups with none show `—`. Added a small `fmtR()` formatter.
+- **`/` keyboard shortcut** — pressing `/` on the Trades or Journal view (when not already typing and no modal open) focuses that view's search box, for fast keyboard-driven filtering. `preventDefault` keeps the slash out of the field.
+- **"Peak→Trough DD" stat card on Dashboard** — surfaces the true largest peak-to-trough drop in the cumulative equity curve (`s.maxDD`), which `stats()` already computes but never displayed. Distinct from the existing "Max Drawdown" card (deliberately the worst *single* trade, per user preference) and "Current DD" (live below peak); this one measures a losing *run's* cumulative damage and pairs with the high-water-mark line. Pure derivation, no persistence change.
+
+### Deferred / next-up ideas (2026-08-24)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement the DD cards with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour (reuse the `.bdt` pattern)
+- **Portfolio R metrics on breakdowns** — now Avg R is per-bucket, consider a per-symbol R profit-factor or a portfolio-level R expectancy
+- **Discoverability of shortcuts** — a small `?`-triggered cheatsheet overlay (nav 1–4, `/` search, Ctrl+Enter save, Esc close)
