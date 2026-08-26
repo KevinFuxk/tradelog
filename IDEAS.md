@@ -79,6 +79,18 @@
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
-- **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
+- **`/` keyboard shortcut to focus the Trades search box** — DONE 2026-08-26
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-26 — Shipped
+- **Fix calendar-day grouping bug** — the Best/Worst Day stat cards and the Daily P&L chart grouped trades by day with `split('T')[0]`, which silently failed on **space-separated** broker timestamps (e.g. `"2024-05-01 14:23:00"`): the whole string, time included, became the "day" key, so every trade landed in its own bucket. Added a shared `dayKey()` helper that splits on either the ISO `T` **or** a space, so per-day grouping now buckets correctly for both formats. Fixes a real data-correctness bug on the Dashboard (ISO-`T` exports were unaffected, which is why it slipped through).
+- **Total Fees stat card on Dashboard** — commissions are parsed and already netted out of each trade's P&L, but the aggregate cost of trading was invisible. New card sums `|commission|` across all trades (shown in red, `across N trades` sub-line) so the drag from transaction costs is explicit. Only appears when fee data exists. Pure derivation; no data-shape change.
+- **`/` shortcut to focus the Trades search** — pressing `/` anywhere (when not typing / no modal open) jumps to the Trades view and focuses+selects the search box, for fast keyboard-driven filtering. The search placeholder now shows a `/` hint and a tooltip to surface it.
+
+### Deferred / next-up ideas (2026-08-26)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Fees as % of gross P&L** — extend the new Total Fees card with fees ÷ gross profit, so a trader sees how much of their edge costs eat
+- **Avg R per symbol / per weekday** — add an Avg R column to the By-Symbol / By-Day-of-Week tables (factor out a shared `tradeR()` helper first)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
