@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-27 — Shipped
+- **Shared `tradeR()` helper** — the realised R-multiple formula (P&L ÷ dollars risked at the stop) was duplicated inline in four places (Dashboard Avg R, Trades table sub-line, Journal card header, CSV export). Factored into one `tradeR(t)` function returning `null` when a trade has no usable stop, so all R figures now come from a single source of truth. Pure refactor — no behaviour change (verified: identical output).
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show average realised R per group (over that group's trades that have a stop set; `—` when none do), via a small `groupAvgR()` helper on top of `tradeR()`. Answers "which symbols / weekdays actually pay in risk units?" — a dollar total can be flattered by one big position, R normalises for size.
+- **`/` keyboard shortcut** — pressing `/` from anywhere (outside a text field / open modal) jumps to the Trades view and focuses+selects the search box, the near-universal "quick filter" convention. Complements the existing 1–4 view shortcuts for keyboard-driven review.
+- **Longest Underwater stat card** on the Dashboard — the longest run of consecutive trades spent below a prior equity high-water mark (how many trades your worst drawdown took to claw back from). Complements Current DD (how deep, now) and Max Drawdown (worst single trade) with a *duration* read on drawdowns. Computed in the same peak/cum walk in `stats()`; `0` reads green ("never dipped below a peak").
+
+### Deferred / next-up ideas (2026-08-27)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Underwater stretch in *days*** — complement the trades-count version with calendar days spent below a prior peak
+- **Avg R column on the Trades CSV export per-symbol summary** — or a dedicated per-symbol export
+- **Expectancy in R on the By-Symbol table** — pair Avg R with a small sample-size caveat (grey out groups with <5 trades)
