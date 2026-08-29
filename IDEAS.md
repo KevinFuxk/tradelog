@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-29 — Shipped
+- **Shared `tradeR()` helper (refactor)** — the realised R-multiple formula (`P&L ÷ amount risked at the stop`) was copy-pasted in four places (Dashboard Avg R card, Trades table sub-line, Journal card header, CSV export). Collapsed into one `tradeR(t)` function returning `null` when there's no usable stop, so every surface stays in lockstep and future R work has a single edit point. No behaviour change; JS parses.
+- **Avg R column on the By-Symbol and By-Day-of-Week dashboard tables** — both breakdown mini-tables now show the average realised R (across the group's trades that have a stop set) alongside Win% and Avg/Trade, via new `avgTradeR()` / `fmtR()` helpers. Lets R-based traders see risk-adjusted edge per instrument and per weekday, not just dollars; shows `—` for groups with no stops set.
+- **Net P&L in the Trades sub-header** — the "N trades" line now reads e.g. `42 trades · +1,234.50 net`, recomputed from the *currently filtered* set. Filter to one symbol or a date range and the subtotal appears instantly — no need to export to Excel just to sum a slice.
+- **`/` keyboard shortcut to focus Trades search** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades view and focuses the symbol search box; the placeholder now shows a `[/]` hint. Fast keyboard-driven filtering for power users, mirroring the `1`–`4` nav shortcuts.
+
+### Deferred / next-up ideas (2026-08-29)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Filtered-set stat strip on Trades** — extend the net-P&L sub-line into win-rate / expectancy / avg-R for the current filter, so a filtered slice reads like a mini-dashboard
+- **Journal export to Markdown** — one-click export of all journal entries (or the current filter) so notes are portable outside the app
