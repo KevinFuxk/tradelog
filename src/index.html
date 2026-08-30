@@ -392,6 +392,7 @@ textarea.nt::placeholder{color:var(--tx3);}
   <div class="view" id="v-journal">
     <div class="ph">
       <div><div class="pt">Journal</div><div class="ps" id="jn-sub">Your notes &amp; reflections</div></div>
+      <button class="btn btn-g" id="jn-export" title="Download the currently shown journal entries as a Markdown file — a portable, human-readable backup of your notes">Export Notes</button>
     </div>
     <!-- Journal filters -->
     <div class="fbar" id="jn-filters" style="margin-bottom:16px">
@@ -921,6 +922,16 @@ function inferContractSize(trade) {
   )
 }
 
+// Realised R-multiple for a trade = P&L ÷ dollars actually risked at the stop.
+// Returns null when there's no usable stop (or a breakeven stop), so callers can
+// show "—". Single source of truth for the R formula used on the Dashboard, the
+// Trades table, the Journal cards, the CSV export and the breakdown tables.
+function tradeR(trade) {
+  const risk = calcRisk(trade)
+  if (!risk || risk.breakeven || risk.actualRiskPct <= 0) return null
+  return trade.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
+}
+
 function calcRisk(trade) {
   const { entryPrice, slPrice, qty } = trade
   const bal     = settings.accountBalance
@@ -1033,11 +1044,7 @@ function renderDash() {
 
   // Average realised R-multiple across trades that have a stop set — the
   // risk-adjusted twin of $ Expectancy (positive = an edge in R terms).
-  const rList = trades.map(t => {
-    const r = calcRisk(t)
-    return (r && !r.breakeven && r.actualRiskPct > 0)
-      ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
-  }).filter(v => v != null)
+  const rList = trades.map(tradeR).filter(v => v != null)
   const avgR = rList.length ? rList.reduce((a, b) => a + b, 0) / rList.length : null
   const avgRCard = avgR != null ? [[
     'Avg R',
@@ -1108,12 +1115,14 @@ function renderDowBreakdown() {
     const n = ts.length
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n }
+    const rs = ts.map(tradeR).filter(v => v != null)
+    const avgR = rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null
+    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n, avgR }
   })
   if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades</div>'; return }
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average realised R-multiple across this day's trades that have a stop set">Avg R</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1121,6 +1130,7 @@ function renderDowBreakdown() {
         <td class="bd-name">${r.name}</td>
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avgR==null?'var(--tx3)':r.avgR>=0?'var(--green)':'var(--red)'}">${r.avgR==null?'—':(r.avgR>=0?'+':'')+r.avgR.toFixed(2)+'R'}</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
@@ -1137,11 +1147,13 @@ function renderSymbolBreakdown() {
     const n = ts.length
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name, n, wr: (wins / n) * 100, total, avg: total / n }
+    const rs = ts.map(tradeR).filter(v => v != null)
+    const avgR = rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null
+    return { name, n, wr: (wins / n) * 100, total, avg: total / n, avgR }
   }).sort((a, b) => b.total - a.total)
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average realised R-multiple across this symbol's trades that have a stop set — the risk-adjusted per-trade edge">Avg R</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1149,6 +1161,7 @@ function renderSymbolBreakdown() {
         <td class="bd-name">${r.name}</td>
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avgR==null?'var(--tx3)':r.avgR>=0?'var(--green)':'var(--red)'}">${r.avgR==null?'—':(r.avgR>=0?'+':'')+r.avgR.toFixed(2)+'R'}</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
@@ -1327,9 +1340,7 @@ function renderTrades() {
     const riskStr    = risk
       ? (risk.breakeven ? `<span style="color:var(--blue)">BE</span>` : `<span class="${risk.actualRiskPct > settings.targetRisk ? 'col-r' : 'col-g'}">${risk.actualRiskPct.toFixed(1)}%</span>`)
       : '<span style="color:var(--tx3)">—</span>'
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
@@ -1378,9 +1389,8 @@ function exportTradesCSV() {
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
-      : ''
+    const r     = tradeR(t)
+    const rMult = r != null ? +r.toFixed(2) : ''
     return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
             t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
       .map(esc).join(',')
@@ -1480,16 +1490,16 @@ function clearJournalFilters() {
   renderJournal()
 }
 
-function renderJournal() {
-  populateJournalSymbols()
-
+// The set of journaled trades matching the current Journal filters, in the
+// same order the cards render. Shared by renderJournal() and the export.
+function getJournalFiltered() {
   const q          = (document.getElementById('jf-q')?.value || '').toLowerCase().trim()
   const symFilter  = document.getElementById('jf-symbol')?.value || ''
   const sideFilter = document.getElementById('jf-side')?.value || ''
   const dateFrom   = document.getElementById('jf-date-from')?.value  // 'YYYY-MM-DD' or ''
   const dateTo     = document.getElementById('jf-date-to')?.value
 
-  const noted = trades.filter(t => {
+  return trades.filter(t => {
     if (!hasNote(notes[t.id])) return false
     if (q && !noteText(notes[t.id]).toLowerCase().includes(q) && !t.symbol.toLowerCase().includes(q)) return false
     if (symFilter  && t.symbol !== symFilter)  return false
@@ -1504,6 +1514,50 @@ function renderJournal() {
     }
     return true
   })
+}
+
+// Export the currently filtered journal entries to a Markdown file — a portable,
+// human-readable backup of a trader's most precious data (their notes). Nothing
+// leaves the machine; it's a plain local download.
+function exportJournalMarkdown() {
+  const list = getJournalFiltered()
+  if (!list.length) { alert('No journal entries to export. Add notes to a trade first, or clear your journal filters.'); return }
+  const L = []
+  L.push('# TradeLog Journal Export', '')
+  L.push(`_${list.length} entr${list.length!==1?'ies':'y'} · exported ${new Date().toISOString().slice(0,10)}_`, '')
+  list.forEach(t => {
+    const n = notes[t.id] || {}
+    const r = tradeR(t)
+    L.push(`## ${t.symbol} · ${t.side.toUpperCase()} · ${fdt(t.entryTime)}`, '')
+    L.push(`- **Net P&L:** ${fmtMoney(t.pnl)}${r!=null?`  ·  **R:** ${r>=0?'+':''}${r.toFixed(2)}R`:''}`)
+    if (t.entryPrice || t.exitPrice)
+      L.push(`- **Entry → Exit:** ${t.entryPrice||'—'} → ${t.exitPrice||'—'}${t.slPrice?`  ·  SL ${t.slPrice}`:''}${t.tpPrice?`  ·  TP ${t.tpPrice}`:''}`)
+    L.push('')
+    if (typeof n === 'string') {
+      if (n.trim()) L.push(n.trim(), '')
+    } else {
+      J_FIELDS.forEach(f => {
+        const val = n[f]
+        if (!val || (typeof val === 'string' && !val.trim())) return
+        L.push(`### ${J_LABELS[f]}`)
+        L.push(f === 'structure' ? (val === 'yes' ? '是 ✓' : '否 ✗') : val.trim(), '')
+      })
+    }
+    L.push('---', '')
+  })
+  const blob = new Blob([L.join('\n')], { type: 'text/markdown;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `tradelog-journal-${new Date().toISOString().slice(0,10)}.md`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
+}
+
+function renderJournal() {
+  populateJournalSymbols()
+
+  const noted = getJournalFiltered()
 
   const em = document.getElementById('jn-empty')
   const ls = document.getElementById('jn-list')
@@ -1519,10 +1573,7 @@ function renderJournal() {
 
     // Realised R-multiple in the header — mirrors the Trades table sub-line so
     // R-based traders can scan their journal in risk units, not just dollars.
-    const risk  = calcRisk(t)
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
 
     // Build per-section rows
     const sectionRows = typeof n === 'object' ? J_FIELDS.map((f, i) => {
@@ -2301,6 +2352,9 @@ function wire() {
   // Export filtered trades
   document.getElementById('tr-export').addEventListener('click', exportTradesCSV)
 
+  // Export journal notes (Markdown backup)
+  document.getElementById('jn-export')?.addEventListener('click', exportJournalMarkdown)
+
   // Clear data
   document.getElementById('tr-clear-data').addEventListener('click', async () => {
     if (!confirm('Clear all trade data? This cannot be undone.')) return
@@ -2372,6 +2426,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight to the Trades view and focus its search box — fast
+        // keyboard-driven filtering for power users (preventDefault so the
+        // "/" isn't typed into the field once it gains focus).
+        e.preventDefault(); go('trades')
+        const q = document.getElementById('f-q'); if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
