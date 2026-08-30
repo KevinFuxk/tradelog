@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-30 — Shipped
+- **Shared `tradeR()` helper** — the realised R-multiple formula (P&L ÷ dollars risked at the stop) was duplicated across the Dashboard Avg R card, the Trades table sub-line, the Journal card header, and the CSV export. Factored into one `tradeR(trade)` returning `null` when no usable stop exists, and routed all four call-sites through it. No behaviour change; removes drift risk if the formula ever changes.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show the average realised R-multiple per bucket (risk-adjusted per-trade edge), alongside the existing $ Avg/Trade. Shows "—" for buckets whose trades have no stop set. Built on the new `tradeR()` helper.
+- **`/` keyboard shortcut** — pressing `/` anywhere outside an input jumps to the Trades view and focuses + selects the search box, for fast keyboard-driven filtering. `preventDefault` keeps the slash out of the field.
+- **Journal Markdown export** — new "Export Notes" button in the Journal header downloads the currently filtered entries as a portable, human-readable `.md` file (all six sections, P&L, R, prices). A local backup of a trader's most precious data; nothing leaves the machine. Factored the journal filter into a shared `getJournalFiltered()` used by both the render and the export.
+
+### Deferred / next-up ideas (2026-08-30)
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak.
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour.
+- **Avg R column on the Strategy (Cup & Handle) breakdowns are already R-native** — but consider a shared bucket-render helper between Dashboard and Strategy mini-tables to cut duplication.
+- **Sortable Hold Time column in the Trades table** — still pending a responsive width pass before adding a column.
+- **PIPELINE HEALTH: ~60+ daily PRs are open and unmerged** (nothing merged since PR #8 on 2026-06-07). Every run branches from the same stale base and re-implements overlapping ideas. The base needs a merge/consolidation pass (see SUPER PR #68) before further daily PRs add net value.
