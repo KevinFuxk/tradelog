@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-08-31 — Shipped
+- **Fix calendar-day grouping bug** — the Daily P&L chart and Best/Worst Day stats grouped trades by `entryTime.split('T')[0] || split(' ')[0]`, which returns the *whole* datetime string for space-separated timestamps (`2024-01-15 09:30`) because the first split is truthy. Result: every intraday trade on a space-separated broker export became its own daily bar / "best day". New `dayKey()` helper extracts the ISO date regardless of separator (with a `Date` fallback for non-ISO like `MM/DD/YYYY`), used in both `renderDash` (best/worst day) and `buildDailyChart`. Correctness fix; no data-shape change.
+- **Shared `tradeR()` helper** — the realised R-multiple formula (`pnl ÷ dollars-risked`, guarded on a usable stop) was copy-pasted in four places (Dashboard Avg-R card, Trades table sub-line, Journal card header, CSV export). Factored into one `tradeR(t)` returning `number|null`; all four now call it. Pure refactor, identical behaviour — removes drift risk for the next R feature.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show average realised R per trade (over trades that have a stop), next to Win% / Avg-$. Traders who size in R can see which instruments and which weekdays carry a risk-adjusted edge, not just a dollar total. Shows `—` for groups with no stop data. Built on the new `tradeR()`.
+- **`/` keyboard shortcut** — pressing `/` (when not typing / no modal open) jumps to the Trades view and focuses+selects the search box, for fast keyboard-driven symbol filtering. Complements the existing `1`–`4` view shortcuts.
+
+### Deferred / next-up ideas (2026-08-31)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour (uses local hour of `entryTime`)
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **NOTE for maintainers: large backlog of unmerged `daily/*` PRs (60+ open, #9–#92)** — many duplicate each other (shared tradeR helper, Avg R columns, `/` shortcut, day-grouping fix all appear repeatedly across #72–#92). Future runs should assume these ideas may already be in flight; the real blocker is review/merge throughput, not idea generation.
