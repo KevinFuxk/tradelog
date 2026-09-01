@@ -247,6 +247,16 @@ textarea.nt::placeholder{color:var(--tx3);}
 .empty-title{font-family:'Syne',sans-serif;font-size:16px;color:var(--tx2);margin-bottom:8px;}
 .empty-sub{font-size:11px;line-height:1.7;}
 
+/* ── Keyboard help ───────────────────────── */
+kbd{
+  display:inline-block;background:var(--s3);border:1px solid var(--b2);
+  border-bottom-width:2px;border-radius:4px;padding:1px 6px;margin:0 1px;
+  font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--tx);line-height:1.5;
+}
+#help-modal .bdt td{padding:9px 8px;vertical-align:middle;}
+#help-modal .bdt td:first-child{white-space:nowrap;color:var(--tx2);width:1%;}
+.help-hint{font-size:11px;color:var(--tx3);margin-top:14px;text-align:center;}
+
 /* ── Misc ────────────────────────────────── */
 ::-webkit-scrollbar{width:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -593,6 +603,26 @@ textarea.nt::placeholder{color:var(--tx3);}
       <button class="btn btn-g" id="m-cancel">Cancel</button>
       <button class="btn btn-p" id="m-save">Save Journal</button>
     </div>
+  </div>
+</div>
+
+<!-- ── Keyboard shortcuts help ─────────────── -->
+<div class="mo" id="help-modal">
+  <div class="md" style="width:440px">
+    <div class="mh">
+      <div class="mtitle">Keyboard Shortcuts</div>
+      <button class="mx" id="help-close">×</button>
+    </div>
+    <table class="bdt">
+      <tbody>
+        <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></td><td>Dashboard · Trades · Journal · Strategy</td></tr>
+        <tr><td><kbd>/</kbd></td><td>Jump to the Trades search box</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Close a dialog</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Save the open journal note</td></tr>
+      </tbody>
+    </table>
+    <div class="help-hint">Press <kbd>?</kbd> any time to reopen this list.</div>
   </div>
 </div>
 
@@ -1050,7 +1080,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1242,7 +1272,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -1333,6 +1363,12 @@ function renderTrades() {
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
+    // Note cell shows how many of the 6 journal sections are filled (e.g. "✎ 3/6"),
+    // so a trader can scan journaling completeness without opening each trade.
+    const nCount   = filledCount(notes[t.id])
+    const noteCell = nCount
+      ? `<span class="ni has" title="${nCount} of 6 journal sections filled">✎ ${nCount}/6</span>`
+      : `<span class="ni" title="No journal note yet — click to add">✎</span>`
     return `<tr data-id="${t.id}">
       <td style="color:var(--tx3)">${idx}</td>
       <td style="color:var(--tx2);white-space:nowrap">${fdt(t.entryTime)}</td>
@@ -1346,7 +1382,7 @@ function renderTrades() {
       <td>${riskStr}</td>
 
       <td class="${pc}">${ps}${rLine}</td>
-      <td><span class="ni ${hasNote(notes[t.id])?'has':''}">✎</span></td>
+      <td>${noteCell}</td>
     </tr>`
   }).join('')
 
@@ -2227,6 +2263,17 @@ function holdMs(t) {
   return (isFinite(ms) && ms >= 0) ? ms : null
 }
 
+// Calendar-day key (YYYY-MM-DD) for a timestamp, robust to BOTH 'T'-separated
+// (2026-01-15T10:30) and space-separated (2026-01-15 10:30) formats. Splitting
+// on 'T' alone left space-format times (e.g. Tickmill "update time") ungrouped —
+// every trade became its own "day", breaking Best/Worst Day and the Daily chart.
+function dayKey(ts) {
+  const s = String(ts || '').trim()
+  if (!s) return ''
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/)
+  return m ? m[1] : s.split('T')[0].split(' ')[0]
+}
+
 // Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.
 // Keeps larger-account P&L readable. `sign` adds a leading + for non-negatives.
 function fmtMoney(n, sign = true) {
@@ -2363,8 +2410,16 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  // Help overlay open/close
+  const help = document.getElementById('help-modal')
+  document.getElementById('help-close').addEventListener('click', () => help.classList.remove('on'))
+  help.addEventListener('click', e => { if (e.target === help) help.classList.remove('on') })
+
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeModal(); return }
+    if (e.key === 'Escape') {
+      if (help.classList.contains('on')) { help.classList.remove('on'); return }
+      closeModal(); return
+    }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
     const isTyping = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)
     if (!isModalOpen && !isTyping) {
@@ -2372,6 +2427,14 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '?') { e.preventDefault(); help.classList.toggle('on') }
+      else if (e.key === '/') {
+        // Jump straight to the Trades search box — fast keyboard-driven filtering
+        e.preventDefault()
+        go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
