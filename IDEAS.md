@@ -82,3 +82,19 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-01 — Shipped
+- **Fixed calendar-day grouping bug** — Best/Worst Day stat cards and the Daily P&L chart split the timestamp on `'T'` only, so space-separated times (e.g. Tickmill "update time" `2026-01-15 10:30:00`) were never truncated to the date — every trade became its own "day", scattering the daily bars and making Best/Worst Day meaningless. New shared `dayKey()` helper matches the leading `YYYY-MM-DD` and is used in both spots. Display-only fix; no persistence change.
+- **`/` jumps to the Trades search box** — long-deferred keyboard nicety: pressing `/` anywhere (outside an input/modal) switches to Trades and focuses+selects the symbol search, so power users can filter without reaching for the mouse.
+- **`?` keyboard-shortcut help overlay** — a small dialog listing every shortcut (`1`–`4` nav, `/` search, `?` help, `Esc` close, `Ctrl+Enter` save). The app had hidden shortcuts with no discoverability; this surfaces them. Closes on `Esc`, the ×, or a backdrop click. Reuses the existing `.mo`/`.md` modal styling; new `<kbd>` styling only.
+- **Journal completeness in the Trades table** — the Note column now shows `✎ n/6` (how many of the 6 journal sections are filled) instead of a bare pencil, so a trader can scan which trades are journaled — and how thoroughly — without opening each row. Reuses `filledCount()`; display-only.
+
+### ⚠️ Process note (2026-09-01)
+- **The daily PR pipeline is jammed.** Nothing has merged since PR #8 (2026-06-07); ~85 daily branches are open and unmerged, all cut from the same `main` (`d910f17`), so they heavily duplicate each other (shared `tradeR()` helper, Avg R breakdown columns, `/` search shortcut, Peak→Trough DD, day-grouping fix each reappear in a dozen+ PRs). A "SUPER" consolidation PR (#68) is itself unmerged. **Future runs add little until the backlog is triaged/merged** — consider pausing new daily PRs or merging a consolidation branch before shipping more.
+
+### Deferred / next-up ideas (2026-09-01)
+- **Triage the 85 open daily PRs** — merge or close the backlog (or land the SUPER #68 consolidation) before layering on more; the base has not moved since June.
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **Longest underwater stretch** — longest run (trades/days) spent below a prior equity peak, next to Current DD
+- **Avg R per symbol / per weekday** — add an Avg R column to the By-Symbol / By-Day-of-Week tables via a shared `tradeR()` helper
+- **Best/worst hour-of-day breakdown** — mirror the weekday table by entry hour for intraday traders
