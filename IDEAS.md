@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-02 — Shipped
+- **Avg R column on the By-Symbol & By-Day-of-Week dashboard tables** — both breakdown tables now show average realised R-multiple per trade (trades with a stop only) alongside the $ Avg/Trade, so you can see which instruments and which weekdays carry your *risk-adjusted* edge, not just raw dollars (a high $/trade on oversized positions can hide a thin R edge). Backed by a new shared `tradeR(trade)` helper that is now the single source of truth for the realised-R formula — the Trades table sub-line, Journal card header, Dashboard Avg R card, and CSV export were all refactored onto it (previously four copies of the same expression), plus `avgTradeR()` / `fmtR()` helpers.
+- **Longest DD stat card on the Dashboard** — surfaces the longest underwater stretch: the most consecutive trades spent below a prior equity peak (how many trades your deepest drawdown took to recover). Pairs with the existing Current DD (depth right now) and Max Drawdown (worst single trade) — depth *and* duration of slumps. Computed in the same peak/cum walk already used for maxDD; no new persistence.
+- **`/` keyboard shortcut** jumps to the Trades view and focuses the symbol search box (with select-all), for fast keyboard-driven filtering. The search input gained a matching tooltip. Ignored while typing in a field or with the journal modal open, so it never eats a literal slash.
+
+### Deferred / next-up ideas (2026-09-02)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour (reuse `.bdt` styling)
+- **Avg R column on the Strategy setups already show R** — but consider an Avg R row on the trade-detail modal too
+- **Time-to-recover in days** — complement "Longest DD (trades)" with the calendar span of the deepest underwater stretch
+- **Expectancy in R on the dashboard header sub-line** — quick at-a-glance risk-unit edge without scrolling the stat grid
