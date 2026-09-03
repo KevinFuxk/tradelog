@@ -4,8 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TradeLog</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<!-- Chart.js is vendored, not fetched from a CDN: a desktop journal has to work
+     offline, and a failed fetch here used to take the whole app down with it. -->
+<script src="vendor/chart.umd.min.js"></script>
+<!-- Loaded non-blocking (media=print, flipped on load): a render-blocking
+     stylesheet also blocks the inline script below it, so when Google Fonts is
+     slow or unreachable the whole app used to sit blank until the request timed
+     out. Every font stack below has a local fallback, so text renders at once. -->
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
 :root {
   --bg:       #070910;
@@ -1122,7 +1128,15 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
-  buildCharts(s)
+  drawCharts(() => buildCharts(s))
+}
+
+// Charts are decorative next to the numbers and the journal: never let a chart
+// problem abort the render pass and take the tables, filters and — because
+// boot() wires listeners after renderAll() — the whole UI down with it.
+function drawCharts(fn) {
+  if (typeof Chart !== 'function') { console.warn('Chart.js unavailable — skipping charts'); return }
+  try { fn() } catch (e) { console.warn('Chart render failed:', e) }
 }
 
 // Day-of-week performance — answers "am I better on certain weekdays?".
@@ -2091,7 +2105,7 @@ function renderStrategy() {
     ).join('')
   }
 
-  buildCnhCharts(list, s)
+  drawCharts(() => buildCnhCharts(list, s))
   renderCnhBreakdowns(list)
   renderCnhTable(list)
 }
@@ -2327,7 +2341,7 @@ function wire() {
 
   // Daily range buttons
   document.querySelectorAll('.daily-range-btn').forEach(b =>
-    b.addEventListener('click', () => { dailyRange = b.dataset.range; try { localStorage.setItem(DAILY_RANGE_KEY, dailyRange) } catch {} ; buildDailyChart() })
+    b.addEventListener('click', () => { dailyRange = b.dataset.range; try { localStorage.setItem(DAILY_RANGE_KEY, dailyRange) } catch {} ; drawCharts(() => buildDailyChart()) })
   )
 
   // Settings save
