@@ -1,5 +1,17 @@
 # TradeLog — Ideas Log
 
+## 2026-09-03 — Shipped
+- **Fix calendar-day grouping bug** — day keys were built with `.split('T')[0] || .split(' ')[0]`, which never triggers the space fallback: for space-separated broker timestamps (e.g. `2026-01-15 10:30:00`) the whole string was returned, so every trade became its own "day". This broke the **Best Day / Worst Day** stat cards (each showed a single trade) and the **Daily P&L** chart (a bar per trade, not per day). Now uses `.split(/[ T]/)[0]` so both ISO (`T`) and space-separated formats collapse to the calendar date. Fixed in `renderDash` (Best/Worst Day) and `buildDailyChart`.
+- **Total Fees stat card** (Dashboard) — sums commission/fees across all trades and shows the cost as a red figure with `across N trades`. Fees are already deducted from Net P&L, but were otherwise invisible; this surfaces the cost drag on a trader's edge. Only appears when commission data exists. Pure derivation from existing `trades`; no persistence change.
+- **`/` keyboard shortcut** — pressing `/` anywhere (outside an input/modal) jumps to the Trades view and focuses the search box, for fast keyboard-driven filtering. Placeholder title hints at it. Mirrors the existing `1`–`4` nav shortcuts.
+
+### Deferred / next-up ideas (2026-09-03)
+- **NOTE for future runs:** ~87 daily PRs (#9–#95) are OPEN and UNMERGED; the last merged PR is #8. `main` therefore still lacks the shared `tradeR()` helper, Avg R breakdown columns, Longest Underwater stat, `?` help overlay, etc. — these are genuinely absent, not done. Prioritise getting PRs merged over opening more; heavy duplication is accumulating.
+- **Shared `tradeR()` helper** — the R-multiple formula is duplicated in `renderTrades`, `renderJournal`, `renderDash` (Avg R), and `exportTradesCSV`; factor it out before adding per-symbol/weekday Avg R columns.
+- **Avg R column on By-Symbol / By-Day-of-Week** breakdowns (needs `tradeR()` first).
+- **Longest Underwater stretch** — complement Current DD with the longest run (trades/days) spent below a prior equity peak.
+- **Best/worst hour-of-day breakdown** for intraday traders.
+
 ## 2026-06-01 — Shipped
 - **Keyboard shortcuts** (`1`–`4` navigate Dashboard/Trades/Journal/Strategy; `Ctrl+Enter` saves journal note in modal; `Escape` already worked)
 - **Sidebar tooltip hints** — tooltips now show `[1]`–`[4]` to surface the shortcuts to new users

@@ -350,7 +350,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px" title="Press / anywhere to jump here and search">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -1046,11 +1046,21 @@ function renderDash() {
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
+  // Total commission/fees paid — the cost drag that quietly eats into gross
+  // edge. Already deducted from Net P&L; surfaced so it isn't invisible.
+  const totalFees = trades.reduce((a, t) => a + (t.commission || 0), 0)
+  const feesCard = totalFees ? [[
+    'Total Fees',
+    `<span class="col-r">${fmtMoney(-Math.abs(totalFees), false)}</span>`,
+    `across ${trades.length} trades`,
+    'Total commission/fees across all trades. Already deducted from your Net P&L — shown here so you can see how much your edge pays away in costs'
+  ]] : []
+
   // Best / worst single trading day by net P&L — surfaces outlier days that
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = (t.entryTime || '').split(/[ T]/)[0] || ''
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1076,6 +1086,7 @@ function renderDash() {
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
+    ...feesCard,
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
@@ -1242,7 +1253,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = (t.entryTime||'').split(/[ T]/)[0]||'?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -2372,6 +2383,7 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') { e.preventDefault(); go('trades'); document.getElementById('f-q')?.focus() }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
