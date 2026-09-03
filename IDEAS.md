@@ -88,6 +88,8 @@
 - **Longest DD stat card on the Dashboard** — surfaces the longest underwater stretch: the most consecutive trades spent below a prior equity peak (how many trades your deepest drawdown took to recover). Pairs with the existing Current DD (depth right now) and Max Drawdown (worst single trade) — depth *and* duration of slumps. Computed in the same peak/cum walk already used for maxDD; no new persistence.
 - **`/` keyboard shortcut** jumps to the Trades view and focuses the symbol search box (with select-all), for fast keyboard-driven filtering. The search input gained a matching tooltip. Ignored while typing in a field or with the journal modal open, so it never eats a literal slash.
 
+- **Bug fix: daily grouping broke on space-separated timestamps** — `Best Day` / `Worst Day` and the Daily P&L chart derived their calendar-day key with `split('T')[0] || split(' ')[0]`. For a timestamp like `2026-08-04 11:17:00` (what the Tickmill and TradingView exports actually produce) `split('T')[0]` returns the *whole string*, which is truthy, so the space fallback was dead code. Every trade therefore became its own "trading day": the Daily P&L chart drew one bar per trade with full timestamps on the x-axis, and Best/Worst Day silently degraded into best/worst *single trade*. Added a `dayKey(ts)` helper that splits on `T` **or** space and used it at both call sites. ISO timestamps are unaffected. Found by rendering the app and noticing Best Day exactly equalled Max Profit.
+
 ### Deferred / next-up ideas (2026-09-02)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour (reuse `.bdt` styling)

@@ -1082,7 +1082,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1277,7 +1277,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -2254,6 +2254,17 @@ function holdMs(t) {
   if (!t.entryTime || !t.exitTime) return null
   const ms = new Date(t.exitTime) - new Date(t.entryTime)
   return (isFinite(ms) && ms >= 0) ? ms : null
+}
+
+// Calendar-day key ('2026-08-04') from a timestamp in either broker format:
+// ISO '2026-08-04T11:17:00' or space-separated '2026-08-04 11:17:00' (what the
+// Tickmill / TradingView exports actually use). Splitting on 'T' alone silently
+// keeps the whole string for the space form, which would make every trade look
+// like its own trading day.
+function dayKey(ts) {
+  const s = String(ts == null ? '' : ts).trim()
+  if (!s) return ''
+  return s.split(/[T ]/)[0]
 }
 
 // Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.
