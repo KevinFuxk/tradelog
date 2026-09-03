@@ -936,6 +936,7 @@ function calcRisk(trade) {
   const lotDiff       = qty - reqLot
   return {
     actualRiskPct: +actualRiskPct.toFixed(2),
+    dollarRisk:    +dollarRisk.toFixed(2),   // exact $ at risk — R divides by this
     reqLot:        +reqLot.toFixed(4),
     lotDiff:       +lotDiff.toFixed(4),
     contractSize,
@@ -946,10 +947,12 @@ function calcRisk(trade) {
 // null when there's no usable stop. Single source of truth reused by the Trades
 // table, Journal headers, the Dashboard Avg R card, the breakdown tables, and
 // the CSV export — so the R figure is computed identically everywhere.
+// Divides by dollarRisk directly rather than re-deriving it from the 2-decimal
+// actualRiskPct, which would fold that display rounding into every R figure.
 function tradeR(trade) {
   const risk = calcRisk(trade)
-  if (!risk || risk.breakeven || !(risk.actualRiskPct > 0)) return null
-  return trade.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
+  if (!risk || risk.breakeven || !(risk.dollarRisk > 0)) return null
+  return trade.pnl / risk.dollarRisk
 }
 
 // Average realised R across a list of trades that have a stop, or null when none do.
@@ -1069,12 +1072,12 @@ function renderDash() {
 
   // Average realised R-multiple across trades that have a stop set — the
   // risk-adjusted twin of $ Expectancy (positive = an edge in R terms).
-  const rList = trades.map(tradeR).filter(v => v != null)
-  const avgR = rList.length ? rList.reduce((a, b) => a + b, 0) / rList.length : null
+  const rCount = trades.filter(t => tradeR(t) != null).length
+  const avgR = avgTradeR(trades)
   const avgRCard = avgR != null ? [[
     'Avg R',
     `<span class="${avgR >= 0 ? 'col-g' : 'col-r'}">${avgR >= 0 ? '+' : ''}${avgR.toFixed(2)}R</span>`,
-    `${rList.length} trade${rList.length !== 1 ? 's' : ''} w/ stop`,
+    `${rCount} trade${rCount !== 1 ? 's' : ''} w/ stop`,
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
@@ -1575,9 +1578,9 @@ function renderJournal() {
         <div class="jct">${t.symbol} <span class="badge ${t.side==='buy'?'bb':'bs'}">${t.side}</span></div>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="${pc}" style="font-size:13px;font-weight:600">${fmtMoney(t.pnl)}</span>
-          ${rMult!=null?`<span style="font-size:11px;color:var(--tx3)" title="Realised R-multiple (P&L ÷ amount risked at the stop)">${rMult>=0?'+':''}${rMult.toFixed(1)}R</span>`:''}
+          ${rMult!=null?`<span style="font-size:11px;color:var(--tx2)" title="Realised R-multiple (P&L ÷ amount risked at the stop)">${rMult>=0?'+':''}${rMult.toFixed(1)}R</span>`:''}
           <span style="font-size:11px;color:var(--tx2)">${fdt(t.entryTime)}</span>
-          <span style="font-size:11px;color:var(--tx3)">${count}/6 sections</span>
+          <span style="font-size:11px;color:var(--tx2)">${count}/6 sections</span>
         </div>
       </div>
       ${sectionRows ? `<div class="jc-sections">${sectionRows}</div>` : `<div class="jce">No notes — click to add</div>`}
