@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-04 — Shipped
+- **Fix calendar-day grouping bug** — the Best/Worst Day stat cards and the Daily P&L chart grouped by `split('T')[0]`, which returns the *whole* string for space-separated timestamps (`"2026-01-15 09:30"`), so every such trade became its own "day" — inflating the day count, scattering the Daily bars, and picking a single trade as "Best/Worst Day". New shared `dayKey()` helper splits on either `T` or space (pure string slice, no Date/timezone shift) and both call sites use it. Correctness fix; no data-shape change.
+- **Shared `tradeR()` helper** — the realised R-multiple formula (`P&L ÷ dollars risked at the stop`) was copy-pasted in four places (Trades table, Journal card header, Dashboard Avg-R stat, CSV export). Factored into one `tradeR(trade)` (returns a Number or null) so the R shown everywhere stays consistent and there's a single place to fix. Pure refactor — output identical.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show average realised R per group (via a small `groupAvgR()` over `tradeR`), so a trader sees risk-adjusted edge per instrument / weekday, not just dollars. Groups with no stop-set trades show "—" rather than a misleading 0.
+- **`/` keyboard shortcut** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades view and focuses the search box (with `preventDefault` so the slash isn't typed). Placeholder now hints `( / )`. Fast keyboard-driven filtering for power users; joins the existing `1`–`4` nav keys.
+
+### Deferred / next-up ideas (2026-09-04)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Journal export / backup** — one-click download of all journal notes (with trade context) as CSV or Markdown; on-theme with "never lose your notes"
+- **Avg R column on the Cup & Handle bucket tables** — those already report R, but a per-bucket Avg R already exists; consider surfacing expectancy consistency (std-dev of R) instead
