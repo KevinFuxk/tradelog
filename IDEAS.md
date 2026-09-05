@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-05 — Shipped
+- **Fix calendar-day grouping bug** — Best Day / Worst Day and the Daily P&L chart grouped trades on `entryTime.split('T')[0] || entryTime.split(' ')[0]`. For any timestamp without a `T` — i.e. the primary Tickmill/broker format (`2024-01-15 10:30` or `2024.01.15 10:30`) — `split('T')[0]` returns the *whole* string, so the `||` never fell through and **every trade became its own "day"**. Best/Worst Day then just echoed the single best/worst *trade* and the Daily chart drew one bar per trade. New `dayKey(t)` helper strips the time via a chained `split('T')[0].split(' ')[0]` (TZ-safe, no `Date` reparse) and is used by both sites.
+- **Shared `tradeR()` helper (dedupe)** — the realised R-multiple formula (`pnl ÷ dollars-risked-at-stop`) was copy-pasted in four places (Dashboard Avg R, Trades table, Journal header, CSV export). Folded into one `tradeR(t)` returning the R or `null`, so the definition can't drift. Behaviour identical; ~15 fewer duplicated lines.
+- **Avg R column on the By-Symbol and By-Day-of-Week dashboard tables** — each breakdown row now shows the average realised R for that symbol/weekday (only trades with a stop set), via `groupAvgR()` + `fmtR()`. Lets R-based traders see *risk-adjusted* per-bucket edge, not just dollars (a fat winner no longer disguises a thin per-unit-risk edge).
+- **`/` keyboard shortcut to focus the Trades search** — pressing `/` anywhere (outside a text field/modal) jumps to the Trades view and focuses+selects the symbol search box (Gmail/GitHub-style). Placeholder now hints `( / )`.
+
+### Deferred / next-up ideas (2026-09-05)
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour (reuse `groupAvgR`/`fmtR`)
+- **Avg R column on the Strategy CSV/Trades CSV summary row** — surface aggregate expectancy in R at the foot of exports
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **`?` help overlay** — a small cheat-sheet listing the 1–4 / `/` / Ctrl+Enter shortcuts for discoverability
