@@ -82,3 +82,37 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-06 — Shipped
+> ⚠️ **Process note for future runs:** as of this run, `main` is frozen at PR #8
+> (2026-06-07) and there are **96 open, unmerged `daily/*` PRs**. Because the base
+> branch and this file never advance, every run re-reads the same state and
+> re-proposes the same deferred ideas — this run's batch already exists in 20+
+> near-duplicate open PRs (#98, #97, #93, #92, #91, #83, #77, #76, #73…). The
+> backlog needs a human to **merge or close** the stack before daily runs can
+> build forward instead of looping. Owner was notified.
+- **Fix calendar-day grouping bug** — `dayKey()` now extracts the date with
+  `split(/[T ]/)[0]`, handling both ISO (`2026-06-07T14:30`) and space-separated
+  (`2026-06-07 14:30`) timestamps. The old `split('T')[0] || split(' ')[0]`
+  fallback never fired for space-separated times (the first split returned the
+  whole truthy string), so every such trade landed in its own "day" — silently
+  breaking the **Best/Worst Day** stat cards and the **Daily P&L** chart's per-day
+  bars. Applied in both `renderDash` and `buildDailyChart`.
+- **Shared `tradeR()` helper** — the realised R-multiple formula (P&L ÷ dollars
+  risked) was duplicated in 4 places (Trades table, Journal card header, CSV
+  export, Dashboard Avg R card); now all read from one `tradeR(t)` function.
+  Behaviour-preserving refactor that makes the R math impossible to drift.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdown tables** — each
+  row now shows the average realised R across that group's trades that have a
+  stop set (`—` when none), so a trader sees the risk-adjusted edge per
+  instrument / per weekday, not just the dollar total. Reuses `tradeR()`/`rNum`.
+- **`/` keyboard shortcut** — jumps to the Trades view and focuses the symbol
+  search box for fast keyboard-driven filtering (skipped while typing or when a
+  modal is open).
+
+### Deferred / next-up ideas (2026-09-06)
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **Avg R column on the Strategy view is already R-native** — consider a Payoff Ratio (avg win ÷ avg loss) card on the Dashboard
+- **PROCESS: consolidate the open PR backlog** — future value is near-zero until the 96 stacked PRs are merged/closed and `main` advances
