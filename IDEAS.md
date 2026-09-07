@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-07 — Shipped
+- **Sortable Hold Time column in the Trades table** — the Trades table now has a `Hold` column showing each trade's entry→exit duration (e.g. `45m`, `2h 10m`, `3d 4h`), and it's sortable like the other columns. Sort descending to instantly find your longest holds (are you sitting in losers?) or ascending for scalps. Computed from `holdMs`/`fdur` (already used by the modal + Avg Hold card); missing timestamps sink to the bottom of the sort. No data-shape change. (Long-deferred; the table already scrolls horizontally via `overflow-x:auto`, so the extra column needs no width rework.)
+- **Hold Time in the Trades CSV export** — the export now carries a numeric `Hold Minutes` column so holding period can be pivoted/charted in Excel/Sheets alongside %Risk and R-multiple. Blank when timestamps are missing. Pure client-side, no IPC/network.
+- **Filter-aware Journal empty state** — when you have journal notes but the current filters (search/symbol/side/date) match none, the Journal view now shows "No entries match your filters" with a one-click **Clear filters** button, instead of the misleading "No journal entries yet" that implied your notes were gone. Purely presentational; never touches the notes store. The true "nothing journaled yet" message still shows when no notes exist at all.
+
+### Deferred / next-up ideas (2026-09-07)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **fix calendar-day grouping bug** — `('...').split('T')[0]` returns the *whole* string for space-separated timestamps (e.g. `2026-01-15 09:30:00`), so Best/Worst Day + the Daily P&L chart mis-group per-timestamp instead of per-date; extract a shared `tradeDay(t)` helper. (Real bug in `main`; already proposed in several open PRs awaiting merge — dedupe against those before re-shipping.)
+- **Sortable Hold Time in the Journal cards / a Hold column in the Strategy setups table**
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week tables with an Avg R column (factor out a shared `tradeR()` helper) — note: already proposed in open PRs
