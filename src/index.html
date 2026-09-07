@@ -379,6 +379,7 @@ textarea.nt::placeholder{color:var(--tx3);}
             <th data-col="qty">Qty</th>
             <th data-col="riskPct">%Risk</th>
             <th data-col="pnl">P&amp;L ↕</th>
+            <th data-col="hold" title="Time held from entry to exit — sort to spot your longest holds or scalps">Hold ↕</th>
             <th>Note</th>
           </tr>
         </thead>
@@ -1282,6 +1283,8 @@ function getFiltered() {
   list.sort((a,b) => {
     let va = a[sortCol], vb = b[sortCol]
     if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    // Hold is a computed field (entry→exit ms); missing timestamps sink to the bottom
+    if (sortCol === 'hold') { va = holdMs(a); vb = holdMs(b); if (va == null) va = -Infinity; if (vb == null) vb = -Infinity }
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -1346,6 +1349,7 @@ function renderTrades() {
       <td>${riskStr}</td>
 
       <td class="${pc}">${ps}${rLine}</td>
+      <td style="color:var(--tx2);white-space:nowrap">${fdur(t.entryTime, t.exitTime) || '<span style="color:var(--tx3)">—</span>'}</td>
       <td><span class="ni ${hasNote(notes[t.id])?'has':''}">✎</span></td>
     </tr>`
   }).join('')
@@ -1374,15 +1378,17 @@ function exportTradesCSV() {
     const s = v == null ? '' : String(v)
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
   }
-  const header = ['#','Entry Time','Exit Time','Symbol','Side','Entry Price','Exit Price','SL Price','TP Price','Qty','Risk %','R Multiple','Net P&L','Commission']
+  const header = ['#','Entry Time','Exit Time','Symbol','Side','Entry Price','Exit Price','SL Price','TP Price','Qty','Hold Minutes','Risk %','R Multiple','Net P&L','Commission']
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
     const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
       ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
       : ''
+    const ms      = holdMs(t)
+    const holdMin = ms != null ? +(ms / 60000).toFixed(1) : ''   // numeric minutes → easy to pivot in Excel/Sheets
     return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
-            t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
+            t.slPrice || '', t.tpPrice || '', t.qty, holdMin, rPct, rMult, t.pnl, t.commission || 0]
       .map(esc).join(',')
   })
   const csv  = [header.join(','), ...rows].join('\r\n')
@@ -1509,7 +1515,19 @@ function renderJournal() {
   const ls = document.getElementById('jn-list')
   document.getElementById('jn-sub').textContent = `${noted.length} entr${noted.length!==1?'ies':'y'}`
 
-  if (!noted.length) { em.style.display='flex'; ls.style.display='none'; return }
+  if (!noted.length) {
+    // Distinguish "you haven't journaled anything yet" from "your filters hid everything"
+    const anyNotes = trades.some(t => hasNote(notes[t.id]))
+    em.innerHTML = anyNotes
+      ? `<div class="empty-icon">🔍</div>
+         <div class="empty-title">No entries match your filters</div>
+         <div class="empty-sub">Try adjusting or clearing the filters above<br>to see your journal entries.</div>
+         <button class="btn btn-g" style="margin-top:16px" onclick="clearJournalFilters()">Clear filters</button>`
+      : `<div class="empty-icon">📝</div>
+         <div class="empty-title">No journal entries yet</div>
+         <div class="empty-sub">Click any trade row to add notes,<br>set your thesis, or log what you learned.</div>`
+    em.style.display='flex'; ls.style.display='none'; return
+  }
   em.style.display='none'; ls.style.display='flex'
 
   ls.innerHTML = noted.map(t => {
