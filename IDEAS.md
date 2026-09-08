@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-08 — Shipped
+- **`/` keyboard shortcut to focus the Trades search** — pressing `/` from any non-typing context jumps to the Trades view and focuses the symbol search box, so power users can filter without reaching for the mouse. Guarded so it never fires while a field/textarea/select is focused or a modal is open; `preventDefault()` stops the slash from being typed.
+- **Shared `tradeR()` helper + Avg R columns on the By-Symbol and By-Day-of-Week breakdowns** — factored the realised R-multiple formula (previously duplicated in the Avg R card, Trades table and Journal) into one `tradeR(t)` helper (returns R or null), then used it to add an **Avg R** column to both Dashboard breakdown mini-tables. Traders now see risk-adjusted edge *per instrument* and *per weekday*, not just $ totals — e.g. a symbol with a fat $ total but weak Avg R is exposed. Avg R shows `—` for groups where no trade has a stop set. The Avg R card now also calls the shared helper.
+- **Total Fees stat card on Dashboard** — sums broker commission across all trades and shows the cumulative fee drag (only appears when the imported data carries commission figures). Makes an often-invisible cost visible next to Net P&L. Pure derivation from existing `trades`; no persistence change.
+
+### Deferred / next-up ideas (2026-09-08)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Refactor Trades-table & Journal inline R formulas onto `tradeR()`** — now that the helper exists, replace the two remaining inline copies (kept as-is this run to keep the diff small) to finish de-duplicating
+- **Total Fees vs gross P&L** — optionally show gross (pre-fee) P&L alongside Total Fees once the net/gross relationship is confirmed across all importers
