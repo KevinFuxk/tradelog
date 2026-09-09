@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-09 — Shipped
+- **Shared `tradeR()` helper** — the realised R-multiple formula (P&L ÷ dollars risked at the stop) was duplicated in four places (Dashboard Avg R card, Trades table sub-line, Journal card header, CSV export). Extracted into one `tradeR(t)` function that returns the R value or `null` when there's no usable stop. Single source of truth — one place to fix if the risk math ever changes, and the same figure everywhere. Pure refactor, no behaviour change, no data-shape change.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show the average realised R per group (trades with a stop), alongside the existing Win% / Avg-$ / Net P&L columns. Lets a trader see which instruments and which weekdays carry a real *risk-adjusted* edge, not just a raw dollar total that one fat trade can flatter. Reuses the new `tradeR()` helper; shows `—` for groups with no stop-loss data.
+- **`/` keyboard shortcut → Trades search** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades view and focuses+selects the symbol search box, so power users can filter without reaching for the mouse. Mirrors the `1`–`4` nav shortcuts; `e.preventDefault()` keeps the slash out of the field.
+- **Total Fees card on the Dashboard** — sums commission/fees across all trades (already deducted from Net P&L) with a per-trade sub-line, so cost drag — a silent edge-killer — is visible against Net P&L. Sign-agnostic and shown only when the imported data actually carries commissions. Pure derivation from existing `trades`; no persistence change.
+
+### Deferred / next-up ideas (2026-09-09)
+- **Avg R on the Strategy view breakdowns already exists (R-native)** — but consider adding Avg R to the *Cup & Handle* per-bucket tables' export
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **NOTE for future runs:** ~90+ daily PRs are open and unmerged (nothing merged since PR #8 / 2026-06-07), so `main` never advances and each run re-implements the same batch against the same stale base. Repo owner needs to review/merge the backlog; until then, expect heavy overlap between daily PRs.
