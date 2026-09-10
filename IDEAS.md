@@ -81,4 +81,39 @@
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
-- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour — DONE 2026-09-10
+
+## 2026-09-10 — Shipped
+> Note: at the time of this run, PRs #73–#102 (daily runs since 2026-06-08) were all
+> still OPEN/unmerged, so `main` was frozen at the 2026-06-07 state. Nearly every
+> deferred idea above (shared `tradeR()` helper, Avg R breakdown columns, `/` search
+> shortcut, Total Fees card, Longest Underwater, sortable Hold Time, help overlay,
+> filtered-P&L header, By-Month/By-Exit-Type breakdowns, etc.) was already proposed
+> in that stack of open PRs. To avoid piling on another duplicate, this batch was
+> chosen to be genuinely DISTINCT from all 30 open PRs.
+- **Fix calendar-day grouping bug** — `Best Day` / `Worst Day` stat cards and the
+  Daily P&L chart grouped by `entryTime.split('T')[0]`, which only works for ISO
+  timestamps. Broker (Tickmill) exports use space/dot datetimes (`2026.06.07 14:30`),
+  so the time stayed attached to the key and *every trade became its own "day"* —
+  making Best/Worst Day meaningless and the daily bar chart one bar per trade. New
+  `dayKey()` helper splits on `T` **or** space; both grouping sites now use it.
+- **By Hour-of-Day breakdown** on the Dashboard — mini-table (Hour · Trades · Win% ·
+  Avg/Trade · Net P&L, with a magnitude bar) grouping trades by entry hour (00–23),
+  for intraday traders spotting time-of-day edges/leaks. Mirrors the By-Day-of-Week
+  table, reuses `.bdt`/`.bd-bar`, hides with the rest of the Dashboard when empty.
+- **In-modal Prev/Next trade navigation** — `‹ Prev` / `Next ›` buttons in the trade
+  modal header (and ←/→ keys when not typing in a note field) step through trades
+  sequentially without closing the modal — core to fast review. Walks the current
+  Trades filter+sort when the open trade is part of it, else all trades newest-first;
+  always honours the existing unsaved-note guard before leaving a trade. Buttons
+  disable at the ends of the list.
+
+### Deferred / next-up ideas (2026-09-10)
+- **MERGE THE BACKLOG** — 30 daily PRs (#73–#102) sit open and unmerged; `main` is
+  frozen. The single highest-value action is for a maintainer to review/merge (or
+  close) that stack so future runs build forward instead of re-deriving the same
+  features. Until then every run risks duplicating open work.
+- **Longest underwater stretch** — longest run of trades/days below a prior equity peak (still not on `main`)
+- **Shared `tradeR()` helper + Avg R breakdown columns** — still not on `main` (many open PRs propose it)
+- **Hour-of-day: add an Avg R column** once a shared `tradeR()` helper lands
+- **Modal nav: show "N of M" position** next to Prev/Next so the trader knows how far through the filtered set they are
