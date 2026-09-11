@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-11 — Shipped
+- **Filtered Net P&L + Win% in the Trades sub-header** — the Trade History sub-line now reads e.g. `12 trades · +1,340.00 net · 58% win` instead of just a count. Because it reflects the *currently filtered* slice, a trader can filter to one symbol / side / date range and instantly read that subset's bottom line (net result and hit rate) without exporting or tallying by hand. Green/red colouring on both figures. New shared `filteredSummaryHTML()` helper; no data-shape change.
+- **Filtered Net P&L + Win% in the Journal sub-header** — mirrors the same summary on the Journal view, so filtering journal entries (by symbol/side/text/date) also surfaces the net P&L and win rate of the matching entries. Reuses the same helper.
+- **`/` keyboard shortcut to focus the search box** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades search box, switching to the Trades view first if needed; if the Journal view is open it focuses the Journal search instead. Existing text in the box is selected for quick replace. A `title` hint on the Trades search advertises it. Complements the existing 1–4 nav / Esc / Ctrl+Enter shortcuts.
+
+### Deferred / next-up ideas (2026-09-11)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Prev/Next navigation inside the trade-detail modal** (← / → arrow keys to step through the filtered list) for fast keyboard-only review — must respect the unsaved-note guard
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Extend the filtered summary to a filtered Avg R / expectancy** once a shared `tradeR()` helper lands, so the sub-line can show risk-unit edge too
