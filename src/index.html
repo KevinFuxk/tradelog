@@ -350,7 +350,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…" title="Filter by symbol — press / anywhere to jump here" style="width:160px">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -1299,9 +1299,27 @@ function getFiltered() {
   })
 }
 
+// Compact "N trades · +$X net · Y% win" sub-line for a list of trades. When
+// filters are active this reflects only the visible slice, so a trader can read
+// the bottom line of any symbol/side/date subset without exporting or tallying
+// by hand. Returns just the count when the list is empty.
+function filteredSummaryHTML(list, noun, plural) {
+  const n = list.length
+  const label = `${n} ${n !== 1 ? (plural || noun + 's') : noun}`
+  if (!n) return label
+  const net  = list.reduce((a, t) => a + t.pnl, 0)
+  const wins = list.filter(t => t.pnl > 0).length
+  const wr   = (wins / n) * 100
+  const netCls = net >= 0 ? 'col-g' : 'col-r'
+  const wrCls  = wr  >= 50 ? 'col-g' : 'col-r'
+  return `${label} <span style="color:var(--tx3)">·</span> ` +
+    `<span class="${netCls}">${fmtMoney(net)}</span> net <span style="color:var(--tx3)">·</span> ` +
+    `<span class="${wrCls}">${wr.toFixed(0)}%</span> win`
+}
+
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  document.getElementById('tr-sub').innerHTML = filteredSummaryHTML(filtered, 'trade')
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -1507,7 +1525,7 @@ function renderJournal() {
 
   const em = document.getElementById('jn-empty')
   const ls = document.getElementById('jn-list')
-  document.getElementById('jn-sub').textContent = `${noted.length} entr${noted.length!==1?'ies':'y'}`
+  document.getElementById('jn-sub').innerHTML = filteredSummaryHTML(noted, 'entry', 'entries')
 
   if (!noted.length) { em.style.display='flex'; ls.style.display='none'; return }
   em.style.display='none'; ls.style.display='flex'
@@ -2372,6 +2390,15 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump to a search box: the Journal's if that view is open, else the
+        // Trades view (switching to it first). Keyboard-only trade review.
+        e.preventDefault()
+        const onJournal = document.getElementById('v-journal')?.classList.contains('on')
+        if (!onJournal) go('trades')
+        const box = document.getElementById(onJournal ? 'jf-q' : 'f-q')
+        if (box) { box.focus(); box.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
