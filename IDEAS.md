@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-12 — Shipped
+- **Fix calendar-day grouping bug** — Best Day / Worst Day cards and the Daily P&L bar chart grouped trades by day via `(entryTime).split('T')[0] || (entryTime).split(' ')[0]`, which never reached the space-separated fallback (the first split returns the whole truthy string when there's no `T`). Broker exports using a space between date and time (`2026-01-15 10:30:00`) therefore put **every trade in its own "day"**, wrecking Best/Worst Day and turning the daily chart into one-bar-per-trade. New `dayKey()` helper splits on both separators (`split('T')[0].split(' ')[0]`); ISO timestamps are unchanged, so it's a pure correctness fix with no data-shape change.
+- **Filtered Net P&L + Win% in the Trades sub-header** — the Trades header used to read only "N trades". It now shows the current filtered slice's Net P&L and win rate (e.g. `42 trades · +1,230.50 · 57.1% win`), so filtering by symbol / side / date instantly answers "how does *this* slice perform?" without leaving the table. Reuses `fmtMoney`; recomputed each render from the already-filtered list.
+- **`/` keyboard shortcut to focus Trades search** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades view and focuses+selects the search box, for fast keyboard-driven filtering. Straight off the long-standing deferred list; complements the existing `1`–`4` nav shortcuts.
+
+### Deferred / next-up ideas (2026-09-12)
+- **Longest underwater stretch** — still unshipped: complement Current DD with the longest run (trades or days) spent below a prior equity peak
+- **Shared `tradeR()` helper** — the realised-R formula is duplicated in the Trades table, Journal headers, Avg R card, and CSV export; factor it out before adding Avg R to the By-Symbol / By-Day breakdowns
+- **In-modal Prev/Next trade navigation** — step through the filtered list without closing the modal (respecting the unsaved-note guard) for fast sequential review
+- **Best/worst hour-of-day breakdown** — mirror the weekday table by entry hour for intraday traders
+- **Total Fees / commission stat card** — sum commission across trades so cost drag is visible at a glance
