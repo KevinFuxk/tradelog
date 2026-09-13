@@ -4,8 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TradeLog</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<!-- Chart.js is vendored, not fetched from a CDN: a desktop journal has to work
+     offline, and a failed fetch here used to take the whole app down with it. -->
+<script src="vendor/chart.umd.min.js"></script>
+<!-- Loaded non-blocking (media=print, flipped on load): a render-blocking
+     stylesheet also blocks the inline script below it, so when Google Fonts is
+     slow or unreachable the whole app used to sit blank until the request timed
+     out. Every font stack below has a local fallback, so text renders at once. -->
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
 :root {
   --bg:       #070910;
@@ -350,7 +356,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…" title="Press / anywhere to jump here" style="width:160px">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -936,10 +942,35 @@ function calcRisk(trade) {
   const lotDiff       = qty - reqLot
   return {
     actualRiskPct: +actualRiskPct.toFixed(2),
+    dollarRisk:    +dollarRisk.toFixed(2),   // exact $ at risk — R divides by this
     reqLot:        +reqLot.toFixed(4),
     lotDiff:       +lotDiff.toFixed(4),
     contractSize,
   }
+}
+
+// Realised R-multiple for a trade (P&L ÷ the dollars risked at the stop), or
+// null when there's no usable stop. Single source of truth reused by the Trades
+// table, Journal headers, the Dashboard Avg R card, the breakdown tables, and
+// the CSV export — so the R figure is computed identically everywhere.
+// Divides by dollarRisk directly rather than re-deriving it from the 2-decimal
+// actualRiskPct, which would fold that display rounding into every R figure.
+function tradeR(trade) {
+  const risk = calcRisk(trade)
+  if (!risk || risk.breakeven || !(risk.dollarRisk > 0)) return null
+  return trade.pnl / risk.dollarRisk
+}
+
+// Average realised R across a list of trades that have a stop, or null when none do.
+function avgTradeR(list) {
+  const rs = list.map(tradeR).filter(v => v != null)
+  return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null
+}
+
+// Compact R-multiple label, e.g. "+1.24R" / "-0.80R"; em-dash when unavailable.
+function fmtR(v) {
+  if (v == null || !isFinite(v)) return '—'
+  return (v >= 0 ? '+' : '') + v.toFixed(2) + 'R'
 }
 
 // ════════════════════════════════════════════════════
@@ -967,11 +998,16 @@ function stats(list) {
   // max drawdown: largest peak-to-trough drop in cumulative P&L
   const sorted = [...list].sort((a,b)=>new Date(a.entryTime)-new Date(b.entryTime))
   let peak=0, cum=0, maxDD=0
+  // Longest underwater stretch = most consecutive trades spent below a prior
+  // equity peak (i.e. how long the deepest slump took to recover).
+  let uw=0, maxUW=0
   sorted.forEach(t => {
     cum += t.pnl
     if (cum > peak) peak = cum
     const dd = peak - cum
     if (dd > maxDD) maxDD = dd
+    if (dd > 0.0049) { uw++; if (uw > maxUW) maxUW = uw }
+    else uw = 0
   })
   // Current (open) drawdown = how far final equity sits below its running peak
   const curDD    = +(peak - cum).toFixed(2)
@@ -983,7 +1019,7 @@ function stats(list) {
     total, avgW, avgL, pf, mw, ml,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
-    maxDD, curDD, curDDPct, peak, atHigh }
+    maxDD, curDD, curDDPct, peak, atHigh, maxUW }
 }
 
 // ════════════════════════════════════════════════════
@@ -1031,18 +1067,23 @@ function renderDash() {
     'How far your current equity sits below its all-time peak (the running high-water mark on the P&L chart). "At new high" means you are at peak equity right now'
   ]
 
+  // Longest underwater stretch — the most consecutive trades spent below a prior
+  // equity peak. Pairs with Current DD (depth now) to show how long slumps last.
+  const uwCard = s.maxUW > 0 ? [[
+    'Longest DD',
+    `<span class="col-r">${s.maxUW}</span>`,
+    `trade${s.maxUW !== 1 ? 's' : ''} below peak`,
+    'Longest run of consecutive trades spent below a prior equity peak — how many trades your deepest drawdown took to recover. Pairs with Current DD (how far below peak you are right now)'
+  ]] : []
+
   // Average realised R-multiple across trades that have a stop set — the
   // risk-adjusted twin of $ Expectancy (positive = an edge in R terms).
-  const rList = trades.map(t => {
-    const r = calcRisk(t)
-    return (r && !r.breakeven && r.actualRiskPct > 0)
-      ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
-  }).filter(v => v != null)
-  const avgR = rList.length ? rList.reduce((a, b) => a + b, 0) / rList.length : null
+  const rCount = trades.filter(t => tradeR(t) != null).length
+  const avgR = avgTradeR(trades)
   const avgRCard = avgR != null ? [[
     'Avg R',
     `<span class="${avgR >= 0 ? 'col-g' : 'col-r'}">${avgR >= 0 ? '+' : ''}${avgR.toFixed(2)}R</span>`,
-    `${rList.length} trade${rList.length !== 1 ? 's' : ''} w/ stop`,
+    `${rCount} trade${rCount !== 1 ? 's' : ''} w/ stop`,
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
@@ -1050,7 +1091,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1077,6 +1118,7 @@ function renderDash() {
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
     ddCard,
+    ...uwCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
@@ -1086,7 +1128,15 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
-  buildCharts(s)
+  drawCharts(() => buildCharts(s))
+}
+
+// Charts are decorative next to the numbers and the journal: never let a chart
+// problem abort the render pass and take the tables, filters and — because
+// boot() wires listeners after renderAll() — the whole UI down with it.
+function drawCharts(fn) {
+  if (typeof Chart !== 'function') { console.warn('Chart.js unavailable — skipping charts'); return }
+  try { fn() } catch (e) { console.warn('Chart render failed:', e) }
 }
 
 // Day-of-week performance — answers "am I better on certain weekdays?".
@@ -1108,12 +1158,12 @@ function renderDowBreakdown() {
     const n = ts.length
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n }
+    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n, avgR: avgTradeR(ts) }
   })
   if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades</div>'; return }
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade on this weekday">Avg/Trade</th><th class="r" title="Average realised R-multiple per trade on this weekday (trades with a stop only)">Avg R</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1122,6 +1172,7 @@ function renderDowBreakdown() {
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${r.avgR==null?'var(--tx3)':r.avgR>=0?'var(--green)':'var(--red)'}">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
@@ -1137,11 +1188,11 @@ function renderSymbolBreakdown() {
     const n = ts.length
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name, n, wr: (wins / n) * 100, total, avg: total / n }
+    return { name, n, wr: (wins / n) * 100, total, avg: total / n, avgR: avgTradeR(ts) }
   }).sort((a, b) => b.total - a.total)
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r" title="Average realised R-multiple per trade for this symbol (trades with a stop only) — the risk-adjusted edge">Avg R</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1150,6 +1201,7 @@ function renderSymbolBreakdown() {
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${r.avgR==null?'var(--tx3)':r.avgR>=0?'var(--green)':'var(--red)'}">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
@@ -1242,7 +1294,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -1327,9 +1379,7 @@ function renderTrades() {
     const riskStr    = risk
       ? (risk.breakeven ? `<span style="color:var(--blue)">BE</span>` : `<span class="${risk.actualRiskPct > settings.targetRisk ? 'col-r' : 'col-g'}">${risk.actualRiskPct.toFixed(1)}%</span>`)
       : '<span style="color:var(--tx3)">—</span>'
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
@@ -1378,9 +1428,8 @@ function exportTradesCSV() {
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
-      : ''
+    const r     = tradeR(t)
+    const rMult = r != null ? +r.toFixed(2) : ''
     return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
             t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
       .map(esc).join(',')
@@ -1519,10 +1568,7 @@ function renderJournal() {
 
     // Realised R-multiple in the header — mirrors the Trades table sub-line so
     // R-based traders can scan their journal in risk units, not just dollars.
-    const risk  = calcRisk(t)
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
 
     // Build per-section rows
     const sectionRows = typeof n === 'object' ? J_FIELDS.map((f, i) => {
@@ -1546,9 +1592,9 @@ function renderJournal() {
         <div class="jct">${t.symbol} <span class="badge ${t.side==='buy'?'bb':'bs'}">${t.side}</span></div>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="${pc}" style="font-size:13px;font-weight:600">${fmtMoney(t.pnl)}</span>
-          ${rMult!=null?`<span style="font-size:11px;color:var(--tx3)" title="Realised R-multiple (P&L ÷ amount risked at the stop)">${rMult>=0?'+':''}${rMult.toFixed(1)}R</span>`:''}
+          ${rMult!=null?`<span style="font-size:11px;color:var(--tx2)" title="Realised R-multiple (P&L ÷ amount risked at the stop)">${rMult>=0?'+':''}${rMult.toFixed(1)}R</span>`:''}
           <span style="font-size:11px;color:var(--tx2)">${fdt(t.entryTime)}</span>
-          <span style="font-size:11px;color:var(--tx3)">${count}/6 sections</span>
+          <span style="font-size:11px;color:var(--tx2)">${count}/6 sections</span>
         </div>
       </div>
       ${sectionRows ? `<div class="jc-sections">${sectionRows}</div>` : `<div class="jce">No notes — click to add</div>`}
@@ -2059,7 +2105,7 @@ function renderStrategy() {
     ).join('')
   }
 
-  buildCnhCharts(list, s)
+  drawCharts(() => buildCnhCharts(list, s))
   renderCnhBreakdowns(list)
   renderCnhTable(list)
 }
@@ -2227,6 +2273,17 @@ function holdMs(t) {
   return (isFinite(ms) && ms >= 0) ? ms : null
 }
 
+// Calendar-day key ('2026-08-04') from a timestamp in either broker format:
+// ISO '2026-08-04T11:17:00' or space-separated '2026-08-04 11:17:00' (what the
+// Tickmill / TradingView exports actually use). Splitting on 'T' alone silently
+// keeps the whole string for the space form, which would make every trade look
+// like its own trading day.
+function dayKey(ts) {
+  const s = String(ts == null ? '' : ts).trim()
+  if (!s) return ''
+  return s.split(/[T ]/)[0]
+}
+
 // Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.
 // Keeps larger-account P&L readable. `sign` adds a leading + for non-negatives.
 function fmtMoney(n, sign = true) {
@@ -2284,7 +2341,7 @@ function wire() {
 
   // Daily range buttons
   document.querySelectorAll('.daily-range-btn').forEach(b =>
-    b.addEventListener('click', () => { dailyRange = b.dataset.range; try { localStorage.setItem(DAILY_RANGE_KEY, dailyRange) } catch {} ; buildDailyChart() })
+    b.addEventListener('click', () => { dailyRange = b.dataset.range; try { localStorage.setItem(DAILY_RANGE_KEY, dailyRange) } catch {} ; drawCharts(() => buildDailyChart()) })
   )
 
   // Settings save
@@ -2372,6 +2429,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps to the Trades view and focuses the symbol search — fast
+      // keyboard-driven filtering without reaching for the mouse.
+      else if (e.key === '/') {
+        e.preventDefault(); go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
