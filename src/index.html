@@ -322,6 +322,11 @@ textarea.nt::placeholder{color:var(--tx3);}
       <div id="ds-dow-bd"></div>
     </div>
 
+    <div class="card" id="month-card" style="margin-bottom:14px">
+      <div class="ct" title="Net P&amp;L grouped by calendar month — spot consistency, hot streaks and drawdown months at a glance">BY MONTH</div>
+      <div id="ds-month-bd"></div>
+    </div>
+
     <div class="card" id="symbol-card" style="margin-bottom:0">
       <div class="ct">BY SYMBOL</div>
       <div id="ds-symbol-bd"></div>
@@ -350,7 +355,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…  [/]" style="width:160px" title="Filter by symbol — press / to jump here from anywhere on this view">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -999,14 +1004,15 @@ function renderDash() {
   const dc = document.getElementById('daily-card')
   const syc = document.getElementById('symbol-card')
   const dwc = document.getElementById('dow-card')
+  const mc  = document.getElementById('month-card')
   const em = document.getElementById('ds-empty')
 
   if (!s) {
-    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = 'none'
+    sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = mc.style.display = 'none'
     em.style.display = 'flex'; return
   }
   em.style.display = 'none'
-  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = ''
+  sg.style.display = cr.style.display = dc.style.display = syc.style.display = dwc.style.display = mc.style.display = ''
 
   document.getElementById('ds-sub').textContent = `${trades.length} trades loaded`
 
@@ -1050,7 +1056,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1086,7 +1092,46 @@ function renderDash() {
 
   renderSymbolBreakdown()
   renderDowBreakdown()
+  renderMonthBreakdown()
   buildCharts(s)
+}
+
+// By-month performance — answers "am I consistent, or carried by one hot month?".
+// Groups every dated trade by calendar month (YYYY-MM) via the robust dayKey,
+// rows in chronological order. Reuses the .bdt / .bd-bar breakdown styling.
+function renderMonthBreakdown() {
+  const el = document.getElementById('ds-month-bd'); if (!el) return
+  const groups = {}
+  trades.forEach(t => {
+    const k = dayKey(t.entryTime).slice(0, 7) // YYYY-MM
+    if (k.length === 7) (groups[k] = groups[k] || []).push(t)
+  })
+  const keys = Object.keys(groups).sort() // chronological (string sort works on YYYY-MM)
+  if (!keys.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades</div>'; return }
+  const rows = keys.map(k => {
+    const ts = groups[k]
+    const n = ts.length
+    const wins = ts.filter(t => t.pnl > 0).length
+    const total = ts.reduce((a, t) => a + t.pnl, 0)
+    const [y, m] = k.split('-')
+    const d = new Date(+y, +m - 1, 1)
+    const label = isNaN(d) ? k : `${d.toLocaleDateString('en-US', { month: 'short' })} '${y.slice(2)}`
+    return { name: label, n, wr: (wins / n) * 100, total, avg: total / n }
+  })
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
+  el.innerHTML = `<table class="bdt">
+    <thead><tr><th>Month</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade in this month">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
+      const w = Math.round(Math.abs(r.total) / maxAbs * 56)
+      return `<tr>
+        <td class="bd-name">${r.name}</td>
+        <td class="r">${r.n}</td>
+        <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
+        <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
+      </tr>`
+    }).join('')}</tbody></table>`
 }
 
 // Day-of-week performance — answers "am I better on certain weekdays?".
@@ -1242,7 +1287,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -2192,6 +2237,16 @@ function buildCnhCharts(list, s) {
 // ════════════════════════════════════════════════════
 //  HELPERS
 // ════════════════════════════════════════════════════
+// Calendar-day key (YYYY-MM-DD) from a trade timestamp. Splitting only on 'T'
+// missed space-separated timestamps like "2026-06-01 14:30:00" (common in
+// broker exports) — the whole string, time and all, leaked through, so every
+// trade became its own "day". Split on either a 'T' or a space so day/month
+// grouping is truly by calendar date.
+function dayKey(ts) {
+  const s = (ts || '').trim()
+  return s ? s.split(/[T ]/)[0] : ''
+}
+
 function fdt(s) {
   if (!s) return '—'
   try {
@@ -2364,7 +2419,13 @@ function wire() {
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeModal(); return }
+    if (e.key === 'Escape') {
+      // Esc first blurs a focused search box (so it doesn't try to close a
+      // non-existent modal); otherwise it closes an open journal modal.
+      const ae = document.activeElement
+      if (ae && (ae.id === 'f-q' || ae.id === 'jf-q')) { ae.blur(); return }
+      closeModal(); return
+    }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
     const isTyping = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)
     if (!isModalOpen && !isTyping) {
@@ -2372,6 +2433,15 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight to the search box of whichever view is open — fast
+        // keyboard-driven filtering without reaching for the mouse.
+        const view = document.querySelector('.view.on')?.id
+        const box = view === 'v-trades'  ? document.getElementById('f-q')
+                  : view === 'v-journal' ? document.getElementById('jf-q')
+                  : null
+        if (box) { e.preventDefault(); box.focus(); box.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })

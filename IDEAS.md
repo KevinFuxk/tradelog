@@ -76,6 +76,18 @@
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
 - **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
 
+## 2026-09-13 — Shipped
+- **Fix calendar-day grouping bug** — day/month aggregation split timestamps only on `'T'`, so space-separated broker timestamps (`"2026-06-01 14:30:00"`, the norm in Tickmill/MT-style exports) leaked the whole datetime through. Every trade then landed in its own "day", quietly wrecking the **Best/Worst Day** stat cards and the **Daily P&L** chart (one bar per trade instead of per day). New `dayKey()` helper splits on `'T'` *or* space; applied in `renderDash` (best/worst day) and `buildDailyChart`. No data-shape change — purely a display/aggregation fix.
+- **By-Month performance breakdown** on the Dashboard — a mini-table (Month · Trades · Win% · Avg/Trade · Net P&L, with a magnitude bar) grouping every dated trade by calendar month in chronological order. Answers "am I consistent, or was the curve carried by one hot month?" — a blind spot the by-symbol / by-weekday tables don't cover. Reuses the `.bdt`/`.bd-bar` styling and the new robust `dayKey()`; hides with the rest of the Dashboard when there's no data.
+- **`/` focuses the active view's search box** — pressing `/` on the Trades or Journal view jumps the cursor straight into the search field (and selects any existing text) for fast keyboard-driven filtering; `Esc` blurs the search box instead of poking at the closed modal. Placeholder/tooltip on the Trades search now surfaces the `[/]` hint. No data-shape change.
+
+### Deferred / next-up ideas (2026-09-13)
+- **By-Month: add an Avg R column** — extend the new month table with average realised R once a shared `tradeR()` helper lands (avoid duplicating the R formula, which now appears in 4 places)
+- **Monthly P&L bar/heatmap** — a visual companion to the By-Month table (12-month calendar heatmap) for spotting seasonality at a glance
+- **`/` also on the Strategy view** — the Cup & Handle view filters by select, not a text box; consider a symbol quick-filter input there too
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
