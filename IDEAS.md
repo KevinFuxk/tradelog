@@ -76,6 +76,19 @@
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
 - **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
 
+## 2026-09-14 — Shipped
+- **Fix calendar-day grouping bug** — the Best/Worst Day stats and the Daily P&L chart grouped trades with a fragile `split('T')[0] || split(' ')[0]` chain. On space-separated broker stamps (`2026-09-14 10:30:00`) `split('T')` found no `T`, returned the whole string, and never fell through to the space split — so the "day" key still carried the time and *every trade became its own day*: Best/Worst Day just echoed the single best/worst trade, and the Daily P&L bars were one-per-trade. Added a robust `dayKey()` helper (handles ISO `T`, space-separated, and `.`/`/` date separators) and routed both grouping sites through it.
+- **`/` keyboard shortcut** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades view and focuses + selects the search box, for fast keyboard-driven filtering. Search-box tooltip advertises it.
+- **Total Fees stat card** on the Dashboard — sums commission/swap across all trades so the often-overlooked cumulative fee drag is visible. Only appears when the import carries fee data.
+- **Scroll-to-top on view switch** — switching views now resets the main scroll position, so you never land mid-table after scrolling a long Journal/Trades list.
+
+### Deferred / next-up ideas (2026-09-14)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **In-modal Prev/Next trade navigation** — arrow through trades without closing the journal modal
+- **Longest underwater stretch** — longest run (trades/days) spent below a prior equity peak, to complement Current DD
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week tables with an Avg R column (factor out a shared `tradeR()` helper)
+- **By-hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
