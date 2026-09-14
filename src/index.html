@@ -350,7 +350,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px" title="Search by symbol — press / anywhere to jump here">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -658,6 +658,9 @@ const MAIN_VIEWS = ['dashboard','trades','journal','strategy']
 function go(v) {
   document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v))
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.id === 'v-' + v))
+  // Reset scroll to the top so a switched-to view never inherits the previous
+  // view's scroll position (e.g. landing mid-table after a long Journal scroll)
+  const main = document.querySelector('.main'); if (main) main.scrollTop = 0
   // Rebuild charts that were sized while their view was hidden
   if (v === 'strategy') renderStrategy()
   // Remember the last main view so it reopens on next launch (skip Import flow)
@@ -1046,11 +1049,22 @@ function renderDash() {
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
+  // Total commissions/fees paid — an easily-overlooked drag on the account.
+  // For broker imports whose P&L is already net of fees, this shows what those
+  // fees added up to. Only shown when the import actually carries fee data.
+  const totalFees = trades.reduce((a, t) => a + Math.abs(t.commission || 0), 0)
+  const feesCard = totalFees > 0 ? [[
+    'Total Fees',
+    `<span class="col-r">${fmtMoney(-totalFees, false)}</span>`,
+    'commission + swap',
+    'Total commission/fees across all trades. For broker imports where P&L is already net of fees, this is what those fees added up to — an often-overlooked drag on returns'
+  ]] : []
+
   // Best / worst single trading day by net P&L — surfaces outlier days that
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1076,6 +1090,7 @@ function renderDash() {
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
+    ...feesCard,
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
@@ -1242,7 +1257,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -2220,6 +2235,23 @@ function fdur(entry, exit) {
   return fmtDur(new Date(exit) - new Date(entry))
 }
 
+// Extract the calendar-day key (YYYY-MM-DD) from a trade timestamp.
+// Handles both ISO ("2026-09-14T10:30:00") and space-separated broker stamps
+// ("2026-09-14 10:30:00", "2026.09.14 10:30"). The old
+// split('T')[0] || split(' ')[0] chain kept the *time* on space-separated
+// stamps (split('T') found no 'T', so it returned the whole string and never
+// fell through to the space split) — so every trade became its own "day",
+// breaking the Best/Worst Day stats and the Daily P&L chart.
+function dayKey(s) {
+  if (!s) return ''
+  const str = String(s).trim()
+  const m = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/)
+  if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`
+  const d = new Date(str)
+  if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  return str.split('T')[0].split(' ')[0]
+}
+
 // Hold time in ms for a trade, or null when timestamps are missing/invalid
 function holdMs(t) {
   if (!t.entryTime || !t.exitTime) return null
@@ -2372,6 +2404,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump to the Trades view and focus its search box for fast filtering
+        e.preventDefault()
+        go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
