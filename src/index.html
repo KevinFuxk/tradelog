@@ -350,7 +350,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…  /" title="Filter by symbol — press / anywhere to jump here" style="width:160px">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -942,6 +942,17 @@ function calcRisk(trade) {
   }
 }
 
+// Realised R-multiple for a trade (P&L ÷ dollars risked at the stop), or null
+// when no usable stop is set. Single source of truth for the R figure shown in
+// the Trades table, Journal card headers, the Avg R stat card, and the
+// Dashboard breakdown tables — so the number stays identical everywhere.
+function tradeR(t) {
+  const risk = calcRisk(t)
+  return (risk && !risk.breakeven && risk.actualRiskPct > 0)
+    ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
+    : null
+}
+
 // ════════════════════════════════════════════════════
 //  STATS
 // ════════════════════════════════════════════════════
@@ -1033,11 +1044,7 @@ function renderDash() {
 
   // Average realised R-multiple across trades that have a stop set — the
   // risk-adjusted twin of $ Expectancy (positive = an edge in R terms).
-  const rList = trades.map(t => {
-    const r = calcRisk(t)
-    return (r && !r.breakeven && r.actualRiskPct > 0)
-      ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
-  }).filter(v => v != null)
+  const rList = trades.map(tradeR).filter(v => v != null)
   const avgR = rList.length ? rList.reduce((a, b) => a + b, 0) / rList.length : null
   const avgRCard = avgR != null ? [[
     'Avg R',
@@ -1050,7 +1057,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1108,12 +1115,12 @@ function renderDowBreakdown() {
     const n = ts.length
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n }
+    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n, avgR: groupAvgR(ts) }
   })
   if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades</div>'; return }
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r" title="Average realised R-multiple across this group's trades that have a stop set">Avg R</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1122,9 +1129,21 @@ function renderDowBreakdown() {
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
+}
+
+// Mean realised R over the trades in a group that have a usable stop, or null.
+function groupAvgR(ts) {
+  const rs = ts.map(tradeR).filter(v => v != null)
+  return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null
+}
+// Render an R-multiple with sign + colour, or a muted em-dash when unavailable.
+function fmtR(r) {
+  if (r == null) return '<span style="color:var(--tx3)">—</span>'
+  return `<span style="color:${r >= 0 ? 'var(--green)' : 'var(--red)'}">${r >= 0 ? '+' : ''}${r.toFixed(2)}R</span>`
 }
 
 // Per-symbol performance mini-table — which instruments actually make money.
@@ -1137,11 +1156,11 @@ function renderSymbolBreakdown() {
     const n = ts.length
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name, n, wr: (wins / n) * 100, total, avg: total / n }
+    return { name, n, wr: (wins / n) * 100, total, avg: total / n, avgR: groupAvgR(ts) }
   }).sort((a, b) => b.total - a.total)
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r" title="Average realised R-multiple across this symbol's trades that have a stop set">Avg R</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1150,6 +1169,7 @@ function renderSymbolBreakdown() {
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
@@ -1242,7 +1262,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -1327,9 +1347,7 @@ function renderTrades() {
     const riskStr    = risk
       ? (risk.breakeven ? `<span style="color:var(--blue)">BE</span>` : `<span class="${risk.actualRiskPct > settings.targetRisk ? 'col-r' : 'col-g'}">${risk.actualRiskPct.toFixed(1)}%</span>`)
       : '<span style="color:var(--tx3)">—</span>'
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
@@ -1378,9 +1396,8 @@ function exportTradesCSV() {
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
-      : ''
+    const rRaw  = tradeR(t)
+    const rMult = rRaw != null ? +rRaw.toFixed(2) : ''
     return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
             t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
       .map(esc).join(',')
@@ -1519,10 +1536,7 @@ function renderJournal() {
 
     // Realised R-multiple in the header — mirrors the Trades table sub-line so
     // R-based traders can scan their journal in risk units, not just dollars.
-    const risk  = calcRisk(t)
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
 
     // Build per-section rows
     const sectionRows = typeof n === 'object' ? J_FIELDS.map((f, i) => {
@@ -2192,6 +2206,21 @@ function buildCnhCharts(list, s) {
 // ════════════════════════════════════════════════════
 //  HELPERS
 // ════════════════════════════════════════════════════
+// Extract a stable YYYY-MM-DD calendar-day key from a trade timestamp.
+// The old `split('T')[0] || split(' ')[0]` logic never reached the space
+// branch — `"2026-01-15 10:30".split('T')[0]` returns the WHOLE string, so
+// space-separated broker timestamps kept their time and every trade landed in
+// its own "day", breaking Best/Worst-Day and the Daily P&L grouping. Match the
+// date portion directly (handles ISO `-` and MT/Tickmill `.` separators), and
+// only split on either T-or-space as a last resort — no timezone shift.
+function dayKey(s) {
+  if (!s) return ''
+  const str = String(s).trim()
+  const m = str.match(/^(\d{4})[-./](\d{2})[-./](\d{2})/)
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`
+  return str.split(/[T ]/)[0]
+}
+
 function fdt(s) {
   if (!s) return '—'
   try {
@@ -2372,6 +2401,14 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps to the Trades view and focuses the symbol search — fast
+      // keyboard-driven filtering without reaching for the mouse.
+      else if (e.key === '/') {
+        e.preventDefault()
+        go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
