@@ -71,6 +71,19 @@
 - **Dirty-guard the "Clear Data" actions too** — confirm exists, but consider an undo/soft-delete so a mis-click can't wipe an imported log
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
 
+## 2026-09-16 — Shipped
+- **Fix calendar-day grouping bug** — `(entryTime).split('T')[0]` returned the *whole* string for space/dot-separated broker timestamps (e.g. `2024.01.15 14:30:00`, common in MT5/Tickmill exports), because there is no `T` to split on and the string is truthy so the ` || split(' ')[0]` fallback never ran. Every such trade became its own "day", so the **Daily P&L chart** drew one bar per trade and the **Best/Worst Day** cards compared per-timestamp, not per-date. Added a shared `dayKey()` helper that normalises ISO, dot-, slash- and space-separated timestamps to `YYYY-MM-DD` (with a `new Date()` fallback), used at both grouping sites. Unit-tested across 6 formats. No data-shape change.
+- **`/` keyboard shortcut** — pressing `/` (when not typing / no modal open) jumps to the Trades view and focuses+selects its search box, for fast keyboard-driven filtering. `preventDefault` stops the `/` landing in the input.
+- **Total Fees stat card** on the Dashboard — sums `|commission|` across all trades and shows it as a cost, with a per-trade average sub-line. Fee drag is a silent edge-killer for active traders; it's netted out of P&L but was never surfaced on its own. Card only appears when the imported data actually carries fees.
+- **Scroll-to-top on view switch** — `go()` now resets the main pane's scroll so changing views never lands you mid-page where the previous view was scrolled.
+
+### Deferred / next-up ideas (2026-09-16)
+- **Reuse `dayKey()` in the date-range filters** (`getFiltered` `t.entryTime < frm` string-compares raw timestamps; normalising via `dayKey` would make date filters robust to non-ISO formats too)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week tables with an Avg R column (factor out a shared `tradeR()` helper first to avoid duplicating the R formula)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
 ## 2026-06-07 — Shipped
 - **Avg R stat card on Dashboard** — shows the average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked), with a `N trades w/ stop` sub-line. The risk-adjusted twin of the existing $ Expectancy card, so R-based traders see their edge in risk units, not just dollars. Reuses `calcRisk`; only the same R formula already used in the Trades table and Journal headers. No data-shape change.
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.

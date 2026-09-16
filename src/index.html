@@ -658,6 +658,9 @@ const MAIN_VIEWS = ['dashboard','trades','journal','strategy']
 function go(v) {
   document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v))
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.id === 'v-' + v))
+  // Scroll the main pane back to the top so switching views never lands you
+  // mid-page where the previous view was scrolled to.
+  const main = document.querySelector('.main'); if (main) main.scrollTop = 0
   // Rebuild charts that were sized while their view was hidden
   if (v === 'strategy') renderStrategy()
   // Remember the last main view so it reopens on next launch (skip Import flow)
@@ -1050,7 +1053,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1065,10 +1068,22 @@ function renderDash() {
     ]
   }
 
+  // Total commissions & fees paid — fee drag is a silent edge-killer for active
+  // traders. Already netted out of P&L; shown here as an explicit cost so the
+  // running toll is visible. Only appears when the imported data carries fees.
+  const totalFees = trades.reduce((a, t) => a + Math.abs(t.commission || 0), 0)
+  const feesCard = totalFees > 0.005 ? [[
+    'Total Fees',
+    `<span class="col-r">${fmtMoney(-totalFees, false)}</span>`,
+    `${fmtMoney(-totalFees / s.n, false)} per trade`,
+    'Total commissions & fees paid across all trades (already deducted from Net P&L). Fee drag is a silent edge-killer — watch it grow with trade frequency'
+  ]] : []
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
     ['Net P&L', `<span class="${s.total>=0?'col-g':'col-r'}">${fmtMoney(s.total)}</span>`, 'all trades', 'Sum of profit/loss across every trade, net of commission'],
+    ...feesCard,
     ['Profit Factor', `<span class="${s.pf>=1?'col-gold':'col-r'}">${isFinite(s.pf)?s.pf.toFixed(2):'∞'}</span>`, 'gross win÷loss', 'Gross profit ÷ gross loss. Above 1.0 is profitable; 2.0+ is strong'],
     ['Avg Win', `<span class="col-g">${fmtMoney(s.avgW)}</span>`, 'per winner', 'Average profit on your winning trades'],
     ['Avg Loss', `<span class="col-r">${fmtMoney(s.avgL)}</span>`, 'per loser', 'Average loss on your losing trades'],
@@ -1242,7 +1257,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -2192,6 +2207,24 @@ function buildCnhCharts(list, s) {
 // ════════════════════════════════════════════════════
 //  HELPERS
 // ════════════════════════════════════════════════════
+// Extract the calendar day (YYYY-MM-DD) from a trade timestamp — robust to both
+// ISO ("2024-01-15T14:30:00") and space/dot-separated broker formats
+// ("2024.01.15 14:30:00", "01/15/2024 09:31"). A naive split('T')[0] returns the
+// WHOLE string for space-separated timestamps (no 'T'), which silently groups
+// every trade into its own "day" — breaking the Daily P&L chart and Best/Worst
+// Day stats. Falls back to Date parsing for anything non-ISO.
+function dayKey(ts) {
+  if (!ts) return ''
+  let d = String(ts).trim().split(/[T ]/)[0].replace(/[./]/g, '-')
+  if (!/^\d{4}-\d{1,2}-\d{1,2}$/.test(d)) {
+    const parsed = new Date(ts)
+    if (!isNaN(parsed)) {
+      d = `${parsed.getFullYear()}-${String(parsed.getMonth()+1).padStart(2,'0')}-${String(parsed.getDate()).padStart(2,'0')}`
+    }
+  }
+  return d
+}
+
 function fdt(s) {
   if (!s) return '—'
   try {
@@ -2372,6 +2405,15 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight to the Trades view and focus its search box — fast
+        // keyboard-driven filtering for power users. preventDefault stops the
+        // '/' from being typed into the freshly-focused input.
+        e.preventDefault()
+        go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
