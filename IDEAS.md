@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-17 — Shipped
+- **Fix calendar-day grouping bug (shared `dayKey()` helper)** — the Daily P&L chart and Best/Worst Day stat cards grouped trades by `entryTime.split('T')[0] || split(' ')[0]`, which is broken for space-delimited stamps like `2026-06-07 10:30:00`: the `'T'` split returns the whole (non-empty) string, so the `' '` fallback never runs and *every trade got its own "day"*. New `dayKey()` extracts the literal leading date token (dashes / dots / slashes all normalised to `YYYY-MM-DD`) and only falls back to `Date` parsing. Now same-day trades correctly collapse — Daily P&L bars and Best/Worst Day are accurate for all broker timestamp formats. No data-shape change.
+- **`/` keyboard shortcut → focus Trades search** — pressing `/` anywhere (when not typing / no modal open) jumps to the Trades view and focuses+selects the symbol search box, so power users can filter without the mouse. Complements the existing `1`–`4` nav shortcuts.
+- **Total Fees stat card on Dashboard** — sums all commissions/fees paid across trades (already netted out of Net P&L) so the total cost drag on the account is visible at a glance. Only appears when commission data exists; pure derivation from `trades`, no persistence change.
+- **Scroll-to-top on view switch** — navigating to a new view now resets the main scroll position to the top instead of inheriting wherever the previous (often long) view was scrolled to.
+
+### Deferred / next-up ideas (2026-09-17)
+- **Shared `tradeR()` helper + Avg R columns** — the realised-R formula (`pnl ÷ risked`) is now duplicated in the Trades table, Journal headers and the Avg R card; factor it out, then add an Avg R column to the By-Symbol and By-Day-of-Week dashboard tables.
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column.
+- **By-Month / By-Hour breakdowns** — mirror the weekday table by calendar month and by entry hour (intraday edge/leak). Now trivial to bucket correctly using `dayKey()`.
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak.
+- **Filtered Net P&L + Win% in the Trades/Journal sub-headers** — show the stats for the *currently filtered* set, not just the count.
