@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-18 — Shipped
+- **Fix calendar-day grouping bug (correctness)** — the Daily P&L chart and the Best/Worst-Day stat cards grouped trades with `entryTime.split('T')[0]`, which silently returned the *entire* timestamp for space-separated stamps like `"2024-01-15 10:30:00"` (no `T`, so the `|| split(' ')` fallback never fired). Every such trade became its own "day", scattering the Daily P&L bars and making Best/Worst Day meaningless. Tickmill's "update time" is exactly this format, so real imports were affected. Added a shared `dayKey()` helper that parses to a real `Date` first (collapsing both `T`- and space-separated formats to one calendar day) with a string-strip fallback; used it in both `renderDash` and `buildDailyChart`.
+- **`/` shortcut focuses the Trades search box** — pressing `/` anywhere (outside an input/modal) jumps to the Trades view and focuses + selects the symbol search box, so keyboard-driven filtering needs no mouse. Placeholder now shows a `/` hint for discoverability. (Was a deferred idea from 2026-06-07.)
+- **Filtered Net P&L + Win% in the Trades sub-header** — the Trades header now shows the current filter set's Net P&L (green/red) and win rate alongside the count, so filtering to a symbol/side/date range instantly answers "how did *this slice* do?" without exporting or eyeballing the table. Pure derivation from the already-computed `filtered` list; no data-shape change.
+
+### Deferred / next-up ideas (2026-09-18)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — longest run (trades/days) spent below a prior equity peak, to complement the Current DD card
+- **Avg R per symbol / per weekday** — add an Avg R column to the By-Symbol and By-Day-of-Week tables (factor out a shared `tradeR()` helper first)
+- **Best/worst hour-of-day breakdown** — mirror the weekday table by entry hour for intraday traders
+- **Total Fees / commission card** on the Dashboard — sum of commissions paid, so cost drag is visible next to Net P&L
