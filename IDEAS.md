@@ -76,6 +76,19 @@
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
 - **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
 
+## 2026-09-19 — Shipped
+- **Fix the calendar-day grouping bug** (Daily P&L bars + Best/Worst Day cards) — timestamps from the Tickmill/TradingView export are space-separated (`"2026-01-05 14:30:00"`, no `T`), so the old `split('T')[0] || split(' ')[0]` idiom returned the *whole* stamp (time included) — truthy, so the space fallback never ran and **every trade became its own "day."** The Daily P&L chart drew one bar per trade and Best/Worst Day were meaningless. Added a shared `dayKey()` helper that splits on either separator; used it in both places. High-value correctness fix.
+- **`/` keyboard shortcut to focus Trades search** — pressing `/` anywhere (outside inputs/modals) jumps to the Trades view and focuses+selects the symbol search box, for fast keyboard-driven filtering. Surfaced via the search box's tooltip.
+- **Filtered Net P&L + Win% in the Trades sub-header** — the "N trades" line now also shows the Net P&L and win rate of the *currently filtered* set, so narrowing to a symbol/date range instantly shows that slice's result (colour-coded) without exporting or eyeballing the table.
+
+### Deferred / next-up ideas (2026-09-19)
+- **Total Fees / commission-drag card** on the Dashboard — sum of commissions with `% of gross P&L` sub-line (fees are a silent leak for active traders)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (trades/days) spent below a prior peak
+- **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week tables with an Avg R column (factor out a shared `tradeR()` helper to avoid duplicating the formula)
+- **Scroll-to-top on view switch** — long tables leave the next view scrolled mid-page
+- **NOTE for future runs:** main is stuck at PR #8 (2026-06-07); 100+ later daily PRs are open and unmerged, so the same ideas keep getting re-derived against a base that never advances. Prefer verifying against the *current main* and consolidating rather than re-shipping already-open work.
+
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak

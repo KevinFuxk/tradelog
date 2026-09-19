@@ -350,7 +350,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px" title="Search by symbol. Press / anywhere to jump here.">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -1050,7 +1050,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1242,7 +1242,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -1301,7 +1301,20 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-header summarises the CURRENTLY FILTERED set, not the whole log, so
+  // narrowing to a symbol/date range instantly shows that slice's Net P&L
+  // and win rate without exporting or eyeballing the table.
+  const sub = document.getElementById('tr-sub')
+  if (filtered.length) {
+    const net  = filtered.reduce((a, t) => a + t.pnl, 0)
+    const wins = filtered.filter(t => t.pnl > 0).length
+    const wr   = (wins / filtered.length) * 100
+    sub.innerHTML = `${filtered.length} trade${filtered.length!==1?'s':''}`
+      + ` · <span class="${net>=0?'col-g':'col-r'}">${fmtMoney(net)}</span> net`
+      + ` · <span class="${wr>=50?'col-g':'col-r'}">${wr.toFixed(1)}%</span> win`
+  } else {
+    sub.textContent = '0 trades'
+  }
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -2235,6 +2248,18 @@ function fmtMoney(n, sign = true) {
   return (n < 0 ? '-' : sign ? '+' : '') + s
 }
 
+// Calendar-day key from a trade timestamp. Timestamps arrive in either
+// "2026-01-05T14:30:00" (T-separated) or "2026-01-05 14:30:00" (space-
+// separated, the Tickmill/TradingView export format) shape, so split on
+// whichever separator is present. The old `split('T')[0] || split(' ')[0]`
+// idiom was buggy: for a space-separated stamp the first split returns the
+// whole string (time included) which is truthy, so the space fallback never
+// ran and every trade landed in its own "day" — breaking the Daily P&L
+// bars and the Best/Worst Day cards.
+function dayKey(ts) {
+  return (ts || '').split(/[ T]/)[0] || ''
+}
+
 // ════════════════════════════════════════════════════
 //  WIRE
 // ════════════════════════════════════════════════════
@@ -2372,6 +2397,15 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight to the Trades view and focus its symbol search —
+        // fast keyboard-driven filtering for power users. preventDefault so
+        // the "/" isn't typed into the freshly-focused input.
+        e.preventDefault()
+        go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
