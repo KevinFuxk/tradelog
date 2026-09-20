@@ -76,6 +76,21 @@
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
 - **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
 
+## 2026-09-20 — Shipped
+- **Shared `tradeR()` helper** — the realised R-multiple formula (P&L ÷ dollars risked at the stop) was duplicated inline in 4 places (Trades table, Journal header, Dashboard Avg R card, CSV export). Factored into one `tradeR(t)` next to `calcRisk`; all call sites now delegate so the R value can never drift between views. No behaviour change; pure DRY that unlocks the breakdown columns below.
+- **Avg R column on the By-Symbol & By-Day-of-Week dashboard tables** — each breakdown row now shows the average realised R across that group's trades that have a stop set (— when none do), next to the existing Avg/Trade ($). Lets R-based traders see which symbols / weekdays carry a risk-adjusted edge, not just a raw $ total. Reuses `tradeR()`; no new persistence.
+- **Longest DD stat card on Dashboard** — surfaces the longest run of consecutive trades spent below a prior equity high-water mark (how *long* drawdowns last, complementing Max DD's depth and Current DD's live state). Computed in the same peak/cum walk in `stats()`; pure derivation, no data-shape change.
+- **`/` keyboard shortcut to focus the Trades search box** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades view and focuses+selects the symbol search. Placeholder now hints `( / )`. Fast keyboard-driven filtering for power users.
+
+> ⚠️ **Process note (2026-09-20):** `origin/main` is still at PR #8 (2026-06-07). Daily PRs #83–#112 are all **open and unmerged**, and recent runs have independently re-implemented the same ideas (shared `tradeR()`, Avg R breakdowns, `/` shortcut, Longest DD, Total Fees, calendar-day grouping fix, …) against a stale `main`. Until those PRs are reviewed/merged (or closed), each daily run branches from June's `main` and produces near-duplicate work. **Merging or closing the backlog is the highest-value action** — it lets `main` advance and stops the duplication. This run's batch is genuinely absent from `main`, so it is forward progress relative to `main`, but it overlaps several open PRs by necessity.
+
+### Deferred / next-up ideas (2026-09-20)
+- **Resolve the open-PR backlog** — review/merge or close #83–#112 so `main` advances; consider whether the daily routine should target an integration branch instead of always branching from `main`
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Longest *winning* streak in $/R terms** — complement Longest DD with the strongest run
+- **Avg R column on the Journal filter summary** — surface aggregate R for the currently-filtered journal set
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
