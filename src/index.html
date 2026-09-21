@@ -1050,7 +1050,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1242,7 +1242,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -1301,7 +1301,18 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-header shows the net P&L + win rate of the *currently filtered* set, so
+  // slicing to one symbol / side / date range instantly answers "is this slice
+  // green, and how often does it win?" without leaving the table.
+  const fsub = stats(filtered)
+  const subEl = document.getElementById('tr-sub')
+  if (fsub) {
+    subEl.innerHTML = `${filtered.length} trade${filtered.length!==1?'s':''}` +
+      ` · Net <span class="${fsub.total>=0?'col-g':'col-r'}">${fmtMoney(fsub.total)}</span>` +
+      ` · <span class="${fsub.wr>=50?'col-g':'col-r'}">${fsub.wr.toFixed(0)}%</span> win`
+  } else {
+    subEl.textContent = '0 trades'
+  }
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -2227,6 +2238,16 @@ function holdMs(t) {
   return (isFinite(ms) && ms >= 0) ? ms : null
 }
 
+// Calendar-date key (the YYYY-MM-DD portion) for a trade. Robust to timestamps
+// that separate date and time with a space instead of a 'T'
+// (e.g. "2024-01-15 10:30:00", a common broker/Tickmill format) — the old
+// `.split('T')[0]` left the time attached, so every trade fell into its own
+// "day" bucket and broke Best/Worst Day + the Daily P&L bars.
+function dayKey(t) {
+  const s = String((t && t.entryTime) || '')
+  return s.split(/[ T]/)[0] || ''
+}
+
 // Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.
 // Keeps larger-account P&L readable. `sign` adds a leading + for non-negatives.
 function fmtMoney(n, sign = true) {
@@ -2372,6 +2393,14 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps to the Trades view and focuses the symbol search — fast
+      // keyboard-driven filtering, the same convention as GitHub/Slack search.
+      else if (e.key === '/') {
+        e.preventDefault()
+        go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })

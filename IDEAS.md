@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-21 — Shipped
+- **Fix calendar-day grouping bug** — Best/Worst Day stat cards and the Daily P&L chart grouped trades by `entryTime.split('T')[0]`, which left the time attached whenever the timestamp used a space instead of a `T` (e.g. `2024-01-15 10:30:00`, a common broker/Tickmill format). Every trade then fell into its own "day", so Best/Worst Day showed a single trade and the Daily chart drew one bar per trade. Added a shared `dayKey(t)` helper that splits on either space or `T`, and routed both grouping sites through it. Correctness fix, no data-shape change.
+- **Filtered Net P&L + Win% in the Trades sub-header** — the Trades header now reads e.g. `42 trades · Net +1,234.50 · 55% win` for the *currently filtered* set, so slicing to one symbol / side / date range instantly shows whether that slice is green and how often it wins, without leaving the table. Reuses the existing `stats()` + `fmtMoney()`; no persistence change.
+- **`/` keyboard shortcut focuses the Trades search box** — pressing `/` (when not typing / no modal open) jumps to the Trades view and focuses + selects the symbol search, the same convention as GitHub/Slack. Complements the existing `1`–`4` nav shortcuts for fast keyboard-driven filtering.
+
+### Deferred / next-up ideas (2026-09-21)
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Shared `tradeR()` helper + Avg R breakdown columns** — the R-multiple formula is still duplicated across renderDash / renderTrades / exportTradesCSV / renderJournal; factor it out, then add an Avg R column to the By-Symbol and By-Day-of-Week tables
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **NOTE for future runs:** many prior daily PRs (#84–#113) remain **open/unmerged** against `main`, so the checkout still reflects PR #8. Each run re-derives the same deferred ideas. Prefer batches that read cleanly as a diff against `main` and lean toward genuine bug fixes (like today's grouping fix) over re-shipping the same polish.
