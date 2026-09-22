@@ -76,6 +76,19 @@
 - **Best Day / Worst Day stat cards on Dashboard** — surface the single most-profitable and worst trading day (net P&L summed per calendar date), each with the date as a sub-line. Outlier days that flatter or wreck an otherwise steady curve are now visible at a glance. Pure derivation from existing `trades`; no new persistence.
 - **Persist Strategy (Cup & Handle) filters + sort** — the strategy view now remembers its symbol/TF/size/outcome/date filters and table sort across restarts via `localStorage` (`tradelog.cnhFilters`), mirroring the Trades-view persistence shipped 2026-06-01. Dynamic selects (symbol/TF/size) are re-applied once their option lists are rebuilt from the imported events. Added `applyCnhSortIndicator()` so the restored sort arrow shows on load. Separate from the JSON event store — no risk to saved data.
 
+## 2026-09-22 — Shipped
+- **Fix calendar-day grouping bug** — Best Day / Worst Day stat cards and the Daily P&L bar chart grouped trades by `entryTime.split('T')[0]`, which only works for ISO stamps. Space-separated timestamps (the **Tickmill** `update time` format — the app's primary broker input) kept their whole `"2024-01-15 10:30:00"` string, so every trade became its own "day": Best/Worst Day were just the single largest/smallest trades and the Daily chart drew one bar per trade. New `dayKey()` helper splits on `T` **or** space, so both formats collapse to the true calendar date. Correctness fix, no data-shape change.
+- **Shared `tradeR()` helper (DRY)** — the realised R-multiple formula (`P&L ÷ dollars risked at the stop`) was duplicated in four places (Trades table sub-line, Journal card header, CSV export, Dashboard Avg R). Consolidated into one `tradeR(t)` that returns the R value or `null`. Identical numbers everywhere; one place to change the formula.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both dashboard mini-tables now show the average realised R per group (trades that have a stop set), alongside the existing $ Avg/Trade. Lets R-based traders see which instruments / weekdays carry a risk-adjusted edge, not just a dollar edge. Shows `—` when a group has no stops. Reuses `tradeR()`.
+- **`/` keyboard shortcut** — pressing `/` (outside any input/modal) jumps to the Trades view and focuses+selects the symbol search box, for fast keyboard-driven filtering. Complements the existing `1`–`4` nav shortcuts.
+
+### Deferred / next-up ideas (2026-09-22)
+- **Longest underwater stretch** — surface the longest run (trades or days) equity spent below a prior peak, next to Current DD
+- **Best/worst hour-of-day breakdown** — mirror the weekday table by entry hour for intraday traders
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **Filtered Net P&L in the Trades sub-header** — show P&L/Win% of the currently filtered set, not just the count
+- **NOTE:** ~30 `daily/*` PRs (#85–#114) are open and unmerged against `main`; the log below (up to 2026-06-07) reflects the last *merged* state. Future runs branch from stale `main`, so these ideas recur. Worth having the maintainer merge or close the backlog.
+
 ### Deferred / next-up ideas (2026-06-07)
 - **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
 - **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
