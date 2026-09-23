@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-23 — Shipped
+- **Shared `tradeR()` helper (single source of truth for realised R)** — the R-multiple formula (`P&L ÷ dollars risked at the stop`) was duplicated in four places (Dashboard Avg R card, Trades table sub-line, Journal header, CSV export). Factored into one `tradeR(t)` helper returning `null` when there's no usable stop, so every surface now computes R identically and future R features can't silently drift. Pure refactor — no behaviour or data-shape change (verified numerically equal to the old inline formula).
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both dashboard mini-tables now show the average realised R-multiple per group alongside Win% and Avg/Trade, so a trader sees the *risk-adjusted* edge per instrument and per weekday, not just the dollar total (a big-account symbol and a small-account one become comparable). Shows `—` for groups whose trades have no stop set. Built on the new `tradeR()` helper; reuses existing `.bdt` styling and the `rNum()` formatter.
+- **Max Underwater stat card on the Dashboard** — surfaces the longest run of consecutive trades your equity spent below a prior high-water mark before making a new high. Complements Current DD (how far below peak *now*) and Max Drawdown (worst single trade) with a *duration* view of how drawn-out a losing patch has historically been. Computed in the same peak/cum walk as `maxDD`; hidden when there's never been a drawdown.
+- **`/` keyboard shortcut to jump to the Trades search box** — pressing `/` anywhere (outside a text field / modal) switches to the Trades view and focuses the symbol search, matching the muscle memory of most web apps. Placeholder + tooltip now advertise it.
+
+### Deferred / next-up ideas (2026-09-23)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Underwater duration in *days* (not just trade count)** — extend Max Underwater with the calendar span of the longest drawdown
+- **Avg R column on the Strategy (Cup & Handle) breakdowns already show R** — consider a $-equivalent column there for parity with the trade view
+- **Expectancy in R on the By-Symbol table tooltip** — show win% × avgWinR − loss% × avgLossR to explain *why* a symbol's Avg R is what it is
