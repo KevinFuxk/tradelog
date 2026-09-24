@@ -82,3 +82,18 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-24 — Shipped
+- **Fix calendar-day grouping bug** — Best/Worst Day stats and the Daily P&L chart grouped trades by a naive `split('T')[0] || split(' ')[0]` chain. For space-separated broker timestamps (`"2026-01-15 09:30:00"`, no `T`), `split('T')[0]` returned the *whole* string, so every timestamp became its own "day" — inflating the day count, and making Best/Worst Day report a single trade rather than a real daily total. Introduced a shared `dayKey()` helper (regex-matches an ISO date prefix; falls back to `Date` parse) used by both spots. Verified two same-day space-format trades now collapse to one date key.
+- **Shared `tradeR()` helper** — the realised R-multiple formula (`pnl ÷ dollars-risked`) was duplicated inline in four places (Trades table, Journal card headers, CSV export, Dashboard Avg R). Factored into one `tradeR(trade)` function so R is computed identically everywhere and future R features build on one source of truth. Pure refactor — no behavior change.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both dashboard mini-tables now show average realised R (across each group's trades that have a stop set), so a trader sees which instruments / weekdays carry a risk-adjusted edge, not just raw dollars. Shows `—` when a group has no stopped trades. Reuses the new `tradeR()` helper.
+- **`/` keyboard shortcut to focus the Trades search box** — pressing `/` (when not typing / no modal open) jumps to the Trades view and focuses+selects the symbol search, for fast keyboard-driven filtering. Joins the existing `1`–`4` nav shortcuts.
+- **Total Fees stat card on Dashboard** — sums commission/fees across all trades (only shown when the import carried commission data), with an `across N trades` sub-line. Surfaces the constant drag fees put on net P&L, which is easy to overlook.
+
+### Deferred / next-up ideas (2026-09-24)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the By-Day-of-Week table by entry hour
+- **Fees as a % of gross P&L** — extend the Total Fees card with what share of gross profit is eaten by commission
+- **In-modal Prev/Next trade navigation** — arrow through the filtered trade list without closing the journal modal
+- **Note:** a large backlog of prior daily PRs (#97–#116) remains open/unmerged on the same themes — worth consolidating rather than re-proposing.
