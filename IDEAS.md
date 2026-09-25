@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-25 — Shipped
+- **`/` shortcut jumps to the search box** — pressing `/` on the Trades view focuses (and selects) the symbol filter; on the Journal view it focuses the note search. Fast keyboard-driven filtering for power users without reaching for the mouse. The hint (`/`) now shows in both placeholders + a title tooltip so it's discoverable. Guarded so it's inert while typing or in the modal, and `preventDefault` keeps the `/` out of the field.
+- **Shared `tradeR()` helper — single source of truth for realised R** — the realised R-multiple formula (P&L ÷ dollars risked at the stop) was duplicated inline in 4 places (Dashboard Avg R card, Trades table sub-line, Journal card header, CSV export). Factored into one `tradeR(t)` helper (returns `null` when there's no usable stop) and swapped every call site to it, so the R shown everywhere provably agrees. Pure refactor — no behaviour change, verified numerically.
+- **Avg R column on the By-Symbol & By-Day-of-Week breakdowns** — both dashboard mini-tables now show the average realised R per group alongside Avg/Trade $, via the new `tradeR()` helper + a small `fmtR()` formatter. Answers "which symbol / weekday has the best *risk-adjusted* edge?", not just raw dollars (which one fat trade can distort). Shows `—` for groups with no stop set. No new CSS.
+- **"Longest DD Run" stat card on the Dashboard** — surfaces the longest streak of consecutive trades spent below a prior equity high-water mark, computed in the same peak/cum walk that already produces Max Drawdown / Current DD. Complements those *depth* stats with a *duration* one: how many trades your worst drawdown lasted. Pure derivation; no persistence change.
+
+### Deferred / next-up ideas (2026-09-25)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Avg R column in the Strategy breakdowns already exists** — but the *Trades* CSV export could gain per-symbol/per-weekday summary rows for offline pivoting
+- **Underwater duration in days (not just trades)** — extend Longest DD Run with the calendar span of the worst drawdown, and surface current underwater length
+- **Expectancy in R on the By-Symbol table** — pair Avg R with a hit-rate-weighted expectancy once enough R data accumulates
