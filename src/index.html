@@ -350,7 +350,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…  /" style="width:160px" title="Search by symbol — press / to jump here from anywhere on this view">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -395,7 +395,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
     <!-- Journal filters -->
     <div class="fbar" id="jn-filters" style="margin-bottom:16px">
-      <input class="fi" id="jf-q" placeholder="Search notes…" oninput="renderJournal()" style="width:180px" title="Search the text of your journal notes (and symbol)">
+      <input class="fi" id="jf-q" placeholder="Search notes…  /" oninput="renderJournal()" style="width:180px" title="Search the text of your journal notes (and symbol) — press / to jump here">
       <select class="fs" id="jf-symbol" onchange="renderJournal()">
         <option value="">All products</option>
       </select>
@@ -942,6 +942,16 @@ function calcRisk(trade) {
   }
 }
 
+// Realised R-multiple for a trade (P&L ÷ dollars risked at the stop), or null
+// when there is no usable stop. Single source of truth — used by the Trades
+// table, Journal headers, the Avg R stat card, the breakdown tables, and CSV
+// export, so the R shown in every place agrees.
+function tradeR(t) {
+  const r = calcRisk(t)
+  if (!r || r.breakeven || !(r.actualRiskPct > 0)) return null
+  return t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance)
+}
+
 // ════════════════════════════════════════════════════
 //  STATS
 // ════════════════════════════════════════════════════
@@ -966,12 +976,15 @@ function stats(list) {
 
   // max drawdown: largest peak-to-trough drop in cumulative P&L
   const sorted = [...list].sort((a,b)=>new Date(a.entryTime)-new Date(b.entryTime))
-  let peak=0, cum=0, maxDD=0
+  let peak=0, cum=0, maxDD=0, uwRun=0, maxUWRun=0
   sorted.forEach(t => {
     cum += t.pnl
     if (cum > peak) peak = cum
     const dd = peak - cum
     if (dd > maxDD) maxDD = dd
+    // Longest underwater stretch: consecutive trades sitting below a prior peak
+    if (dd > 0.0049) { uwRun++; if (uwRun > maxUWRun) maxUWRun = uwRun }
+    else uwRun = 0
   })
   // Current (open) drawdown = how far final equity sits below its running peak
   const curDD    = +(peak - cum).toFixed(2)
@@ -983,7 +996,7 @@ function stats(list) {
     total, avgW, avgL, pf, mw, ml,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
-    maxDD, curDD, curDDPct, peak, atHigh }
+    maxDD, curDD, curDDPct, peak, atHigh, maxUWRun }
 }
 
 // ════════════════════════════════════════════════════
@@ -1033,11 +1046,7 @@ function renderDash() {
 
   // Average realised R-multiple across trades that have a stop set — the
   // risk-adjusted twin of $ Expectancy (positive = an edge in R terms).
-  const rList = trades.map(t => {
-    const r = calcRisk(t)
-    return (r && !r.breakeven && r.actualRiskPct > 0)
-      ? t.pnl / ((r.actualRiskPct / 100) * settings.accountBalance) : null
-  }).filter(v => v != null)
+  const rList = trades.map(tradeR).filter(v => v != null)
   const avgR = rList.length ? rList.reduce((a, b) => a + b, 0) / rList.length : null
   const avgRCard = avgR != null ? [[
     'Avg R',
@@ -1077,6 +1086,10 @@ function renderDash() {
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
     ddCard,
+    ['Longest DD Run',
+      `<span class="${s.maxUWRun>0?'col-r':'col-g'}">${s.maxUWRun}</span>`,
+      s.maxUWRun===1?'trade below peak':'trades below peak',
+      'The longest streak of consecutive trades spent below a prior equity high-water mark — how many trades your worst drawdown lasted, not just how deep it was'],
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
@@ -1108,12 +1121,14 @@ function renderDowBreakdown() {
     const n = ts.length
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n }
+    const rs = ts.map(tradeR).filter(v => v != null)
+    const avgR = rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null
+    return { name: NAMES[k], n, wr: (wins / n) * 100, total, avg: total / n, avgR }
   })
   if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--tx3)">No dated trades</div>'; return }
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>Day</th><th class="r">Trades</th><th class="r">Win%</th><th class="r">Avg/Trade</th><th class="r" title="Average realised R-multiple for trades with a stop set">Avg R</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1122,6 +1137,7 @@ function renderDowBreakdown() {
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${r.avgR==null?'var(--tx3)':r.avgR>=0?'var(--green)':'var(--red)'}">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
@@ -1137,11 +1153,13 @@ function renderSymbolBreakdown() {
     const n = ts.length
     const wins = ts.filter(t => t.pnl > 0).length
     const total = ts.reduce((a, t) => a + t.pnl, 0)
-    return { name, n, wr: (wins / n) * 100, total, avg: total / n }
+    const rs = ts.map(tradeR).filter(v => v != null)
+    const avgR = rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null
+    return { name, n, wr: (wins / n) * 100, total, avg: total / n, avgR }
   }).sort((a, b) => b.total - a.total)
   const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.total)))
   el.innerHTML = `<table class="bdt">
-    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r">Net P&L</th></tr></thead>
+    <thead><tr><th>Symbol</th><th class="r">Trades</th><th class="r">Win%</th><th class="r" title="Average $ result per trade for this symbol — the per-trade edge, not just the running total">Avg/Trade</th><th class="r" title="Average realised R-multiple for trades with a stop set">Avg R</th><th class="r">Net P&L</th></tr></thead>
     <tbody>${rows.map(r => {
       const col = r.total >= 0 ? 'var(--green)' : 'var(--red)'
       const w = Math.round(Math.abs(r.total) / maxAbs * 56)
@@ -1150,6 +1168,7 @@ function renderSymbolBreakdown() {
         <td class="r">${r.n}</td>
         <td class="r" style="color:${r.wr>=50?'var(--green)':'var(--tx2)'}">${r.wr.toFixed(0)}%</td>
         <td class="r" style="color:${r.avg>=0?'var(--green)':'var(--red)'}">${fmtMoney(r.avg)}</td>
+        <td class="r" style="color:${r.avgR==null?'var(--tx3)':r.avgR>=0?'var(--green)':'var(--red)'}">${fmtR(r.avgR)}</td>
         <td class="r" style="color:${col}">${fmtMoney(r.total)}<span class="bd-bar" style="width:${w}px;background:${col}"></span></td>
       </tr>`
     }).join('')}</tbody></table>`
@@ -1327,9 +1346,7 @@ function renderTrades() {
     const riskStr    = risk
       ? (risk.breakeven ? `<span style="color:var(--blue)">BE</span>` : `<span class="${risk.actualRiskPct > settings.targetRisk ? 'col-r' : 'col-g'}">${risk.actualRiskPct.toFixed(1)}%</span>`)
       : '<span style="color:var(--tx3)">—</span>'
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
     const rLine = rMult != null
       ? `<div style="font-size:10px;color:var(--tx3);margin-top:2px">${rMult>=0?'+':''}${rMult.toFixed(1)}R</div>`
       : ''
@@ -1378,9 +1395,8 @@ function exportTradesCSV() {
   const rows = list.map((t, i) => {
     const risk  = calcRisk(t)
     const rPct  = risk && !risk.breakeven ? risk.actualRiskPct : ''
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? +(t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)).toFixed(2)
-      : ''
+    const r     = tradeR(t)
+    const rMult = r != null ? +r.toFixed(2) : ''
     return [i+1, t.entryTime, t.exitTime, t.symbol, t.side, t.entryPrice, t.exitPrice,
             t.slPrice || '', t.tpPrice || '', t.qty, rPct, rMult, t.pnl, t.commission || 0]
       .map(esc).join(',')
@@ -1519,10 +1535,7 @@ function renderJournal() {
 
     // Realised R-multiple in the header — mirrors the Trades table sub-line so
     // R-based traders can scan their journal in risk units, not just dollars.
-    const risk  = calcRisk(t)
-    const rMult = (risk && !risk.breakeven && risk.actualRiskPct > 0)
-      ? t.pnl / ((risk.actualRiskPct / 100) * settings.accountBalance)
-      : null
+    const rMult = tradeR(t)
 
     // Build per-section rows
     const sectionRows = typeof n === 'object' ? J_FIELDS.map((f, i) => {
@@ -2235,6 +2248,13 @@ function fmtMoney(n, sign = true) {
   return (n < 0 ? '-' : sign ? '+' : '') + s
 }
 
+// Format a realised R-multiple for display, e.g. +1.50R / -0.80R, or an em-dash
+// when there's no R (no stop set). Keeps the breakdown tables' R column tidy.
+function fmtR(r) {
+  if (r == null || !isFinite(r)) return '—'
+  return (r >= 0 ? '+' : '') + r.toFixed(2) + 'R'
+}
+
 // ════════════════════════════════════════════════════
 //  WIRE
 // ════════════════════════════════════════════════════
@@ -2372,6 +2392,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight to the search box on whichever view has one
+        const view = document.querySelector('.view.on')?.id
+        const box  = view === 'v-trades' ? 'f-q' : view === 'v-journal' ? 'jf-q' : null
+        const el   = box && document.getElementById(box)
+        if (el) { e.preventDefault(); el.focus(); el.select?.() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
