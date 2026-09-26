@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-26 — Shipped
+- **Fix calendar-day grouping bug** — the Daily P&L chart and the Best/Worst Day stat cards grouped trades by `entryTime.split('T')[0] || .split(' ')[0]`. For space-separated timestamps (`2026-01-15 09:30:00` — exactly the **Tickmill** `Update Time` format, the primary import), `split('T')[0]` returns the whole string with the time still attached, so the fallback never ran and *every trade became its own "day."* Added a `dayKey(ts)` helper that splits on both `T` and space (`split(/[T ]/)[0]`) and used it in both grouping sites. Daily bars and Best/Worst Day now aggregate correctly for broker exports. No data-shape change.
+- **Shared `tradeR()` helper** — the realised R-multiple formula (`P&L ÷ amount risked at the stop`) was duplicated inline in four places (Trades table, Trades CSV export, Journal card header, Dashboard Avg R card). Factored into one `tradeR(t)` returning `null` when there's no usable stop, so every surface agrees on the same math. Pure refactor, behaviour verified identical.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show average realised R per group (via the shared `tradeR()`), rendered `—` when no trades in the group have a stop. Lets a trader see which symbols/weekdays carry a risk-adjusted edge, not just a raw dollar total.
+- **`/` keyboard shortcut** — pressing `/` anywhere (outside an input/modal) jumps to the Trades view and focuses+selects the symbol search box, for mouse-free filtering. Search box `title` now advertises the shortcut.
+
+### Deferred / next-up ideas (2026-09-26)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Total Fees / commission card** on the Dashboard — sum of commissions paid, so cost drag is visible
+- **In-modal Prev/Next trade navigation** — arrow through trades without closing the detail modal
