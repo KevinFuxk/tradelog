@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-28 — Shipped
+- **Fix calendar-day grouping bug** — Best Day / Worst Day stat cards and the Daily P&L chart split the timestamp on `'T'` only. For space-separated stamps (`"2026-06-07 14:30:00"`) that left the time attached, so every trade became its own "day": the Daily chart showed one bar per trade and Best/Worst Day were per-trade, not per-day. Added a shared `dayKey()` helper (`split(/[ T]/)[0]`) that handles both ISO and space-separated formats, and routed both call sites through it. Correctness fix, no data-shape change.
+- **`/` keyboard shortcut → Trades search** — pressing `/` (when not typing / no modal open) jumps to the Trades view and focuses+selects the search box, so power users can filter without reaching for the mouse. Sits alongside the existing `1`–`4` nav shortcuts.
+- **Total Fees stat card on Dashboard** — sums commission paid across all trades and shows it as a red cost figure with a `commission paid` sub-line (only when commission data exists). Net P&L already nets fees out; this surfaces the gross cost drag of trading — a common blind spot, especially for high-frequency traders. Pure derivation from existing `trades`; no persistence change.
+
+### Deferred / next-up ideas (2026-09-28)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Avg R per symbol / per weekday** — add an Avg R column to the By-Symbol and By-Day-of-Week tables (factor out a shared `tradeR()` helper first)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Fees as % of gross P&L** — pair the new Total Fees card with the ratio of fees to gross profit, so the cost drag is contextualised
