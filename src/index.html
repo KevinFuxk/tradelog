@@ -395,22 +395,22 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
     <!-- Journal filters -->
     <div class="fbar" id="jn-filters" style="margin-bottom:16px">
-      <input class="fi" id="jf-q" placeholder="Search notes…" oninput="renderJournal()" style="width:180px" title="Search the text of your journal notes (and symbol)">
-      <select class="fs" id="jf-symbol" onchange="renderJournal()">
+      <input class="fi" id="jf-q" placeholder="Search notes…" oninput="renderJournal();saveJournalFilters()" style="width:180px" title="Search the text of your journal notes (and symbol)">
+      <select class="fs" id="jf-symbol" onchange="renderJournal();saveJournalFilters()">
         <option value="">All products</option>
       </select>
-      <select class="fs" id="jf-side" onchange="renderJournal()">
+      <select class="fs" id="jf-side" onchange="renderJournal();saveJournalFilters()">
         <option value="">All sides</option>
         <option value="buy">Buy</option>
         <option value="sell">Sell</option>
       </select>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:12px;color:var(--tx3)">From</span>
-        <input type="date" class="fi" id="jf-date-from" onchange="renderJournal()" style="padding:7px 10px;font-size:12px">
+        <input type="date" class="fi" id="jf-date-from" onchange="renderJournal();saveJournalFilters()" style="padding:7px 10px;font-size:12px">
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:12px;color:var(--tx3)">To</span>
-        <input type="date" class="fi" id="jf-date-to" onchange="renderJournal()" style="padding:7px 10px;font-size:12px">
+        <input type="date" class="fi" id="jf-date-to" onchange="renderJournal();saveJournalFilters()" style="padding:7px 10px;font-size:12px">
       </div>
       <button class="pb" onclick="clearJournalFilters()" style="font-size:12px;padding:7px 12px">✕ Clear</button>
     </div>
@@ -560,7 +560,12 @@ textarea.nt::placeholder{color:var(--tx3);}
   <div class="md">
     <div class="mh">
       <div class="mtitle" id="m-title">Trade Journal</div>
-      <button class="mx" id="m-close">×</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="pb" id="m-prev" title="Previous trade in the current list (Alt+←)">‹</button>
+        <span id="m-nav-pos" style="font-size:11px;color:var(--tx3);min-width:52px;text-align:center"></span>
+        <button class="pb" id="m-next" title="Next trade in the current list (Alt+→)">›</button>
+        <button class="mx" id="m-close">×</button>
+      </div>
     </div>
     <div class="mmeta" id="m-meta"></div>
 
@@ -614,6 +619,8 @@ let sortDir  = 'desc'
 let pending  = null
 let activeTrade = null
 let charts   = {}
+let journalNoted = []              // trade ids shown in the Journal list, in display order
+let modalNav = { ids: [], idx: -1 } // list the modal's ‹ / › buttons walk through
 
 // Cup & Handle strategy state
 let events    = []
@@ -640,6 +647,7 @@ async function boot() {
   } catch {}
   restoreTradeFilters()
   restoreCnhFilters()
+  restoreJournalFilters()
   renderAll()
   applyTradeSortIndicator()
   wire()
@@ -1469,6 +1477,37 @@ function populateJournalSymbols() {
   const symbols = [...new Set(trades.filter(t => hasNote(notes[t.id])).map(t => t.symbol))].sort()
   sel.innerHTML = '<option value="">All products</option>' +
     symbols.map(s => `<option value="${s}"${s===current?' selected':''}>${s}</option>`).join('')
+  // Re-apply a restored symbol filter once its option exists (the list is built
+  // from the noted trades above, so it isn't available until first render).
+  if (jnPendingSymbol && [...sel.options].some(o => o.value === jnPendingSymbol)) {
+    sel.value = jnPendingSymbol
+  }
+  jnPendingSymbol = null
+}
+
+// ── Journal filter persistence (mirrors the Trades / Strategy views) ──
+// Remembered locally so returning to the Journal keeps your last search /
+// symbol / side / date filters across restarts. No JSON-store change.
+const JN_FILTERS_KEY = 'tradelog.journalFilters'
+let jnPendingSymbol = null
+function saveJournalFilters() {
+  try {
+    const v = id => document.getElementById(id)?.value || ''
+    localStorage.setItem(JN_FILTERS_KEY, JSON.stringify({
+      q: v('jf-q'), symbol: v('jf-symbol'), side: v('jf-side'),
+      from: v('jf-date-from'), to: v('jf-date-to')
+    }))
+  } catch {}
+}
+function restoreJournalFilters() {
+  try {
+    const s = JSON.parse(localStorage.getItem(JN_FILTERS_KEY) || 'null')
+    if (!s) return
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val }
+    set('jf-q', s.q); set('jf-side', s.side)
+    set('jf-date-from', s.from); set('jf-date-to', s.to)
+    jnPendingSymbol = s.symbol || null   // applied once the option list is built
+  } catch {}
 }
 
 function clearJournalFilters() {
@@ -1477,6 +1516,8 @@ function clearJournalFilters() {
   document.getElementById('jf-side').value = ''
   document.getElementById('jf-date-from').value = ''
   document.getElementById('jf-date-to').value = ''
+  jnPendingSymbol = null
+  saveJournalFilters()
   renderJournal()
 }
 
@@ -1504,6 +1545,8 @@ function renderJournal() {
     }
     return true
   })
+
+  journalNoted = noted.map(t => t.id)   // drives the modal's ‹ / › navigation from this view
 
   const em = document.getElementById('jn-empty')
   const ls = document.getElementById('jn-list')
@@ -1594,6 +1637,12 @@ function openModal(id) {
   const t = trades.find(t => t.id === id)
   if (!t) return
   activeTrade = t
+  // Build the ‹ / › navigation list from whichever view launched the modal, so
+  // you can step through the current (filtered + sorted) Trades or Journal list
+  // without closing and reopening — fast sequential trade review.
+  const inJournal = document.getElementById('v-journal')?.classList.contains('on')
+  modalNav.ids = inJournal ? journalNoted.slice() : filtered.map(x => x.id)
+  modalNav.idx = modalNav.ids.indexOf(id)
   const pc = t.pnl > 0 ? 'var(--green)' : 'var(--red)'
   document.getElementById('m-title').textContent = `${t.symbol} · ${t.side.toUpperCase()}`
   // Populate structured journal fields (handle legacy string notes)
@@ -1625,7 +1674,36 @@ function openModal(id) {
   ].map(([k,v]) => `<div class="mi"><div class="mk">${k}</div><div class="mv">${v}</div></div>`).join('')
   // Capture the just-populated field state as the clean baseline for dirty-checking
   modalBaseline = JSON.stringify(currentModalNote())
+  updateModalNav()
   document.getElementById('modal').classList.add('on')
+}
+
+// Reflect the current position in the ‹ N / M › control; hide it when there's
+// nothing to step through (single item or opened outside a list).
+function updateModalNav() {
+  const pos  = document.getElementById('m-nav-pos')
+  const prev = document.getElementById('m-prev')
+  const next = document.getElementById('m-next')
+  if (!pos || !prev || !next) return
+  if (modalNav.idx >= 0 && modalNav.ids.length > 1) {
+    pos.textContent  = `${modalNav.idx + 1} / ${modalNav.ids.length}`
+    prev.disabled    = modalNav.idx <= 0
+    next.disabled    = modalNav.idx >= modalNav.ids.length - 1
+    prev.style.display = next.style.display = pos.style.display = ''
+  } else {
+    prev.style.display = next.style.display = pos.style.display = 'none'
+  }
+}
+
+// Step to the previous/next trade in modalNav, honouring the unsaved-note guard
+// so a stray click can never silently discard journal edits.
+function modalNavTo(delta) {
+  if (modalNav.idx < 0) return
+  const ni = modalNav.idx + delta
+  if (ni < 0 || ni >= modalNav.ids.length) return
+  if (activeTrade && modalIsDirty() &&
+      !confirm('You have unsaved journal changes. Discard them?')) return
+  openModal(modalNav.ids[ni])
 }
 
 function setStructure(val) {
@@ -2363,6 +2441,8 @@ function wire() {
   document.getElementById('m-close').addEventListener('click', () => closeModal())
   document.getElementById('m-cancel').addEventListener('click', () => closeModal())
   document.getElementById('m-save').addEventListener('click', saveNote)
+  document.getElementById('m-prev').addEventListener('click', () => modalNavTo(-1))
+  document.getElementById('m-next').addEventListener('click', () => modalNavTo(1))
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); return }
     const isModalOpen = document.getElementById('modal').classList.contains('on')
@@ -2374,6 +2454,9 @@ function wire() {
       else if (e.key === '4') go('strategy')
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
+    // Alt+←/→ steps through the current trade list without leaving the textarea
+    if (isModalOpen && e.altKey && e.key === 'ArrowLeft')  { e.preventDefault(); modalNavTo(-1) }
+    if (isModalOpen && e.altKey && e.key === 'ArrowRight') { e.preventDefault(); modalNavTo(1) }
   })
 }
 

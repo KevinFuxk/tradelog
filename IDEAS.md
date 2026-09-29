@@ -82,3 +82,18 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-29 — Shipped
+- **Journal filter persistence** — the Journal view now remembers its search / product / side / date filters across restarts via `localStorage` (`tradelog.journalFilters`), mirroring the Trades (`tradelog.tradeFilters`) and Strategy (`tradelog.cnhFilters`) persistence already shipped. A trader who always reviews one product's notes no longer re-sets the filter every launch. The dynamic product `<select>` is re-applied once its option list is rebuilt from noted trades (via `jnPendingSymbol`, same trick as the Strategy view). No JSON-store change.
+- **In-modal Prev / Next trade navigation** — the trade/journal modal gains ‹ N / M › controls (and `Alt+←` / `Alt+→`) that step through the *current filtered + sorted* list — the Trades table order when opened from Trades, the Journal list order when opened from Journal — without closing and reopening. Makes end-of-day sequential review much faster. Fully honours the existing unsaved-note guard (confirms before leaving a dirty entry), spans page boundaries (walks the whole filtered set, not just the visible page), and hides itself when there's nothing to step through.
+
+### ⚠️ Process note (2026-09-29) — backlog needs human triage
+- There are **30+ open, unmerged daily PRs** (roughly #92–#121). The merge history stops at **#8**. Almost every open PR re-proposes the *same* small set of changes — `tradeR()` helper, Avg R breakdown columns, `/`-to-search shortcut, filtered P&L in the Trades header, a "calendar-day grouping bug" fix, and a Total Fees card — so the daily agent has been repeating near-identical work that never lands. **Recommend a human triage pass: pick/merge one canonical PR per feature and close the duplicates**, or point the daily routine at a fresh base. Today's batch was deliberately chosen to *avoid* that duplicated set.
+- The most-repeated candidate worth a human decision: the **"calendar-day grouping bug"** (daily P&L / Best-Worst-Day group by the raw `entryTime` string date, i.e. broker/UTC calendar day rather than the trader's local day). Many open PRs claim to fix it — worth verifying and merging exactly one.
+
+### Deferred / next-up ideas (2026-09-29)
+- **Persist the last-selected trade / scroll position** so reopening the app lands where you left off during a review session.
+- **Sortable Hold Time column in Trades table** — still pending the responsive width pass noted since 2026-06-04.
+- **Longest underwater stretch** — complement Current DD with the longest run (trades/days) spent below a prior equity peak.
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour.
+- **Journal Markdown/CSV export** — let traders take their reflections out of the app.
