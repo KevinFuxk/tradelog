@@ -82,3 +82,17 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-09-30 — Shipped
+- **Fix calendar-day grouping bug** — the Daily P&L chart and the Best/Worst Day stat cards grouped trades by `entryTime.split('T')[0] || entryTime.split(' ')[0]`. For space-separated timestamps (`2026-06-07 14:30:00`, `2026.06.07 09:15`) `split('T')[0]` returns the *whole* string (time included), so the `||` fallback never ran and every trade became its own "day": the Daily chart showed one bar per trade and Best/Worst Day just echoed the best/worst single trade. Added a shared `dayKey()` helper (`split('T')[0].split(' ')[0]`, trims whitespace, handles ISO + space + dot separators) used in both places, so each calendar date now aggregates correctly. This was the most-repeated ask across the backlog of open daily PRs.
+- **Shared `tradeR()` helper** — the realised R-multiple formula (`pnl ÷ dollars-risked`, with the breakeven/no-stop guard) was copy-pasted in four spots (Trades table sub-line, Journal card header, Dashboard Avg R card, CSV export). Factored into one `tradeR(t)` function so the four stay in lock-step and can't silently diverge. Pure refactor — identical output, verified against the old inline expressions. Unblocks the deferred "Avg R per symbol/weekday" idea.
+- **Total Fees stat card on Dashboard** — new card sums commission & swap across all trades (the cost drag traders routinely under-count), shown only when any trade actually carries a fee. Values are read as-stored (matching the trade-detail modal), so it's a pure derivation with no data-shape change.
+- **`/` keyboard shortcut** — pressing `/` (when not already typing and no modal is open) jumps to the Trades view and focuses+selects the symbol search box, for fast keyboard-driven filtering. Complements the existing `1`–`4` nav shortcuts.
+
+### Deferred / next-up ideas (2026-09-30)
+- **Avg R per symbol / per weekday** — now that `tradeR()` exists, add an Avg R column to the By-Symbol and By-Day-of-Week dashboard tables
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades or days) spent below a prior peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Fees as % of gross P&L** — extend the new Total Fees card with a sub-line showing cost drag relative to gross profit
+- **Surface the `/` and `1`–`4` shortcuts in-app** — a small `?` help overlay or sidebar tooltip hints so the shortcuts are discoverable
