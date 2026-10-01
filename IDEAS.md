@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-10-01 — Shipped
+- **Shared `tradeR()` helper** — the realised R-multiple formula (P&L ÷ dollars risked at the stop) was duplicated in four places (dashboard Avg R card, Trades table sub-line, Journal card header, CSV export). Factored into one `tradeR(t)` function so those surfaces can never drift apart, and so new R-based features reuse it instead of re-deriving the formula. Pure refactor + enabler — no behaviour change to existing numbers (verified identical output).
+- **Avg R column on the By-Symbol and By-Day-of-Week dashboard breakdowns** — both mini-tables now show average realised R per trade (across trades with a stop set) alongside $ Avg/Trade, so R-based traders can see per-instrument and per-weekday edge in risk units, not just dollars. Shows "—" for groups with no stop data. Uses the new shared `tradeR()` (long-standing backlog item, now unblocked).
+- **Longest DD Run stat card** — surfaces the most consecutive trades spent below a prior equity peak before a new high was made (0 = every trade made a fresh high). Complements the existing Current DD (depth) and Max Drawdown cards with drawdown *duration*. Computed in the same peak/cum walk already in `stats()`.
+- **`/` keyboard shortcut** — jumps to the Trades view and focuses the search box (selecting any existing text), matching the app's keyboard-first ethos (1–4 nav, Ctrl+Enter save). Ignored while typing or when the modal is open.
+
+### Deferred / next-up ideas (2026-10-01)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Journal export/backup** — a one-click export of all journal notes (JSON or Markdown) so a trader's most precious data can be backed up outside the app
+- **Avg R column on the Strategy "By bucket" tables** — those are already R-native (eventGroupStats has avgR); surface it the same way if not already shown
+- **Expectancy in R on the dashboard** vs $ — a combined "edge" readout, plus a tooltip linking Avg R × trade count
