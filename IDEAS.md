@@ -1,5 +1,21 @@
 # TradeLog — Ideas Log
 
+## 2026-10-02 — Shipped
+- **Fixed calendar-day grouping bug** — the Daily P&L chart and the Best/Worst Day stat cards grouped trades by `entryTime.split('T')[0] || split(' ')[0]`, which silently broke for space-separated timestamps (`"2024-06-07 14:32"`): `split('T')[0]` returns the whole string (truthy), so the space fallback never ran and *every minute became its own "day"*. New `dayKey()` helper splits on both separators, so broker exports that use a space (common) now bucket by true calendar date. Real correctness bug affecting two dashboard features.
+- **Shared `tradeR()` helper** — the realised R-multiple formula (`pnl ÷ dollars risked`) was copy-pasted in four places (Dashboard Avg R card, Trades table sub-line, Journal card header, CSV export). Factored into one `tradeR(t)` (returns `null` when no usable stop). Behaviour-identical; removes drift risk.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — each dashboard breakdown table now shows average realised R per symbol / per weekday (trades with a stop only; `—` otherwise), so R-based traders can see risk-adjusted edge per instrument/day, not just dollars. Reuses `tradeR()` + the existing `.bdt` styling.
+- **Longest Underwater stat card** — new Dashboard card showing the most consecutive trades spent below a prior equity peak before a new high. Complements Current DD (depth) with *duration* of slumps. Computed in the existing `stats()` peak/cum walk — no extra pass.
+- **`/` keyboard shortcut** — press `/` anywhere (outside a field/modal) to jump to the Trades view and focus the symbol search. Fast keyboard-driven filtering for power users; joins the existing `1`–`4` nav shortcuts.
+
+> NOTE for future runs: `main` has not advanced since 2026-06-07 (PR #8) — 30+ daily PRs (#9–#124) are open and unmerged, so each run re-derives the same backlog against a stale base. This batch is built off `main` and overlaps earlier unmerged PRs by necessity. If PRs start merging, re-check this list against the new `main` before picking work.
+
+### Deferred / next-up ideas (2026-10-02)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour (reuse `dayKey`-style parse on the hour)
+- **Total Fees / commission card** on the Dashboard — sum of commission paid, often invisible drag on net edge
+- **Underwater duration in *days* / *$ depth*** — extend the new Longest Underwater card with wall-clock days and the depth of that specific stretch
+- **In-modal Prev/Next trade navigation** — arrow through trades without closing the journal modal
+
 ## 2026-06-01 — Shipped
 - **Keyboard shortcuts** (`1`–`4` navigate Dashboard/Trades/Journal/Strategy; `Ctrl+Enter` saves journal note in modal; `Escape` already worked)
 - **Sidebar tooltip hints** — tooltips now show `[1]`–`[4]` to surface the shortcuts to new users
