@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-10-03 — Shipped
+- **Fix calendar-day grouping bug** — Best Day / Worst Day and the Daily P&L bar chart grouped trades by `entryTime.split('T')[0]`. For space-separated timestamps (e.g. `2024-01-15 10:30:00`, as several broker feeds produce) there is no `T`, so the whole datetime string became the key and **every trade landed in its own "day"** — making Best/Worst Day meaningless and the Daily chart one bar per trade. Added a single `dayKey()` helper that splits on the first `T` *or* space, and routed both call sites through it. Real correctness fix, display-only (no persistence change).
+- **Shared `tradeR()` helper (dedupe) + Avg R columns on the By-Symbol and By-Day-of-Week breakdowns** — the realised-R formula (`P&L ÷ $ risked`) was copy-pasted in four places (Dashboard Avg R card, Trades-table sub-line, Journal header, CSV export). Factored it into one `tradeR(t)` source of truth and pointed all four at it, then used it to add an **Avg R** column to both dashboard breakdown tables (via `groupAvgR()` / `rCell()`), so a trader sees which symbols *and* which weekdays carry a positive risk-adjusted edge, not just raw dollars. Only shows R where a stop exists (`—` otherwise). No data-shape change.
+- **`/` keyboard shortcut → Trades search** — pressing `/` (when not typing / no modal open) jumps to the Trades view and focuses + selects the symbol search box, so power users can filter without the mouse. Joins the existing `1`–`4` nav and `Ctrl+Enter` save shortcuts.
+
+### Deferred / next-up ideas (2026-10-03)
+- **Longest underwater stretch** — still open; complement Current DD with the longest run (in trades or days) spent below a prior equity peak
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Avg R column on the Strategy breakdowns** is native (events are R-based); consider surfacing Avg R in the Trades-table header summary too
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **Total Fees / commission stat card** on the Dashboard — sum of commission paid, a cost a journal should make visible
+- ⚠️ **Backlog note:** `main` has not advanced past June (#8), yet ~115+ `daily/*` PRs sit open and unmerged, nearly all re-shipping the same handful of ideas (shared `tradeR()`, `/` search, calendar-day fix, Total Fees, Avg R breakdowns). Future runs add little until these are reviewed/merged or closed — consider pausing the routine or consolidating.
