@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-10-04 — Shipped
+- **`/` keyboard shortcut to focus the search box** — pressing `/` (when not already typing and no modal is open) jumps focus straight to the active view's search field — the Trades symbol search or the Journal notes search — and selects any existing text. Mirrors the familiar GitHub/Gmail pattern so power users can filter without reaching for the mouse. A title hint on the Trades search surfaces it. Pure keyboard handler + attribute; no data-shape change.
+- **Filtered Net P&L + Win% in the Trades sub-header** — the Trade History sub-header now reads e.g. `42 trades · Net +1,230.50 · Win 57.1%` for the *currently filtered* set, recomputed on every filter/sort change via the existing `stats()`. Narrowing to one symbol or a date range instantly reveals that subset's edge instead of just a row count. Colored green/red like the rest of the app; falls back to a plain count when empty.
+- **"Max Underwater" stat card on the Dashboard** — surfaces the longest run of consecutive trades equity spent below a prior high-water mark (duration of the deepest slump, in trades), with a sub-line showing the current underwater streak or "recovered to a new high". Pairs with the Current DD card: depth in `$` vs. duration in trades. Computed in the same peak/cum walk already used for Max Drawdown — no new persistence.
+
+### Deferred / next-up ideas (2026-10-04)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Shared `tradeR()` helper** — the realised-R formula is still inlined in 4+ spots (Trades table, CSV export, Avg R card, Journal header); factor it out once to stop drift, then add an Avg R column to the By-Symbol / By-Day-of-Week tables
+- **Filtered summary in the Journal sub-header too** — mirror the new Trades sub-header (count · Net · Win%) for the Journal filter set
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **In-modal Prev/Next trade navigation** — step through filtered trades with ←/→ inside the detail modal for fast sequential review
