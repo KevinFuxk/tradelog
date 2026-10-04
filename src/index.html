@@ -350,7 +350,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…" title="Filter trades by symbol. Press / to jump here from anywhere" style="width:160px">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -965,25 +965,29 @@ function stats(list) {
   })
 
   // max drawdown: largest peak-to-trough drop in cumulative P&L
+  // Also track the "underwater" stretch: how many trades in a row equity sat
+  // below a prior high-water mark (uw = running streak, maxUW = longest).
   const sorted = [...list].sort((a,b)=>new Date(a.entryTime)-new Date(b.entryTime))
-  let peak=0, cum=0, maxDD=0
+  let peak=0, cum=0, maxDD=0, uw=0, maxUW=0
   sorted.forEach(t => {
     cum += t.pnl
     if (cum > peak) peak = cum
     const dd = peak - cum
     if (dd > maxDD) maxDD = dd
+    if (dd > 0.0049) { uw++; if (uw > maxUW) maxUW = uw } else { uw = 0 }
   })
   // Current (open) drawdown = how far final equity sits below its running peak
   const curDD    = +(peak - cum).toFixed(2)
   const curDDPct = peak > 0 ? (curDD / peak) * 100 : 0
   const atHigh   = curDD <= 0.0049   // within rounding of a fresh high
+  const curUW    = uw                // trades still underwater at the end
 
   return { n:list.length, wins:wins.length, losses:losses.length,
     wr: list.length ? (wins.length/list.length)*100 : 0,
     total, avgW, avgL, pf, mw, ml,
     best:   wins.length   ? Math.max(...wins.map(t=>t.pnl))   : 0,
     worst:  losses.length ? Math.min(...losses.map(t=>t.pnl)) : 0,
-    maxDD, curDD, curDDPct, peak, atHigh }
+    maxDD, curDD, curDDPct, peak, atHigh, maxUW, curUW }
 }
 
 // ════════════════════════════════════════════════════
@@ -1029,6 +1033,20 @@ function renderDash() {
     s.atHigh ? `<span class="col-g">At new high</span>` : `<span class="col-r">${fmtMoney(-s.curDD)}</span>`,
     curDDsub,
     'How far your current equity sits below its all-time peak (the running high-water mark on the P&L chart). "At new high" means you are at peak equity right now'
+  ]
+
+  // Longest underwater stretch — the most consecutive trades spent below a
+  // prior equity peak. Pairs with Current DD: depth ($) vs. duration (trades).
+  const uwVal = s.maxUW === 0
+    ? `<span class="col-g">0</span>`
+    : `<span class="col-r">${s.maxUW}</span>`
+  const uwSub = s.maxUW === 0 ? 'never below peak'
+    : (s.curUW > 0 ? `currently ${s.curUW} underwater` : 'recovered to a new high')
+  const uwCard = [
+    'Max Underwater',
+    uwVal,
+    uwSub,
+    'The longest run of consecutive trades your equity spent below a prior high-water mark (duration of your deepest slump, in trades). Current DD shows the depth in $; this shows how long you stayed down'
   ]
 
   // Average realised R-multiple across trades that have a stop set — the
@@ -1077,6 +1095,7 @@ function renderDash() {
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
     ddCard,
+    uwCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
@@ -1301,7 +1320,17 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-header shows live stats for the CURRENT filter set, so narrowing to a
+  // symbol / date range instantly reveals that subset's edge (not just a count).
+  const fsub = document.getElementById('tr-sub')
+  const cnt  = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  if (filtered.length) {
+    const fs = stats(filtered)
+    fsub.innerHTML = `${cnt} · Net <span class="${fs.total>=0?'col-g':'col-r'}">${fmtMoney(fs.total)}</span>`
+      + ` · Win <span class="${fs.wr>=50?'col-g':'col-r'}">${fs.wr.toFixed(1)}%</span>`
+  } else {
+    fsub.textContent = cnt
+  }
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -2372,6 +2401,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Focus the search box of whichever view is active (Trades / Journal).
+        const box = document.getElementById('v-trades').classList.contains('on')  ? document.getElementById('f-q')
+                  : document.getElementById('v-journal').classList.contains('on') ? document.getElementById('jf-q')
+                  : null
+        if (box) { e.preventDefault(); box.focus(); box.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
