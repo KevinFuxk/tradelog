@@ -1050,7 +1050,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1065,6 +1065,17 @@ function renderDash() {
     ]
   }
 
+  // Total commission paid across all trades — the cumulative fee drag on the
+  // account. Net P&L already nets this out; this card surfaces how much of the
+  // gross went to the broker. Only shown when any trade carries a commission.
+  const totalComm = trades.reduce((a, t) => a + (t.commission || 0), 0)
+  const commCard = totalComm ? [[
+    'Total Fees',
+    `<span class="col-r">${fmtMoney(totalComm, false)}</span>`,
+    'commission paid',
+    'Sum of commission/fees across every trade. Your Net P&L already subtracts this — it shows how much of the gross went to the broker'
+  ]] : []
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
@@ -1078,6 +1089,7 @@ function renderDash() {
     ...avgRCard,
     ddCard,
     ...dayCards,
+    ...commCard,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
     ...holdCard,
   ].map(([l,v,ss,ti]) =>
@@ -1242,7 +1254,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -1301,7 +1313,13 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Net P&L of the CURRENTLY filtered set — so narrowing to a symbol or date
+  // range instantly shows that subset's result, not just the trade count.
+  const fNet = filtered.reduce((a, t) => a + t.pnl, 0)
+  const netStr = filtered.length
+    ? ` · net <span class="${fNet>=0?'col-g':'col-r'}">${fmtMoney(fNet)}</span>`
+    : ''
+  document.getElementById('tr-sub').innerHTML = `${filtered.length} trade${filtered.length!==1?'s':''}${netStr}`
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -2227,6 +2245,15 @@ function holdMs(t) {
   return (isFinite(ms) && ms >= 0) ? ms : null
 }
 
+// Calendar-day key (just the date, no time) for a trade. Handles BOTH the ISO
+// form "2026-01-15T10:30:00" and the space-separated form "2026-01-15 10:30:00"
+// — splitting on only 'T' left space-separated stamps ungrouped, so every trade
+// became its own "day" (wrong Best/Worst Day stats and a Daily P&L bar per trade).
+function dayKey(t) {
+  const s = ((t && t.entryTime) || '').trim()
+  return s ? s.split('T')[0].split(' ')[0] : ''
+}
+
 // Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.
 // Keeps larger-account P&L readable. `sign` adds a leading + for non-negatives.
 function fmtMoney(n, sign = true) {
@@ -2372,6 +2399,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps to the Trades view and focuses the symbol search — fast,
+      // keyboard-only filtering for power users. preventDefault stops the "/"
+      // from being typed into the input it focuses.
+      else if (e.key === '/') {
+        e.preventDefault(); go('trades')
+        const q = document.getElementById('f-q'); if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
