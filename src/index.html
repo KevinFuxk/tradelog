@@ -1050,7 +1050,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1242,7 +1242,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -1280,8 +1280,17 @@ function getFiltered() {
 
   // Sort
   list.sort((a,b) => {
-    let va = a[sortCol], vb = b[sortCol]
-    if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    let va, vb
+    if (sortCol === 'riskPct') {
+      // %Risk is computed, not a stored field — derive it so the header sorts
+      // (previously a no-op). Trades without a stop sink to the bottom.
+      const ra = calcRisk(a), rb = calcRisk(b)
+      va = (ra && !ra.breakeven) ? ra.actualRiskPct : -Infinity
+      vb = (rb && !rb.breakeven) ? rb.actualRiskPct : -Infinity
+    } else {
+      va = a[sortCol]; vb = b[sortCol]
+      if (sortCol === 'entryTime') { va = new Date(va)||0; vb = new Date(vb)||0 }
+    }
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -1301,7 +1310,14 @@ function getFiltered() {
 
 function renderTrades() {
   filtered = getFiltered()
-  document.getElementById('tr-sub').textContent = `${filtered.length} trade${filtered.length!==1?'s':''}`
+  // Sub-header reflects the CURRENT filter/search: net P&L + win% of exactly
+  // what's shown, so "how did I do on GBPUSD / this week?" is one glance away.
+  const fTotal = filtered.reduce((a, t) => a + t.pnl, 0)
+  const fWins  = filtered.filter(t => t.pnl > 0).length
+  const fWr    = filtered.length ? (fWins / filtered.length) * 100 : 0
+  document.getElementById('tr-sub').innerHTML =
+    `${filtered.length} trade${filtered.length !== 1 ? 's' : ''}` +
+    (filtered.length ? ` · <span class="${fTotal >= 0 ? 'col-g' : 'col-r'}">${fmtMoney(fTotal)}</span> · ${fWr.toFixed(0)}% win` : '')
 
   const em = document.getElementById('tr-empty')
   const wr = document.getElementById('tr-wrap')
@@ -2192,6 +2208,22 @@ function buildCnhCharts(list, s) {
 // ════════════════════════════════════════════════════
 //  HELPERS
 // ════════════════════════════════════════════════════
+// Calendar-day key (YYYY-MM-DD) from a trade timestamp. Handles BOTH
+// 'T'-separated ISO strings ("2026-06-07T14:30") and space-separated broker
+// formats ("2026-06-07 14:30"): a plain `.split('T')[0]` leaves the latter
+// intact, so every timestamp became its own "day" — wrecking the Best/Worst
+// Day stats and the Daily P&L grouping. Falls back to Date parsing for other
+// locale formats (e.g. "06/07/2026 14:30").
+function dayKey(ts) {
+  if (!ts) return ''
+  const s = String(ts).trim()
+  const iso = s.match(/^\d{4}-\d{2}-\d{2}/)   // ISO date prefix (T- or space-separated)
+  if (iso) return iso[0]
+  const d = new Date(s)
+  if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  return s.split('T')[0].split(' ')[0]
+}
+
 function fdt(s) {
   if (!s) return '—'
   try {
@@ -2372,6 +2404,12 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight to Trades and focus the search box for fast filtering
+        e.preventDefault(); go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
