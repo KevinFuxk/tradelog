@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-10-06 — Shipped
+- **Fix calendar-day grouping bug** — Best/Worst Day stats and the Daily P&L chart grouped by `entryTime.split('T')[0]`, which left *space-separated* broker timestamps ("2026-06-07 14:30", as Tickmill `update time` exports) completely intact — so each timestamp became its own "day" and daily aggregation silently collapsed to one bar/row per trade. New `dayKey()` helper extracts the ISO date prefix for both `T`- and space-separated strings (and falls back to `Date` parsing for locale formats like `06/07/2026`). Applied in the Dashboard day-map and the Daily P&L chart. Pure correctness fix; no data-shape change.
+- **Filtered Net P&L + Win% in the Trades sub-header** — the Trade History sub-header now shows the net P&L (green/red) and win% of *exactly the currently filtered/searched set*, not just the count. "How did I do on GBPUSD / this week / shorts only?" is now one glance away — filter and read. Derived in `renderTrades`; no persistence change.
+- **`/` keyboard shortcut** — pressing `/` anywhere (outside a text field / modal) jumps to the Trades view and focuses + selects the search box, for fast keyboard-driven filtering. Joins the existing `1`–`4` nav shortcuts.
+- **Fix `%Risk` column sort** — the `%Risk` table header was clickable but sorted by a non-existent stored field (`riskPct`), so it was a silent no-op. The sort comparator now derives actual %Risk via `calcRisk()` (trades without a stop sink to the bottom), letting traders surface their riskiest trades.
+
+### Deferred / next-up ideas (2026-10-06)
+- **Longest underwater stretch** — longest run (trades/days) below a prior equity peak, pairing with the Current DD card
+- **Shared `tradeR()` helper** — the realised-R formula is now duplicated in the Trades table, Journal headers, Avg R card and CSV export; factor it out before adding Avg R breakdown columns
+- **Avg R per symbol / per weekday** columns on the Dashboard breakdown tables (needs `tradeR()` first)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass
+- **Journal export / backup** — one-click export of all structured notes to a Markdown/text file (protects the app's most precious data)
