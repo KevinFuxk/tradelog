@@ -82,3 +82,16 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-10-08 — Shipped
+- **Shared `tradeR()` helper** — the realised R-multiple formula (P&L ÷ amount risked at the stop) was copy-pasted in four places (Dashboard Avg R card, Trades table sub-line, Journal card header, CSV export). Extracted to one `tradeR(trade)` function so every surface agrees and future R features build on one source of truth. Pure refactor; identical numbers verified.
+- **Avg R column on the By-Symbol and By-Day-of-Week breakdowns** — both Dashboard mini-tables now show average realised R per trade (for trades with a stop set) alongside Win% and Avg/Trade, so R-based traders see the risk-adjusted per-row edge, not just dollars. Shows `—` for rows with no stopped trades. Reuses the new `tradeR()` helper + existing `rNum`/`.bdt` styling — no new CSS.
+- **Longest Underwater stat card** — surfaces the longest run of consecutive trades equity spent below a prior high-water mark before recovering (in trades). Complements the Current DD + Max Drawdown cards: depth *and* duration of drawdowns are now both visible. Computed in the same peak/cum walk in `stats()`.
+- **`/` keyboard shortcut** — pressing `/` anywhere (when not typing / no modal) jumps to the Trades view and focuses the symbol search box, selecting its text. Placeholder now hints the shortcut. Fast keyboard-driven filtering for power users; joins the existing `1`–`4` nav and `Ctrl+Enter` save shortcuts.
+
+### Deferred / next-up ideas (2026-10-08)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Underwater duration in days** — complement the trades-based Longest Underwater with calendar-days underwater, and/or draw the underwater period as a shaded band on the equity chart
+- **Avg R column on the Strategy breakdowns already exist (R-native); consider surfacing Avg R in the trade-detail modal** so a single trade shows its R inline with %Risk
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **`g` then `d/t/j/s` chord navigation** — Vim-style two-key nav as the shortcut set grows beyond single digits
