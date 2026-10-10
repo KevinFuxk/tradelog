@@ -350,7 +350,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…  [/]" title="Filter by symbol — press / anywhere to jump here" style="width:160px">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -1046,11 +1046,22 @@ function renderDash() {
     'Average realised R-multiple across trades that have a stop-loss set (P&L ÷ amount risked). The risk-adjusted version of Expectancy — positive means an edge in R terms'
   ]] : []
 
+  // Total fees paid — commission is a silent drag that a Net-P&L figure hides.
+  // Shown as a cost (already baked into Net P&L); only appears when any trade
+  // carries commission data.
+  const totalComm = trades.reduce((a, t) => a + (t.commission || 0), 0)
+  const feeCard = trades.some(t => t.commission) ? [[
+    'Total Fees',
+    `<span class="col-r">-${fmtMoney(Math.abs(totalComm), false)}</span>`,
+    'commission paid',
+    'Sum of all commission/fees across your trades. Already included in Net P&L — shown separately so you can see how much your edge is spending on costs'
+  ]] : []
+
   // Best / worst single trading day by net P&L — surfaces outlier days that
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1058,7 +1069,9 @@ function renderDash() {
   if (dayRows.length) {
     const best  = dayRows.reduce((a, b) => b[1] > a[1] ? b : a)
     const worst = dayRows.reduce((a, b) => b[1] < a[1] ? b : a)
-    const fday  = d => { const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' }) }
+    // Parse the YYYY-MM-DD key at local midnight so the displayed date matches
+    // the grouping day (a bare "2026-06-07" would otherwise be read as UTC).
+    const fday  = d => { const x = new Date(d + 'T00:00:00'); return isNaN(x) ? d : x.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' }) }
     dayCards = [
       ['Best Day',  `<span class="col-g">${fmtMoney(best[1])}</span>`,  fday(best[0]),  'Your single most profitable trading day (sum of all P&L on that calendar date)'],
       ['Worst Day', `<span class="col-r">${fmtMoney(worst[1])}</span>`, fday(worst[0]), 'Your single worst trading day (sum of all P&L on that calendar date)'],
@@ -1076,6 +1089,7 @@ function renderDash() {
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
     ...avgRCard,
+    ...feeCard,
     ddCard,
     ...dayCards,
     ['Max Consec Wins', `<span class="col-g">${s.mw}</span>`, `${s.ml} consec losses`, 'Longest streak of consecutive winning trades (and losing streak below)'],
@@ -1242,7 +1256,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -2227,6 +2241,23 @@ function holdMs(t) {
   return (isFinite(ms) && ms >= 0) ? ms : null
 }
 
+// Normalise a timestamp to its calendar day (local) as YYYY-MM-DD, so trades
+// group by day regardless of the timestamp format. Broker exports (Tickmill)
+// use a space separator ("2026-06-07 14:30:00"), not ISO "T", so the old
+// `split('T')[0]` kept the time and made every trade its own "day" — breaking
+// the Best/Worst Day cards and the Daily P&L chart. Falls back to a plain
+// string strip when the value can't be parsed as a date.
+function dayKey(s) {
+  if (!s) return ''
+  const d = new Date(s)
+  if (!isNaN(d)) {
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${d.getFullYear()}-${mm}-${dd}`
+  }
+  return String(s).split('T')[0].split(' ')[0]
+}
+
 // Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.
 // Keeps larger-account P&L readable. `sign` adds a leading + for non-negatives.
 function fmtMoney(n, sign = true) {
@@ -2372,6 +2403,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      else if (e.key === '/') {
+        // Jump straight to filtering: switch to Trades and focus the search box.
+        e.preventDefault()
+        go('trades')
+        const q = document.getElementById('f-q')
+        if (q) { q.focus(); q.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
