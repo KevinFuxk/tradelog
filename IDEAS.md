@@ -82,3 +82,15 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-10-10 — Shipped
+- **Fixed the calendar-day grouping bug** (correctness) — introduced a shared `dayKey()` helper and used it for both the **Best/Worst Day** stat cards and the **Daily P&L chart**. The old code did `entryTime.split('T')[0]`, which only strips the time from ISO strings. Broker/Tickmill exports use a *space* separator (`"2026-06-07 14:30:00"`), so the time was never stripped — every trade became its own "day", turning Best/Worst Day into a duplicate of worst/best *single trade* and the Daily chart into one bar *per trade*. `dayKey()` now normalises to local `YYYY-MM-DD` via `Date`, falling back to a string strip only when unparseable. Best/Worst Day dates are parsed at local midnight (`+ 'T00:00:00'`) so the shown date matches the grouping day.
+- **Total Fees stat card on Dashboard** — sums all commission across trades and shows it as a cost (already baked into Net P&L, surfaced separately). Commission is a silent drag a single Net-P&L number hides; the card only appears when any trade carries commission data. Pure derivation; no persistence change.
+- **`/` keyboard shortcut to focus the Trades search** — pressing `/` anywhere (outside an input/modal) jumps to the Trades view and focuses + selects the symbol search box, for fast keyboard-driven filtering. Placeholder/title updated to advertise it.
+
+### Deferred / next-up ideas (2026-10-10)
+- **Sortable Hold Time column in Trades table** — still pending a responsive width pass before adding another column
+- **Longest underwater stretch** — complement Current DD with the longest run (in trades/days) spent below a prior equity peak
+- **Avg R per symbol / per weekday** — add an Avg R column to the By-Symbol and By-Day-of-Week tables via a shared `tradeR()` helper (don't duplicate the R formula from the Trades table / Journal / Avg R card)
+- **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+- **Note:** many prior daily runs (open PRs #113–#132, none merged) repeatedly re-attempt the same items — calendar-day fix, Total Fees, `/` search, shared `tradeR()`. Base `main` still lacks all of them, so this run ships the highest-value subset against `main` directly.
