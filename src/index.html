@@ -350,7 +350,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
 
     <div class="fbar">
-      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px">
+      <input class="fi" id="f-q" placeholder="Search symbol…" style="width:160px" title="Filter by symbol — press / to jump here">
       <select class="fs" id="f-side"><option value="">All sides</option><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select>
       <select class="fs" id="f-res"><option value="">All results</option><option value="win">Winners ✅</option><option value="loss">Losers ❌</option></select>
       <input class="fi" type="date" id="f-from" title="From date">
@@ -395,7 +395,7 @@ textarea.nt::placeholder{color:var(--tx3);}
     </div>
     <!-- Journal filters -->
     <div class="fbar" id="jn-filters" style="margin-bottom:16px">
-      <input class="fi" id="jf-q" placeholder="Search notes…" oninput="renderJournal()" style="width:180px" title="Search the text of your journal notes (and symbol)">
+      <input class="fi" id="jf-q" placeholder="Search notes…" oninput="renderJournal()" style="width:180px" title="Search the text of your journal notes (and symbol) — press / to jump here">
       <select class="fs" id="jf-symbol" onchange="renderJournal()">
         <option value="">All products</option>
       </select>
@@ -1021,6 +1021,17 @@ function renderDash() {
     'Average hold time of winning trades (losers shown below). If losers are held much longer than winners, you may be letting losses run'
   ]] : []
 
+  // Total commission/fees paid across all trades — the raw cost of trading.
+  // P&L is already net of these, so this surfaces the drag that's otherwise
+  // invisible. Only shown when any commission data is present.
+  const totalFees = trades.reduce((a, t) => a + Math.abs(t.commission || 0), 0)
+  const feesCard = totalFees > 0 ? [[
+    'Total Fees',
+    `<span class="col-r">${fmtMoney(-totalFees, false)}</span>`,
+    'commission paid',
+    'Total commission/fees paid across all trades. Your P&L figures are already net of these — this card surfaces the raw cost of trading'
+  ]] : []
+
   // Current drawdown — how far equity sits below its running peak right now.
   const curDDsub = s.atHigh ? 'no open drawdown'
     : (s.peak > 0 ? `${s.curDDPct.toFixed(1)}% below peak` : 'below peak')
@@ -1050,7 +1061,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1075,6 +1086,7 @@ function renderDash() {
     ['Max Profit',   `<span class="col-g">${fmtMoney(s.best)}</span>`, 'single trade', 'Your single largest winning trade'],
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ...feesCard,
     ...avgRCard,
     ddCard,
     ...dayCards,
@@ -1242,7 +1254,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -2227,6 +2239,17 @@ function holdMs(t) {
   return (isFinite(ms) && ms >= 0) ? ms : null
 }
 
+// Robust calendar-day key (date portion) from a timestamp, handling both
+// ISO "2026-06-07T14:30" and space-separated "2026-06-07 14:30" formats.
+// (The old `split('T')[0] || split(' ')[0]` chain silently failed on the
+//  space format: the first split returns the whole string, so it was always
+//  truthy and the fallback never ran — making every timestamp its own "day"
+//  and breaking the Best/Worst Day stats and the Daily P&L bars.)
+function dayKey(ts) {
+  const s = String(ts || '')
+  return s ? s.split('T')[0].split(' ')[0] : ''
+}
+
 // Format a dollar figure with thousands separators, e.g. +1,234.50 / -980.00.
 // Keeps larger-account P&L readable. `sign` adds a leading + for non-negatives.
 function fmtMoney(n, sign = true) {
@@ -2372,6 +2395,13 @@ function wire() {
       else if (e.key === '2') go('trades')
       else if (e.key === '3') go('journal')
       else if (e.key === '4') go('strategy')
+      // "/" jumps straight to the current view's search box (power-user filter).
+      else if (e.key === '/') {
+        const active = document.querySelector('.view.on')?.id
+        const boxId = active === 'v-trades' ? 'f-q' : active === 'v-journal' ? 'jf-q' : null
+        const box = boxId && document.getElementById(boxId)
+        if (box) { e.preventDefault(); box.focus(); box.select() }
+      }
     }
     if (isModalOpen && (e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote()
   })
