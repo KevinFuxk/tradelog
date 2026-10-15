@@ -82,3 +82,13 @@
 - **`/` keyboard shortcut to focus the Trades search box** — fast keyboard-driven filtering for power users
 - **Avg R per symbol / per weekday** — extend the By-Symbol and By-Day-of-Week dashboard tables with an Avg R column now that Avg R is computed (factor out a shared `tradeR()` helper to avoid duplicating the formula)
 - **Best/worst hour-of-day breakdown** — for intraday traders, mirror the weekday table by entry hour
+
+## 2026-10-15 — Shipped
+- **Fixed the calendar-day grouping bug** — `renderDash()` (Best Day / Worst Day stat cards) and `buildDailyChart()` (Daily P&L bars) grouped trades by day with `entryTime.split('T')[0] || split(' ')[0]`. That `||` is dead-code: when a timestamp has no `T` (space-separated broker exports like `2026-01-15 10:30:00`, common in Tickmill/TradingView "Update Time"), `split('T')[0]` returns the *whole* string incl. the time, so the space fallback never ran and **every timestamp became its own "day"** — Best/Worst Day showed single trades and the Daily P&L chart drew one bar per trade. Replaced both with a shared, date-parsing `dayKey()` helper (YYYY-MM-DD, local, consistent with the By-Day-of-Week `getDay()` grouping). Pure read-side fix; no persistence/data-shape change.
+
+### ⚠️ Process note for future runs (IMPORTANT — read before picking work)
+- As of this run there are **~50 open, unmerged `daily/*` PRs** (#87–#136) stacked up since the last merge (#8, 2026-06-07). They are almost all near-identical because each run branches fresh off `main` (frozen at #8) and re-proposes the same handful of ideas: *fix calendar-day grouping bug*, *`/` search shortcut*, *Total Fees card*, *shared `tradeR()` helper + Avg R breakdown columns*, *Longest Underwater / Longest DD stat*, *filtered P&L in Trades header*, *By-Month / By-Hour breakdowns*, *in-modal Prev/Next nav*, *sortable Hold Time column*, *`?` help overlay*, *journal filter persistence*.
+- **Do NOT keep adding to this pile.** Nothing new ships value until these are triaged. Recommended: the maintainer merges (or closes) the backlog; a future run could instead consolidate the best of the open PRs into one, or simply hold. This run deliberately shipped only the single real correctness bug fix above (smallest valuable change) rather than a 51st duplicate.
+
+### Deferred / next-up ideas (still unshipped on `main`, but already covered by open PRs above)
+- `/` to focus Trades search · shared `tradeR()` helper + Avg R breakdown columns · Longest Underwater stat · Total Fees card · filtered Net P&L in Trades/Journal sub-headers · By-Hour / By-Month breakdowns · in-modal Prev/Next trade nav · sortable Hold Time column
