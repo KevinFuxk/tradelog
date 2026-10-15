@@ -1050,7 +1050,7 @@ function renderDash() {
   // can flatter or wreck an otherwise steady-looking curve.
   const dayMap = {}
   trades.forEach(t => {
-    const d = (t.entryTime || '').split('T')[0] || (t.entryTime || '').split(' ')[0] || ''
+    const d = dayKey(t.entryTime)
     if (d) dayMap[d] = (dayMap[d] || 0) + t.pnl
   })
   const dayRows = Object.entries(dayMap)
@@ -1242,7 +1242,7 @@ function buildDailyChart(tipBase, yAxis) {
 
   const dmap = {}
   filtered.forEach(t => {
-    const d = (t.entryTime||'').split('T')[0]||(t.entryTime||'').split(' ')[0]||'?'
+    const d = dayKey(t.entryTime) || '?'
     dmap[d] = +(((dmap[d]||0) + t.pnl).toFixed(2))
   })
   const days = Object.keys(dmap), vals = days.map(d=>dmap[d])
@@ -2192,6 +2192,22 @@ function buildCnhCharts(list, s) {
 // ════════════════════════════════════════════════════
 //  HELPERS
 // ════════════════════════════════════════════════════
+// Calendar-day key (YYYY-MM-DD) for grouping trades by the day they were entered.
+// Robust to both "2026-01-15T10:30" (ISO) and "2026-01-15 10:30" / "2026.01.15 10:30"
+// (space-separated broker exports). The old `split('T')[0] || split(' ')[0]` trick
+// was buggy: when there is no 'T', split('T')[0] returns the whole string (time and
+// all), so the space fallback never ran and every timestamp became its own "day".
+function dayKey(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  if (!isNaN(d)) {
+    const p = n => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  }
+  // Unparseable string: strip the time portion on either separator as a fallback.
+  return String(ts).split('T')[0].split(' ')[0]
+}
+
 function fdt(s) {
   if (!s) return '—'
   try {
