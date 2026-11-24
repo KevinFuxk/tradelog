@@ -386,6 +386,10 @@ textarea.nt::placeholder{color:var(--tx3);}
         <div class="ct" title="P&amp;L grouped by the hour of each trade's entry — find your best (and worst) session windows">BY HOUR OF DAY</div>
         <div id="ds-hour-bd"></div>
       </div>
+      <div class="card" id="exit-card" style="display:none">
+        <div class="ct" title="P&amp;L grouped by how each position actually closed (Take Profit / Stop Loss / manual Market close) — are you letting targets work, or bailing by hand?">BY EXIT TYPE</div>
+        <div id="ds-exit-bd"></div>
+      </div>
     </div>
 
     <div class="card" id="rdist-card" style="margin-bottom:14px">
@@ -1431,6 +1435,16 @@ function renderDash() {
     'Net P&L as a percentage of the account balance configured in Import → Account Settings'
   ]] : []
 
+  // Std dev of per-trade P&L — same Expectancy with a smaller spread means a
+  // smoother, more tradeable equity curve.
+  const meanPnl = s.total / s.n
+  const sdCard = s.n > 1 ? [[
+    'P&L Std Dev',
+    `<span class="col-b">${fmtMoney(Math.sqrt(trades.reduce((a, t) => a + (t.pnl - meanPnl) ** 2, 0) / s.n), false)}</span>`,
+    'per-trade spread',
+    'Standard deviation of per-trade P&L — how spread out your results are. Same Expectancy with a smaller Std Dev means a smoother, more consistent equity curve'
+  ]] : []
+
   sg.innerHTML = [
     ['Total Trades', `<span class="col-b">${s.n}</span>`, `${s.wins}W / ${s.losses}L`, 'Total number of closed trades in your log'],
     ['Win Rate', `<span class="${s.wr>=50?'col-g':'col-r'}">${s.wr.toFixed(1)}%</span>`, `${s.wins} winners`, 'Share of trades closed in profit (winners ÷ total trades)'],
@@ -1445,6 +1459,7 @@ function renderDash() {
     ['Max Drawdown', `<span class="col-r">${fmtMoney(s.worst)}</span>`, 'single trade', 'Your single worst losing trade'],
     ['Max DD (Equity)', s.maxDD > 0 ? `<span class="col-r">-${fmtMoney(s.maxDD, false)}</span>` : `<span class="col-g">${fmtMoney(0, false)}</span>`, 'peak → trough', 'The deepest fall in cumulative equity from any peak to the following trough — the classic drawdown metric (Max Drawdown card shows the worst single trade)'],
     ['Expectancy',   `<span class="${s.total/s.n>=0?'col-g':'col-r'}">${fmtMoney(s.total/s.n)}</span>`, 'avg $/trade', 'Average $ result per trade (Net P&L ÷ trade count). Your edge per trade — if negative, no sizing trick saves you'],
+    ...sdCard,
     ...medCard,
     ...avgRCard,
     ...medRCard,
@@ -1473,6 +1488,7 @@ function renderDash() {
   renderDirBreakdown()
   renderMonthBreakdown()
   renderHourBreakdown()
+  renderExitBreakdown()
   renderRDistBreakdown()
   renderCalendar()
   buildCharts(s)
@@ -1570,6 +1586,33 @@ function renderHourBreakdown() {
   if (hours.length < 2) { if (card) card.style.display = 'none'; return }
   if (card) card.style.display = ''
   el.innerHTML = breakdownTable(hours.map(h => breakdownRow(String(h).padStart(2, '0') + ':00', groups[h])), 'Hour', 'No timed trades')
+}
+
+// Exit-type performance — brokers like Tickmill record how each position closed
+// (Take Profit / Stop Loss / Market). Grouping by it answers "do my manual exits
+// leak money?". Hidden unless the import carries exit types.
+function renderExitBreakdown() {
+  const card = document.getElementById('exit-card')
+  const el = document.getElementById('ds-exit-bd'); if (!el) return
+  const groups = {}
+  trades.forEach(t => { if (t.exitType) (groups[t.exitType] = groups[t.exitType] || []).push(t) })
+  const keys = Object.keys(groups)
+  if (!keys.length) { if (card) card.style.display = 'none'; return }
+  if (card) card.style.display = ''
+  const rows = keys.map(k => breakdownRow(fmtExitType(k, true), groups[k])).sort((a, b) => b.total - a.total)
+  el.innerHTML = breakdownTable(rows, 'Exit', 'No exit data')
+}
+
+// How a position actually closed — did you let your TP/SL work or exit by hand?
+// Only order-based broker imports carry exitType; other formats omit it.
+// plain=true returns text (for table cells); otherwise coloured HTML.
+function fmtExitType(x, plain) {
+  if (!x) return null
+  const s = String(x).toLowerCase()
+  const safe = String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+  if (s.includes('take profit') || s === 'tp') return plain ? '🎯 Take Profit' : '<span style="color:var(--green)">🎯 Take Profit</span>'
+  if (s.includes('stop loss')   || s === 'sl') return plain ? '🛑 Stop Loss'   : '<span style="color:var(--red)">🛑 Stop Loss</span>'
+  return plain ? `✋ ${safe}` : `<span style="color:var(--tx)">✋ ${safe}</span>` // Market / manual close
 }
 
 // R-multiple distribution — a table histogram of results in risk units
@@ -2061,7 +2104,7 @@ function renderTrades() {
       <td class="num">${riskStr}</td>
       <td class="num" style="color:var(--tx2);white-space:nowrap">${hold || '<span style="color:var(--tx3)">—</span>'}</td>
       <td class="num ${pc}">${ps}${rLine}</td>
-      <td><span class="ni ${hasNote(notes[t.id])?'has':''}" title="${noteTip || 'Click the row to add a note'}">✎</span></td>
+      <td style="white-space:nowrap"><span class="ni ${hasNote(notes[t.id])?'has':''}" title="${noteTip || 'Click the row to add a note'}">✎${filledCount(notes[t.id]) ? ` <span style="font-size:10px">${filledCount(notes[t.id])}/6</span>` : ''}</span></td>
     </tr>`
   }).join('')
 
@@ -2360,7 +2403,18 @@ function renderJournal() {
 
   const em = document.getElementById('jn-empty')
   const ls = document.getElementById('jn-list')
-  document.getElementById('jn-sub').textContent = `${noted.length} entr${noted.length!==1?'ies':'y'}`
+  // Sub-header: count plus net P&L and win rate of the (filtered) entries shown
+  {
+    const jsub = document.getElementById('jn-sub')
+    const label = `${noted.length} entr${noted.length!==1?'ies':'y'}`
+    if (!noted.length) jsub.textContent = label
+    else {
+      const net = noted.reduce((a, t) => a + t.pnl, 0)
+      const wr = noted.filter(t => t.pnl > 0).length / noted.length * 100
+      jsub.innerHTML = `${label} · <span class="${net >= 0 ? 'col-g' : 'col-r'}" title="Net P&L of the journal entries currently shown">${fmtMoney(net)}</span> net · ` +
+        `<span class="${wr >= 50 ? 'col-g' : 'col-r'}">${wr.toFixed(0)}%</span> win`
+    }
+  }
 
   if (!noted.length) {
     const anyNoted = trades.some(t => hasNote(notes[t.id]))
@@ -2549,6 +2603,7 @@ function openModal(id) {
   document.getElementById('m-meta').innerHTML = [
     ['Entry Time',  fdt(t.entryTime)],
     ['Exit Time',   fdt(t.exitTime)],
+    ...(t.exitType ? [['Exit Type', fmtExitType(t.exitType)]] : []),
     ...(dur ? [['Hold Time', dur]] : []),
     ['Entry Price', t.entryPrice ? fmtPrice(t.entryPrice) : '—'],
     ['Exit Price',  t.exitPrice  ? fmtPrice(t.exitPrice)  : '—'],
@@ -2650,6 +2705,9 @@ function handleText(text) {
   const mergeLine = trades.length
     ? `<span style="color:var(--tx3)">${pending.length - updates} new · ${updates} update${updates !== 1 ? 's' : ''} to existing trades (loading merges — nothing already saved is lost)</span><br>`
     : ''
+  // True chronological span — parsers return rows in different orders
+  // (Tickmill is newest-first), so pending[0] / pending[last] could be backwards.
+  const spanTimes = pending.map(t => t.entryTime).filter(Boolean).sort((a, b) => new Date(a) - new Date(b))
   document.getElementById('prev-title').textContent = `PREVIEW — ${pending.length} trades detected`
   document.getElementById('prev-body').innerHTML =
     `<strong style="color:var(--tx)">${pending.length}</strong> trades detected<br>${mergeLine}
@@ -2657,8 +2715,8 @@ function handleText(text) {
      Win Rate: <span style="color:var(--tx)">${s.wr.toFixed(1)}%</span> (${s.wins}W / ${s.losses}L)<br>
      Symbols: ${[...new Set(pending.map(t=>t.symbol))].slice(0,8).join(', ')}<br>
      <br>
-     <span style="color:var(--tx3)">First trade: ${pending[0]?.entryTime||'—'}</span><br>
-     <span style="color:var(--tx3)">Last trade:  ${pending[pending.length-1]?.entryTime||'—'}</span>`
+     <span style="color:var(--tx3)">First trade: ${spanTimes[0] ? fdt(spanTimes[0]) : '—'}</span><br>
+     <span style="color:var(--tx3)">Last trade:  ${spanTimes.length ? fdt(spanTimes[spanTimes.length - 1]) : '—'}</span>`
   document.getElementById('imp-preview').style.display = 'block'
   go('import')
 }
@@ -3340,7 +3398,13 @@ function fmtMoney(n, sign = true) {
 
 // Calendar-day key from a timestamp: works for both ISO ("2026-01-05T09:30")
 // and space-separated broker formats ("2026-01-05 09:30").
-const dayKey = s => (s || '').split(/[T ]/)[0] || ''
+// Calendar-day key (YYYY-MM-DD). Handles 'T', space and dotted broker formats
+// ("2026-08-11T14:30", "2026-08-11 14:30", "2026.08.11 14:30" → "2026-08-11").
+const dayKey = s => {
+  const str = String(s || '').trim()
+  const m = str.match(/^(\d{4})[-./](\d{2})[-./](\d{2})/)
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : (str.split(/[T ]/)[0] || '')
+}
 
 // Quantity with thousands separators; preserves fractional lot sizes
 function fmtQty(q) {
