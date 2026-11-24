@@ -3511,11 +3511,8 @@ function wire() {
   document.getElementById('m-prev').addEventListener('click', () => stepModal(-1))
   document.getElementById('m-next').addEventListener('click', () => stepModal(1))
   document.getElementById('m-copy').addEventListener('click', copyJournalText)
-  // Clicking the dark backdrop closes (through the unsaved-changes guard);
-  // clicks inside the dialog never bubble to the backdrop target.
-  document.getElementById('modal').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeModal()
-  })
+  // Deliberately NO click-backdrop-to-close: the user mis-taps outside the
+  // dialog and loses journal notes. Close only via ✕ / Cancel / Esc.
   // Live unsaved-edit indicator on the Save button
   J_FIELDS.forEach(f => {
     if (f === 'structure') return
